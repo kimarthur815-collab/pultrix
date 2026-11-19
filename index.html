@@ -177,7 +177,9 @@ const RULES = {
   MAP_EVERY_SEC: 20,         // 도망자 미니맵의 추격자 위치 갱신 간격
   MAP_RECOVER: 10,           // 갱신될 때 도망자 스태미나 회복
   MAX_PLAYERS: 10,
-  AREA_DEFAULT_M: 300
+  AREA_DEFAULT_M: 300,
+  GPS_MAX_SPEED_MS: 8,       // 이보다 빠르게 '순간이동'한 GPS 값은 튄 값으로 보고 무시 (같은 쪽으로 3번 연속이면 인정)
+  GPS_BAD_ACC: 30            // GPS 오차가 이 값(m)보다 크면 대기·구역 벌칙 판정을 잠시 멈춤
 };
 
 const Logic = (() => {
@@ -276,6 +278,20 @@ const Logic = (() => {
     if (d > RULES.CATCH_MAX_DIST_M) return `GPS상 ${Math.round(d)}m 떨어져 있어서 잡을 수 없어요`;
     return null;
   }
+  // GPS 튐 보정: 오차(acc)가 큰 값일수록 덜 반영하는 칼만 필터 + 순간이동 같은 값은 무시
+  // k: 이전 상태(없으면 null), fix: {lat,lng,acc}, speedHint: 현재 속도(m/s) — 빠를수록 새 값을 더 빨리 따라감
+  function filterFix(k, fix, t, speedHint) {
+    const acc = Math.max(fix.acc || 999, 3);
+    const fresh = { lat: fix.lat, lng: fix.lng, v: acc * acc, t, rejects: 0, used: true };
+    if (!k) return fresh;
+    const dt = Math.max((t - k.t) / 1000, 0.1);
+    if (dist(k, fix) > RULES.GPS_MAX_SPEED_MS * dt + acc + Math.sqrt(k.v)) {
+      return k.rejects < 2 ? { ...k, rejects: k.rejects + 1, used: false } : fresh; // 3번 연속이면 진짜 이동으로 인정
+    }
+    const q = Math.min(Math.max((speedHint || 0) * 1.5 + 1, 1), 10);
+    const v = k.v + dt * q * q, g = v / (v + acc * acc);
+    return { lat: k.lat + g * (fix.lat - k.lat), lng: k.lng + g * (fix.lng - k.lng), v: v * (1 - g), t, rejects: 0, used: true };
+  }
   function assignRoles(ids, nChasers, rnd = Math.random) {
     const a = ids.slice();
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -284,7 +300,7 @@ const Logic = (() => {
     a.forEach((id, i) => { roles[id] = i < n ? 'chaser' : 'runner'; });
     return roles;
   }
-  return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, assignRoles };
+  return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles };
 })();
 // LOGIC END
 </script>
@@ -371,14 +387,20 @@ function onOrient(e) {
 }
 
 function onFix(p) {
-  const c = p.coords, t = Date.now();
-  const fix = { lat: c.latitude, lng: c.longitude, acc: c.accuracy || 999 };
-  // 속도: 기기가 주는 값 우선, 없으면 3초 이상 간격의 이동거리로 계산 (GPS 튐 완화)
-  let v = null;
-  if (typeof c.speed === 'number' && c.speed >= 0 && fix.acc <= 30) v = c.speed;
-  else if (S.prevFix && fix.acc <= 30 && t - S.prevFix.t >= 3000) v = Logic.dist(S.prevFix, fix) / ((t - S.prevFix.t) / 1000);
+  const c = p.coords, t = Date.now(), acc = c.accuracy || 999;
+  // 기기가 주는 속도(도플러 측정)는 위치 튐에 영향을 안 받아서 우선 사용
+  const devSpeed = typeof c.speed === 'number' && c.speed >= 0 && acc <= RULES.GPS_BAD_ACC ? c.speed : null;
+  S.kf = Logic.filterFix(S.kf, { lat: c.latitude, lng: c.longitude, acc }, t, devSpeed ?? S.speed);
+  if (!S.kf.used) return; // 순간적으로 튄 값은 무시
+  const fix = { lat: S.kf.lat, lng: S.kf.lng, acc: Math.sqrt(S.kf.v), rawAcc: acc };
+  // 기기 속도가 없으면 보정된 위치로 4초 이상 간격의 이동거리를 계산 (4m 미만 움직임은 제자리로 봄)
+  let v = devSpeed;
+  if (v == null && S.prevFix && t - S.prevFix.t >= 4000) {
+    const d = Logic.dist(S.prevFix, fix);
+    v = d < 4 ? 0 : d / ((t - S.prevFix.t) / 1000);
+  }
   if (v != null) S.speed = S.speed * 0.5 + v * 0.5;
-  if (!S.prevFix || t - S.prevFix.t >= 3000) S.prevFix = { ...fix, t };
+  if (!S.prevFix || t - S.prevFix.t >= 4000) S.prevFix = { ...fix, t };
   S.fix = fix; S.fixAt = t;
   const room = S.room, me = room && room.players && room.players[S.pid];
   if (room && me && room.status === 'lobby') {
@@ -646,29 +668,33 @@ function tick() {
   let dmg = 0;
   const warn = [];
   // 1) 추격자 대기 규칙: 숨는 시간 + 잡은 뒤 정지 시간
+  // GPS가 약할 때는 억울한 벌칙이 없도록 위치 판정을 잠시 멈춤 (멀리 가 있었다면 신호가 돌아오는 즉시 다시 적용)
+  const gpsOk = S.fix.rawAcc <= RULES.GPS_BAD_ACC;
   const waiting = me.role === 'chaser' && (ph.phase === 'hide' || (me.frozenUntil || 0) > t);
   if (waiting) {
-    if (!S.anchor) { S.anchor = { lat: S.fix.lat, lng: S.fix.lng }; update(meRef(), { anchor: S.anchor }); }
-    const d = Logic.dist(S.fix, S.anchor);
-    if (d > RULES.WAIT_MOVE_M) {
-      S.waitOut += dt;
-      if (S.waitOut >= RULES.WAIT_MOVE_GRACE_SEC) { dmg += RULES.WAIT_MOVE_DMG * dt; warn.push(`대기 중 이동! 체력 감소 중 (${Math.round(d)}m)`); }
-      else warn.push(`대기 중이에요! 제자리로 (${Math.round(d)}m)`);
-    } else S.waitOut = 0;
+    if (gpsOk) {
+      if (!S.anchor) { S.anchor = { lat: S.fix.lat, lng: S.fix.lng }; update(meRef(), { anchor: S.anchor }); }
+      const d = Logic.dist(S.fix, S.anchor);
+      if (d > RULES.WAIT_MOVE_M) {
+        S.waitOut += dt;
+        if (S.waitOut >= RULES.WAIT_MOVE_GRACE_SEC) { dmg += RULES.WAIT_MOVE_DMG * dt; warn.push(`대기 중 이동! 체력 감소 중 (${Math.round(d)}m)`); }
+        else warn.push(`대기 중이에요! 제자리로 (${Math.round(d)}m)`);
+      } else S.waitOut = 0;
+    }
   } else {
     S.waitOut = 0;
     if (S.anchor) { S.anchor = null; update(meRef(), { anchor: null }); }
   }
   // 2) 구역 밖 / 탈것
   const area = room.settings && room.settings.area;
-  const outside = !!area && Logic.dist(S.fix, area) > area.r;
+  const outside = gpsOk && !!area && Logic.dist(S.fix, area) > area.r;
   const vehicle = S.speed * 3.6 > RULES.VEHICLE_KMH;
   if (outside || vehicle) {
     S.ruleSec += dt;
     const what = outside ? '구역 밖' : '탈것 감지', left = RULES.RULE_WARN_SEC - S.ruleSec;
     if (left > 0) warn.push(`${what}! ${Math.ceil(left)}초 안에 돌아오세요`);
     else { dmg += RULES.RULE_DMG * dt; warn.push(`${what}! 체력 감소 중`); }
-  } else S.ruleSec = 0;
+  } else if (gpsOk) S.ruleSec = 0;
   // 3) 스태미나 (뛸 때만 소모, 0이면 체력으로)
   const sp = Logic.spendStamina(S.st, Logic.staminaCostPerSec(S.speed) * dt);
   S.st = sp.st; dmg += sp.hpLoss;
@@ -722,7 +748,7 @@ function renderGame() {
   else if (isC && frozen) st.push(`잡은 뒤 정지 ${fmt(me.frozenUntil - t)} · 제자리 대기`);
   else if (!isC && inv > 0) st.push(`무적 ${fmt(inv)} · 지금 도망가세요!`);
   if (!S.fix) st.push('GPS 신호 기다리는 중…');
-  else if (S.fix.acc > 30) st.push(`GPS 약함 (±${Math.round(S.fix.acc)}m)`);
+  else if (S.fix.rawAcc > RULES.GPS_BAD_ACC) st.push(`GPS 약함 (±${Math.round(S.fix.rawAcc)}m) · 위치 판정 잠시 멈춤`);
   $('#g-status').textContent = st.join(' · ');
   $('#g-warn').textContent = alive ? S.warn.join('\n') : '';
 
