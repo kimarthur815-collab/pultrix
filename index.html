@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111418">
-<title>GPS 술래잡기</title>
+<title>PULTRIX · GPS 술래잡기</title>
 <!--
   ===== 설정 요약 =====
   1) Firebase 콘솔에서 프로젝트 만들기 → Realtime Database 만들기
@@ -65,12 +65,39 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 .toast.on{display:block}.toast.big{font-size:20px;font-weight:700;border-color:var(--warn)}
 .leaflet-container{background:#1b2027}
 .chaserTip{background:var(--chaser);color:#fff;border:0;font-weight:700}
+/* 어두운 지도: 밝은 지도 타일을 반전해서 어두운 화면과 맞춤 */
+.leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6)}
+/* PULTRIX 타이틀 */
+.home-head{text-align:center;padding-top:8px}
+.radar{display:block;width:128px;height:128px;margin:12px auto 0}
+.radar .sweep{transform-origin:64px 64px;animation:spin 3s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.logo{font-size:54px;font-weight:900;letter-spacing:7px;line-height:1.1;margin:10px 0 2px;background:linear-gradient(90deg,var(--chaser),var(--warn) 50%,var(--runner));-webkit-background-clip:text;background-clip:text;color:transparent}
+/* 화면 테두리 번쩍 */
+#flash{position:fixed;inset:0;z-index:2500;pointer-events:none;opacity:0}
+#flash.go{animation:flash 1.1s ease-out}
+@keyframes flash{0%{opacity:1}100%{opacity:0}}
+/* 위험 표시 */
+@keyframes blink{50%{opacity:.35}}
+.bar i.mid{background:var(--warn)}
+.bar i.low{background:var(--chaser);animation:blink .8s infinite}
+.bar.st i.low{background:#ff7a45;animation:blink .8s infinite}
+.time.low{color:var(--chaser);animation:blink 1s infinite}
+/* 화살표 등장 */
+.arrowbox.pop{animation:pop .6s ease-out}
+@keyframes pop{0%{transform:translate(-50%,-50%) scale(.6);box-shadow:0 0 0 0 rgba(255,77,79,.8)}60%{transform:translate(-50%,-50%) scale(1.06)}100%{transform:translate(-50%,-50%) scale(1);box-shadow:0 0 0 40px rgba(255,77,79,0)}}
+/* 슬롯머신 역할 공개 */
+.slot{width:260px;height:96px;overflow:hidden;border-radius:16px;border:3px solid var(--warn);background:var(--panel);margin:14px 0;box-shadow:0 0 30px rgba(255,176,32,.25)}
+.reel{transition:transform 2.6s cubic-bezier(.12,.75,.2,1)}
+.reel div{height:96px;line-height:96px;font-size:40px;font-weight:900;text-align:center}
+.chaser-t{color:var(--chaser)}.runner-t{color:var(--runner)}
+#roleMsg{font-size:30px;min-height:40px}
 </style>
 </head>
 <body>
 
 <section id="s-setup" class="screen">
-  <h1>GPS 술래잡기</h1>
+  <h1>PULTRIX</h1>
   <div class="card">
     <p>아직 Firebase가 연결되지 않았어요.</p>
     <p class="dim">이 HTML 파일 위쪽의 <b>FIREBASE_CONFIG</b>에 Firebase 웹 앱 설정값을 붙여넣은 뒤 다시 열어주세요.</p>
@@ -78,8 +105,20 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 </section>
 
 <section id="s-home" class="screen">
-  <h1>GPS 술래잡기</h1>
-  <p class="dim">현실에서 하는 증강 술래잡기</p>
+  <div class="home-head">
+    <svg class="radar" viewBox="0 0 128 128" aria-hidden="true">
+      <defs><linearGradient id="sw" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3ccf7a" stop-opacity="0"/><stop offset="1" stop-color="#3ccf7a" stop-opacity=".45"/></linearGradient></defs>
+      <circle cx="64" cy="64" r="60" fill="#151a20" stroke="#2a313b" stroke-width="2"/>
+      <circle cx="64" cy="64" r="40" fill="none" stroke="#2a313b" stroke-width="2"/>
+      <circle cx="64" cy="64" r="20" fill="none" stroke="#2a313b" stroke-width="2"/>
+      <path d="M64 4V124M4 64H124" stroke="#2a313b" stroke-width="1.5"/>
+      <path class="sweep" d="M64 64 L64 4 A60 60 0 0 1 116 34 Z" fill="url(#sw)"/>
+      <circle cx="90" cy="40" r="7" fill="#ff4d4f"/>
+      <circle cx="42" cy="84" r="7" fill="#3ba3ff"/>
+    </svg>
+    <div class="logo">PULTRIX</div>
+    <p class="dim">GPS 증강 술래잡기</p>
+  </div>
   <h2>닉네임</h2>
   <input id="in-name" maxlength="10" placeholder="닉네임">
   <button id="btnCreate" class="primary">방 만들기</button>
@@ -135,6 +174,8 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 
 <div id="ov-qr" class="ov"><div id="qrBox" class="qrbox"></div><p id="qrName" class="big"></p><p class="dim">추격자가 이 QR을 찍으면 잡혀요</p><button id="btnQrClose">닫기</button></div>
 <div id="ov-scan" class="ov"><video id="scanVideo" playsinline muted></video><p class="dim" style="margin-top:12px">도망자 폰의 QR을 비춰주세요</p><button id="btnScanClose">취소</button></div>
+<div id="ov-role" class="ov"><p class="dim">당신의 역할은…</p><div class="slot"><div id="reel" class="reel"></div></div><p id="roleMsg" class="big"></p><p id="roleSub" class="dim"></p><button id="btnRoleOk" class="primary">확인</button></div>
+<div id="flash"></div>
 <div id="ov-resume" class="ov"><h2>센서를 다시 켜야 해요</h2><p class="dim">GPS와 나침반을 켜려면 눌러주세요</p><button id="btnResume" class="primary">센서 켜기</button></div>
 <div id="toast" class="toast"></div>
 
@@ -346,6 +387,36 @@ function show(id) {
   document.querySelectorAll('.screen').forEach(e => e.classList.toggle('on', e.id === id));
   S.screen = id;
 }
+// 화면 테두리가 한 번 번쩍임
+function flash(color) {
+  const f = $('#flash');
+  f.style.boxShadow = `inset 0 0 160px 60px ${color}`;
+  f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+}
+const ROLE_NAME = { chaser: '추격자', runner: '도망자' };
+const ROLE_RGBA = { chaser: 'rgba(255,77,79,.85)', runner: 'rgba(59,163,255,.85)' };
+// 슬롯머신처럼 역할이 돌다가 내 역할에서 멈춤 (배정은 방장이 시작할 때 랜덤으로 이미 정해짐)
+function showRoleReveal(role) {
+  const reel = $('#reel'), items = [];
+  for (let i = 0; i < 23; i++) items.push(i % 2 ? 'runner' : 'chaser');
+  items.push(role);
+  reel.innerHTML = items.map(r => `<div class="${r}-t">${ROLE_NAME[r]}</div>`).join('');
+  reel.style.transition = 'none'; reel.style.transform = 'translateY(0)';
+  $('#roleMsg').textContent = ''; $('#roleSub').textContent = '';
+  $('#btnRoleOk').style.visibility = 'hidden';
+  $('#ov-role').classList.add('on');
+  void reel.offsetWidth;
+  reel.style.transition = ''; reel.style.transform = `translateY(-${(items.length - 1) * 96}px)`;
+  clearTimeout(S.revealT);
+  S.revealT = setTimeout(() => {
+    $('#roleMsg').textContent = `당신은 ${ROLE_NAME[role]}!`;
+    $('#roleMsg').className = 'big ' + role + '-t';
+    $('#roleSub').textContent = role === 'chaser' ? `${RULES.HIDE_SEC / 60}분 동안 제자리에서 기다리세요` : `${RULES.HIDE_SEC / 60}분 안에 숨으세요!`;
+    $('#btnRoleOk').style.visibility = 'visible';
+    flash(ROLE_RGBA[role]); vibrate(role === 'chaser' ? [200, 80, 200] : 200);
+  }, 2700);
+}
+$('#btnRoleOk').onclick = () => $('#ov-role').classList.remove('on');
 function saveLocal(v) { try { localStorage.setItem('gtag', JSON.stringify(v)); } catch (e) {} }
 
 /* ---------- 센서 ---------- */
@@ -526,8 +597,8 @@ function onEvent(e) {
   if (e.type !== 'catch') return;
   const P = (S.room && S.room.players) || {}, by = (P[e.by] || {}).name || '?', tg = (P[e.target] || {}).name || '?';
   const min = RULES.CATCH_COOLDOWN_SEC / 60;
-  if (e.target === S.pid) { $('#ov-qr').classList.remove('on'); toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min}분 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); }
-  else if (e.by === S.pid) { toast(`${tg} 잡았다! ${min}분 동안 제자리 대기`, true); vibrate(200); }
+  if (e.target === S.pid) { $('#ov-qr').classList.remove('on'); toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min}분 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); flash('rgba(255,77,79,.9)'); }
+  else if (e.by === S.pid) { toast(`${tg} 잡았다! ${min}분 동안 제자리 대기`, true); vibrate(200); flash('rgba(60,207,122,.85)'); }
   else toast(`${by} → ${tg} 잡았어요!`);
 }
 async function leaveRoom() {
@@ -545,7 +616,7 @@ function leaveLocal(msg) {
   if (S.unsub) S.unsub();
   if (S.evUnsub) S.evUnsub();
   S.unsub = S.evUnsub = null; S.code = S.pid = S.room = S.gameKey = null;
-  closeScanner(); $('#ov-qr').classList.remove('on'); $('#ov-resume').classList.remove('on');
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role'].forEach(s => $(s).classList.remove('on'));
   saveLocal({ name: S.name });
   show('s-home');
   if (msg) toast(msg);
@@ -626,12 +697,14 @@ function enterGame() {
     Object.assign(S, {
       selfDmg: me.selfDmg || 0, st: me.st ?? RULES.ST_MAX[me.role], anchor: me.anchor || null,
       waitOut: 0, ruleSec: 0, lastMapIdx: null, lastArrowKey: null, snap: [], dead: {}, warn: [],
-      lastTick: 0, lastWrite: 0, winSent: false
+      lastTick: 0, lastWrite: 0, winSent: false, minuteWarned: false, arrowPopKey: null
     });
     const hits = room.hits || {};
     for (const [id, p] of Object.entries(room.players)) {
       if (p.role && Logic.hpOf(id === S.pid ? { ...p, selfDmg: S.selfDmg } : p, hits[id]) <= 0) S.dead[id] = true;
     }
+    // 방금 시작한 게임이면 역할 공개 연출 (새로고침해서 다시 들어온 경우엔 생략)
+    if (now() - room.startAt < 15000 && Date.now() - (S.revealAt || 0) > 20000) { S.revealAt = Date.now(); showRoleReveal(me.role); }
   }
   if (S.screen !== 's-game') {
     show('s-game');
@@ -707,7 +780,7 @@ function tick() {
 
   S.selfDmg += dmg; S.warn = warn;
   const dead = !Logic.alive({ ...me, selfDmg: S.selfDmg }, hits[S.pid]);
-  if (dead) { toast('체력 0 — 탈락했어요', true); vibrate([300, 100, 300]); }
+  if (dead) { toast('체력 0 — 탈락했어요', true); vibrate([300, 100, 300]); flash('rgba(255,77,79,1)'); }
   if (dead || real - S.lastWrite >= 2000) {
     S.lastWrite = real;
     update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10 });
@@ -741,6 +814,12 @@ function renderGame() {
   $('#g-time').textContent = fmt(ph.remainMs);
   $('#g-hp').style.width = hp + '%'; $('#g-hpv').textContent = Math.ceil(hp);
   $('#g-st').style.width = (S.st / stMax * 100) + '%'; $('#g-stv').textContent = `${Math.floor(S.st)}/${stMax}`;
+  // 위험 표시: 체력 50 이하 주황, 25 이하 빨강 깜빡임 / 스태미나 20% 이하 깜빡임 / 마지막 1분 타이머 깜빡임
+  $('#g-hp').className = hp <= 25 ? 'low' : hp <= 50 ? 'mid' : '';
+  $('#g-st').className = S.st <= stMax * 0.2 ? 'low' : '';
+  const lastMin = ph.phase === 'chase' && ph.remainMs <= 60000;
+  $('#g-time').classList.toggle('low', lastMin);
+  if (lastMin && alive && !S.minuteWarned) { S.minuteWarned = true; toast('1분 남았어요!', true); vibrate([100, 80, 100]); }
 
   const st = [];
   if (!alive) st.push('탈락했어요 · 결과를 기다리는 중');
@@ -780,7 +859,7 @@ function rotateArrow(deg) {
 }
 function drawArrow() {
   const box = $('#arrowBox'), room = S.room;
-  const off = (txt = '') => { box.className = 'arrowbox'; return txt; };
+  const off = (txt = '') => { box.classList.remove('on', 'pop'); return txt; };
   if (!room || room.status !== 'playing') return off();
   const me = room.players && room.players[S.pid], t = now(), hits = room.hits || {};
   if (!me || me.role !== 'chaser' || !Logic.alive({ ...me, selfDmg: S.selfDmg }, hits[S.pid])) return off();
@@ -788,10 +867,15 @@ function drawArrow() {
   if (ph.phase === 'hide') return off(`추격 시작까지 ${fmt(ph.remainMs)}`);
   if (ph.phase !== 'chase') return off();
   if ((me.frozenUntil || 0) > t) return off('정지가 풀리면 다시 쫓을 수 있어요');
-  const a = Logic.arrowState(t, Logic.arrowBase(me, room.startAt));
+  const base = Logic.arrowBase(me, room.startAt), a = Logic.arrowState(t, base);
   if (!a.unlocked) return off(`화살표 열리기까지 ${fmt(a.nextInMs)}`);
   if (!a.visible) return off(`다음 화살표까지 ${fmt(a.nextInMs)}`);
-  box.className = 'arrowbox on';
+  box.classList.add('on');
+  if (S.arrowPopKey !== base + ':' + a.idx) { // 화살표가 새로 뜰 때 펄스 + 짧은 진동
+    S.arrowPopKey = base + ':' + a.idx;
+    box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop');
+    vibrate(80);
+  }
   const arrow = $('#arrow'), txt = $('#arrowTxt');
   const tg = S.fix ? Logic.nearestRunner(S.fix, room.players, hits, t) : null;
   if (!S.fix) { arrow.style.display = 'none'; txt.textContent = 'GPS 기다리는 중'; }
@@ -861,7 +945,7 @@ const handleScan = safe(async text => {
 
 /* ---------- 결과 ---------- */
 function renderResult() {
-  closeScanner(); $('#ov-qr').classList.remove('on'); $('#ov-resume').classList.remove('on');
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role'].forEach(s => $(s).classList.remove('on'));
   $('#arrowBox').className = 'arrowbox';
   show('s-result');
   const room = S.room, r = room.result || {}, me = room.players[S.pid], hits = room.hits || {};
