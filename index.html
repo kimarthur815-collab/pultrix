@@ -259,7 +259,7 @@ const RULES = {
   SPOT_RESPAWN_SEC: 180,     // 먹힌 지점이 다른 곳에 다시 생기는 시간
   TIER_ODDS: [0.6, 0.3, 0.1], // 증강 등급 확률 B / A / S
   AUG_ON: 1,                 // 증강 켜기(1) / 끄기(0)
-  AREA_R: 300                // 현재 구역 반경 (방 설정에서 자동으로 들어옴, 경보기 거리 계산용)
+  AREA_R: 300                // 현재 구역 반경 (방 설정에서 자동으로 들어옴, 육감 거리 계산용)
 };
 // 위 값들은 기본값이에요. 실제 게임에서는 방장이 로비에서 정한 설정(추천값 또는 직접 수정)이 덮어써요.
 const RULE_DEFAULTS = JSON.parse(JSON.stringify(RULES));
@@ -316,7 +316,7 @@ const Logic = (() => {
     return Math.min(RULES.HP_MAX, Math.max(0, RULES.HP_MAX - (p.selfDmg || 0) - caught * RULES.CATCH_DMG));
   }
   const alive = (p, hit) => hpOf(p, hit) > 0;
-  // 살아 있고 무적·은신이 아닌 도망자 중 가장 가까운 사람
+  // 살아 있고 무적·투명화가 아닌 도망자 중 가장 가까운 사람
   function nearestRunner(pos, players, hits, now) {
     let best = null;
     for (const [id, p] of Object.entries(players || {})) {
@@ -381,22 +381,22 @@ const Logic = (() => {
   // ===== 증강 =====  v: 등급별 수치 [B, A, S]
   const TIERS = ['B', 'A', 'S'];
   const AUGS = {
-    arrowBoost:   { name: '화살표 강화', role: 'chaser', v: [35, 30, 20], d: v => `화살표 주기 ${augArrowSec(v)}초 (기본 ${RULES.ARROW_EVERY_SEC}초)` },
-    distance:     { name: '거리 표시', role: 'chaser', v: [50, 10, 1], d: v => v === 1 ? '화살표에 정확한 거리 표시' : `화살표에 거리 표시 (${v}m 단위)` },
-    radar:        { name: '레이더', role: 'chaser', once: true, v: [5, 10, 20], d: v => `${v}초 동안 모든 도망자 위치 표시` },
-    chaserSt:     { name: '추격 본능', role: 'chaser', v: [30, 50, 80], d: v => `스태미나 최대치 +${v}, 즉시 가득` },
-    stealth:      { name: '은신', role: 'runner', once: true, v: [30, 60, 120], d: v => `${v}초 동안 추격자 화살표에 안 잡힘` },
-    alarm:        { name: '경보기', role: 'runner', v: [30, 50, 80], d: v => `추격자가 ${augAlarmM(v)}m 안에 오면 진동` },
-    fastIntel:    { name: '빠른 정보', role: 'runner', v: [15, 10, 5], d: v => `미니맵 추격자 위치 ${augIntelSec(v)}초마다 갱신 (기본 ${RULES.MAP_EVERY_SEC}초)` },
-    runnerSt:     { name: '질주 체질', role: 'runner', v: [20, 30, 50], d: v => `스태미나 최대치 +${v}, 즉시 가득` },
-    heal:         { name: '응급 회복', role: 'all', once: true, v: [15, 30, 50], d: v => `체력 +${v}` },
-    stRefill:     { name: '스태미나 충전', role: 'all', once: true, v: [50, 0, 60], d: (v, t) => ['스태미나 +50', '스태미나 가득', '스태미나 가득 + 1분간 소모 없음'][t] },
-    recoverBoost: { name: '회복 2배', role: 'all', v: [1.5, 2, 3], d: v => `위치 표시 때 스태미나 회복 ×${v}` },
-    ironman:      { name: '철인', role: 'all', v: [0.7, 0.5, 0.25], d: v => `스태미나 0일 때 체력 감소 ${Math.round(v * 100)}%로` }
+    arrowBoost:   { name: '정밀 추적', role: 'chaser', v: [35, 30, 20], d: v => `화살표 주기 ${augArrowSec(v)}초 (기본 ${RULES.ARROW_EVERY_SEC}초)` },
+    distance:     { name: '공간 지각', role: 'chaser', v: [50, 10, 1], d: v => v === 1 ? '화살표에 정확한 거리 표시' : `화살표에 거리 표시 (${v}m 단위)` },
+    radar:        { name: '순간 포착', role: 'chaser', once: true, v: [5, 10, 20], d: v => `${v}초 동안 모든 도망자 위치 표시` },
+    chaserSt:     { name: '질주 본능', role: 'chaser', v: [30, 50, 80], d: v => `스태미나 최대치 +${v}, 즉시 가득` },
+    stealth:      { name: '투명화', role: 'runner', once: true, v: [30, 60, 120], d: v => `${v}초 동안 추격자 화살표에 안 잡힘` },
+    alarm:        { name: '육감', role: 'runner', v: [30, 50, 80], d: v => `추격자가 ${augAlarmM(v)}m 안에 오면 진동` },
+    fastIntel:    { name: '고속 스캔', role: 'runner', v: [15, 10, 5], d: v => `미니맵 추격자 위치 ${augIntelSec(v)}초마다 갱신 (기본 ${RULES.MAP_EVERY_SEC}초)` },
+    runnerSt:     { name: '폐활량 증가', role: 'runner', v: [20, 30, 50], d: v => `스태미나 최대치 +${v}, 즉시 가득` },
+    heal:         { name: '응급처치', role: 'all', once: true, v: [15, 30, 50], d: v => `체력 +${v}` },
+    stRefill:     { name: '에너지 드링크', role: 'all', once: true, v: [50, 0, 60], d: (v, t) => ['스태미나 +50', '스태미나 가득', '스태미나 가득 + 1분간 소모 없음'][t] },
+    recoverBoost: { name: '활력 충전', role: 'all', v: [1.5, 2, 3], d: v => `위치 표시 때 스태미나 회복 ×${v}` },
+    ironman:      { name: '아드레날린', role: 'all', v: [0.7, 0.5, 0.25], d: v => `스태미나 0일 때 체력 감소 ${Math.round(v * 100)}%로` }
   };
-  // 화살표 강화·빠른 정보는 방장이 정한 기본 주기에 비례해서 줄어듦 (기본값 45초·20초 기준 수치)
+  // 정밀 추적·고속 스캔은 방장이 정한 기본 주기에 비례해서 줄어듦 (기본값 45초·20초 기준 수치)
   const augArrowSec = v => Math.max(15, Math.round(v * RULES.ARROW_EVERY_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
-  // 경보기 거리는 구역 반경에 비례 (300m 기준 수치), 15~200m
+  // 육감 거리는 구역 반경에 비례 (300m 기준 수치), 15~200m
   const augAlarmM = v => Math.min(200, Math.max(15, Math.round(v * RULES.AREA_R / RULE_DEFAULTS.AREA_R)));
   const augIntelSec = v => Math.max(3, Math.round(v * RULES.MAP_EVERY_SEC / RULE_DEFAULTS.MAP_EVERY_SEC));
   const augDesc = (id, tier) => AUGS[id].d(AUGS[id].v[tier], tier);
@@ -864,7 +864,7 @@ function renderLobby() {
   $('#btnStart').disabled = !(n >= 2 && allReady && area);
   $('#l-hint').textContent = n < 2 ? '2명 이상이어야 시작할 수 있어요'
     : !allReady ? '모두 센서를 켜야 시작할 수 있어요'
-    : !area ? (S.sensorsOn ? 'GPS 위치를 기다리는 중…' : '방장이 센서를 켜면 구역이 정해져요') : '';
+    : !area ? (S.sensorsOn ? 'GPS 신호를 기다리는 중…' : '방장이 센서를 켜면 구역이 정해져요') : '';
   const mo = getMap('lmap');
   if (!mo.bound) {
     mo.bound = true;
@@ -990,16 +990,16 @@ function useAug(id) {
   if (id === 'heal') {
     const hp = Logic.hpOf({ ...me, selfDmg: S.selfDmg }, (room.hits || {})[S.pid]), h = Math.min(v, RULES.HP_MAX - hp);
     if (h <= 0) return toast('체력이 이미 가득해요');
-    S.selfDmg -= h; S.lastWrite = 0; toast(`응급 회복! 체력 +${Math.round(h)}`, true);
+    S.selfDmg -= h; S.lastWrite = 0; toast(`응급처치! 체력 +${Math.round(h)}`, true);
   } else if (id === 'stRefill') {
     const mx = stMaxOf(me.role);
     S.st = x.tier === 0 ? Math.min(mx, S.st + 50) : mx;
     if (x.tier === 2) nx.until = t + 60000;
-    toast(x.tier === 2 ? '스태미나 가득 + 1분간 소모 없음!' : '스태미나 충전!', true);
+    toast(x.tier === 2 ? '에너지 드링크! 스태미나 가득 + 1분간 소모 없음' : '에너지 드링크! 스태미나 충전', true);
   } else if (id === 'radar') {
-    nx.until = t + v * 1000; toast(`레이더 ${v}초! 모든 도망자 위치 표시`, true);
+    nx.until = t + v * 1000; toast(`순간 포착 ${v}초! 모든 도망자 위치 표시`, true);
   } else if (id === 'stealth') {
-    nx.until = t + v * 1000; update(meRef(), { stealthUntil: nx.until }); toast(`은신 ${v}초! 화살표에 안 잡혀요`, true);
+    nx.until = t + v * 1000; update(meRef(), { stealthUntil: nx.until }); toast(`투명화 ${v}초! 화살표에 안 잡혀요`, true);
   }
   S.augs = { ...S.augs, [id]: nx };
   update(meRef(), { ['augs/' + id]: nx });
@@ -1106,7 +1106,7 @@ function tick() {
   const stMax = stMaxOf(me.role), recMul = av('recoverBoost') || 1;
   const meAlive = Logic.alive({ ...me, selfDmg: S.selfDmg }, hits[S.pid]);
 
-  // 도망자: 미니맵 추격자 위치 갱신(빠른 정보 증강이면 더 자주) + 20초마다 스태미나 회복
+  // 도망자: 미니맵 추격자 위치 갱신(고속 스캔 증강이면 더 자주) + 20초마다 스태미나 회복
   if (me.role === 'runner') {
     const snapIdx = Math.floor((t - room.startAt) / (intelSec() * 1000));
     if (S.lastSnapIdx == null) S.lastSnapIdx = snapIdx;
@@ -1150,16 +1150,16 @@ function tick() {
     else { dmg += RULES.RULE_DMG * dt; warn.push(`${what}! 체력 감소 중`); }
   } else if (gpsOk) S.ruleSec = 0;
   // 3) 스태미나 (뛸 때만 소모, 0이면 체력으로)
-  const noDrain = S.augs.stRefill && (S.augs.stRefill.until || 0) > t; // 스태미나 충전 S등급: 1분간 소모 없음
+  const noDrain = S.augs.stRefill && (S.augs.stRefill.until || 0) > t; // 에너지 드링크 S등급: 1분간 소모 없음
   const sp = Logic.spendStamina(S.st, noDrain ? 0 : Logic.staminaCostPerSec(S.speed) * dt);
-  S.st = sp.st; dmg += sp.hpLoss * (av('ironman') || 1); // 철인: 체력 감소 줄임
+  S.st = sp.st; dmg += sp.hpLoss * (av('ironman') || 1); // 아드레날린: 체력 감소 줄임
   if (sp.hpLoss > 0) warn.push('스태미나 0! 뛰면 체력이 닳아요');
   // 4) 추격자: 화살표가 뜰 때 스태미나 회복
   if (me.role === 'chaser' && ph.phase === 'chase' && !waiting) {
     const base = Logic.arrowBase(me, room.startAt), a = Logic.arrowState(t, base, arrowEverySec()), key = base + ':' + a.idx;
     if (a.visible && S.lastArrowKey !== key) { S.lastArrowKey = key; S.st = Math.min(stMax, S.st + RULES.ARROW_RECOVER * recMul); }
   }
-  // 5) 도망자 경보기: 잡을 수 있는 상태의 추격자가 가까이 오면 진동
+  // 5) 도망자 육감: 잡을 수 있는 상태의 추격자가 가까이 오면 진동
   const alarmM = av('alarm') && Logic.augAlarmM(av('alarm'));
   if (me.role === 'runner' && alarmM && ph.phase === 'chase') {
     let nd = Infinity;
@@ -1224,7 +1224,7 @@ function renderGame() {
   else if (isC && ph.phase === 'hide') st.push(`제자리 대기 · ${RULES.WAIT_MOVE_M}m 넘게 움직이면 체력 감소`);
   else if (isC && frozen) st.push(`잡은 뒤 정지 ${fmt(me.frozenUntil - t)} · 제자리 대기`);
   else if (!isC && inv > 0) st.push(`무적 ${fmt(inv)} · 지금 도망가세요!`);
-  if (!S.fix) st.push('GPS 신호 기다리는 중…');
+  if (!S.fix) st.push('GPS 신호를 기다리는 중…');
   else if (S.fix.rawAcc > RULES.GPS_BAD_ACC) st.push(`GPS 약함 (±${Math.round(S.fix.rawAcc)}m) · 위치 판정 잠시 멈춤`);
   $('#g-status').textContent = st.join(' · ');
   $('#g-warn').textContent = alive ? S.warn.join('\n') : '';
@@ -1277,14 +1277,14 @@ function drawArrow() {
   }
   const arrow = $('#arrow'), txt = $('#arrowTxt');
   const tg = S.fix ? Logic.nearestRunner(S.fix, room.players, hits, t) : null;
-  if (!S.fix) { arrow.style.display = 'none'; txt.textContent = 'GPS 기다리는 중'; }
+  if (!S.fix) { arrow.style.display = 'none'; txt.textContent = 'GPS 신호를 기다리는 중…'; }
   else if (!tg) { arrow.style.display = 'none'; txt.textContent = '잡을 수 있는 도망자가 없어요'; }
   else if (tg.d <= RULES.ARROW_NEAR_M) { arrow.style.display = 'none'; txt.textContent = '근처에 있어요!'; }
   else {
     arrow.style.display = 'block';
     const b = Logic.bearing(S.fix, tg.p);
     rotateArrow(S.compass && S.heading != null ? b - S.heading : b);
-    const unit = av('distance'); // 거리 표시 증강
+    const unit = av('distance'); // 공간 지각 증강
     const dTxt = unit ? (unit === 1 ? `${Math.round(tg.d)}m` : `약 ${Math.max(unit, Math.round(tg.d / unit) * unit)}m`) : '';
     txt.textContent = [dTxt, S.compass ? '' : '나침반 없음 · 화면 위쪽이 북쪽'].filter(Boolean).join(' · ');
   }
