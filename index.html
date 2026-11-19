@@ -103,6 +103,15 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 button.augcard{display:flex;gap:12px;align-items:center;text-align:left;padding:14px;margin:0;background:var(--panel);border:2px solid var(--line)}
 .augcard .tier{width:46px;height:46px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;flex:none}
 .augcard b{display:block;font-size:17px}.augcard small{display:block;color:var(--dim);font-size:13px;font-weight:400;margin-top:2px}
+/* 게임 설정 */
+.setcard summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.setcard summary::-webkit-details-marker{display:none}
+.setcard summary::after{content:'▾';color:var(--dim)}.setcard[open] summary::after{content:'▴'}
+.sgrp{font-size:13px;color:var(--warn);font-weight:700;margin:14px 0 4px}
+.srow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:15px}
+.srow .stepper button{width:38px;padding:6px;font-size:16px}.srow .stepper b{min-width:76px;font-size:15px}
+.srow i{font-style:normal;font-size:11px;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:0 4px;margin-left:4px}
+.srow.off{opacity:.4}
 .spotTip{background:#ffcf40;color:#111;border:0;font-weight:800}
 .runnerTip{background:var(--runner);color:#fff;border:0;font-weight:700}
 </style>
@@ -156,6 +165,12 @@ button.augcard{display:flex;gap:12px;align-items:center;text-align:left;padding:
     <div id="lmap" class="lmap"></div>
     <p id="l-areaHint" class="dim small" style="margin-top:6px"></p>
   </div>
+  <details id="l-set" class="card setcard">
+    <summary><span><b>게임 설정</b><br><span id="l-setSum" class="dim small"></span></span></summary>
+    <p id="l-setHint" class="dim small" style="margin-top:8px"></p>
+    <div id="l-setRows"></div>
+    <button id="btnRec">추천값으로 되돌리기</button>
+  </details>
   <p id="l-hint" class="warnTxt"></p>
   <button id="btnStart" class="danger">게임 시작</button>
   <button id="btnLeave1">나가기</button>
@@ -242,8 +257,11 @@ const RULES = {
   SPOT_COUNT: 2,             // 구역 안 증강 지점 수
   SPOT_PICK_M: 15,           // 지점에서 이 거리 안에 들어가면 획득
   SPOT_RESPAWN_SEC: 180,     // 먹힌 지점이 다른 곳에 다시 생기는 시간
-  TIER_ODDS: [0.6, 0.3, 0.1] // 증강 등급 확률 B / A / S
+  TIER_ODDS: [0.6, 0.3, 0.1], // 증강 등급 확률 B / A / S
+  AUG_ON: 1                  // 증강 켜기(1) / 끄기(0)
 };
+// 위 값들은 기본값이에요. 실제 게임에서는 방장이 로비에서 정한 설정(추천값 또는 직접 수정)이 덮어써요.
+const RULE_DEFAULTS = JSON.parse(JSON.stringify(RULES));
 
 const Logic = (() => {
   const R = 6371000, rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
@@ -358,19 +376,22 @@ const Logic = (() => {
   // ===== 증강 =====  v: 등급별 수치 [B, A, S]
   const TIERS = ['B', 'A', 'S'];
   const AUGS = {
-    arrowBoost:   { name: '화살표 강화', role: 'chaser', v: [35, 30, 20], d: v => `화살표 주기 ${v}초 (기본 45초)` },
+    arrowBoost:   { name: '화살표 강화', role: 'chaser', v: [35, 30, 20], d: v => `화살표 주기 ${augArrowSec(v)}초 (기본 ${RULES.ARROW_EVERY_SEC}초)` },
     distance:     { name: '거리 표시', role: 'chaser', v: [50, 10, 1], d: v => v === 1 ? '화살표에 정확한 거리 표시' : `화살표에 거리 표시 (${v}m 단위)` },
     radar:        { name: '레이더', role: 'chaser', once: true, v: [5, 10, 20], d: v => `${v}초 동안 모든 도망자 위치 표시` },
     chaserSt:     { name: '추격 본능', role: 'chaser', v: [30, 50, 80], d: v => `스태미나 최대치 +${v}, 즉시 가득` },
     stealth:      { name: '은신', role: 'runner', once: true, v: [30, 60, 120], d: v => `${v}초 동안 추격자 화살표에 안 잡힘` },
     alarm:        { name: '경보기', role: 'runner', v: [30, 50, 80], d: v => `추격자가 ${v}m 안에 오면 진동` },
-    fastIntel:    { name: '빠른 정보', role: 'runner', v: [15, 10, 5], d: v => `미니맵 추격자 위치 ${v}초마다 갱신` },
+    fastIntel:    { name: '빠른 정보', role: 'runner', v: [15, 10, 5], d: v => `미니맵 추격자 위치 ${augIntelSec(v)}초마다 갱신 (기본 ${RULES.MAP_EVERY_SEC}초)` },
     runnerSt:     { name: '질주 체질', role: 'runner', v: [20, 30, 50], d: v => `스태미나 최대치 +${v}, 즉시 가득` },
     heal:         { name: '응급 회복', role: 'all', once: true, v: [15, 30, 50], d: v => `체력 +${v}` },
     stRefill:     { name: '스태미나 충전', role: 'all', once: true, v: [50, 0, 60], d: (v, t) => ['스태미나 +50', '스태미나 가득', '스태미나 가득 + 1분간 소모 없음'][t] },
     recoverBoost: { name: '회복 2배', role: 'all', v: [1.5, 2, 3], d: v => `위치 표시 때 스태미나 회복 ×${v}` },
     ironman:      { name: '철인', role: 'all', v: [0.7, 0.5, 0.25], d: v => `스태미나 0일 때 체력 감소 ${Math.round(v * 100)}%로` }
   };
+  // 화살표 강화·빠른 정보는 방장이 정한 기본 주기에 비례해서 줄어듦 (기본값 45초·20초 기준 수치)
+  const augArrowSec = v => Math.max(5, Math.round(v * RULES.ARROW_EVERY_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
+  const augIntelSec = v => Math.max(3, Math.round(v * RULES.MAP_EVERY_SEC / RULE_DEFAULTS.MAP_EVERY_SEC));
   const augDesc = (id, tier) => AUGS[id].d(AUGS[id].v[tier], tier);
   const augPool = role => Object.keys(AUGS).filter(id => AUGS[id].role === role || AUGS[id].role === 'all');
   function rollTier(rnd = Math.random) {
@@ -402,6 +423,43 @@ const Logic = (() => {
     const r = area.r * 0.85 * Math.sqrt(rnd()), th = rnd() * 2 * Math.PI;
     return { lat: area.lat + r * Math.cos(th) / 111195, lng: area.lng + r * Math.sin(th) / (111195 * Math.cos(rad(area.lat))) };
   }
+  // ===== 게임 설정 추천값: 반경(r)·인원(n)·추격자 수 기준 =====
+  function interp(table, x) {
+    if (x <= table[0][0]) return table[0][1];
+    for (let i = 1; i < table.length; i++) {
+      const [x1, y1] = table[i], [x0, y0] = table[i - 1];
+      if (x <= x1) return y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+    }
+    return table[table.length - 1][1];
+  }
+  const roundTo = (v, step) => Math.round(v / step) * step;
+  function recommend(r, n, chasers) {
+    const c = Math.max(1, chasers), runners = Math.max(1, n - c);
+    const gameMin = Math.min(60, Math.max(15, roundTo(interp([[100, 20], [300, 30], [600, 40], [1000, 50]], r) * Math.sqrt(runners / c), 5)));
+    const arrow = roundTo(interp([[100, 75], [300, 45], [600, 35], [1000, 25]], r), 5);
+    return {
+      HIDE_SEC: roundTo(interp([[100, 120], [300, 300], [600, 480], [1000, 600]], r), 30),
+      GAME_SEC: gameMin * 60,
+      ARROW_UNLOCK_SEC: RULE_DEFAULTS.ARROW_UNLOCK_SEC,
+      ARROW_EVERY_SEC: arrow,
+      MAP_EVERY_SEC: Math.max(10, roundTo(arrow * 0.45, 5)),
+      CATCH_DMG: RULE_DEFAULTS.CATCH_DMG,
+      CATCH_COOLDOWN_SEC: RULE_DEFAULTS.CATCH_COOLDOWN_SEC,
+      WAIT_MOVE_DMG: RULE_DEFAULTS.WAIT_MOVE_DMG,
+      ST_RUNNER: RULE_DEFAULTS.ST_MAX.runner,
+      ST_CHASER: RULE_DEFAULTS.ST_MAX.chaser,
+      AUG_ON: 1,
+      SPOT_COUNT: Math.min(6, Math.max(2, Math.ceil(n / 2)) + (r > 600 ? 1 : 0)),
+      AUG_EVERY_SEC: gameMin * 60 / 3
+    };
+  }
+  // 방에 저장된 설정을 RULES에 적용 (없는 값은 기본값)
+  const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON'];
+  function applySettings(g) {
+    g = g || {};
+    for (const k of SETTING_KEYS) RULES[k] = g[k] ?? RULE_DEFAULTS[k];
+    RULES.ST_MAX = { runner: g.ST_RUNNER ?? RULE_DEFAULTS.ST_MAX.runner, chaser: g.ST_CHASER ?? RULE_DEFAULTS.ST_MAX.chaser };
+  }
   function assignRoles(ids, nChasers, rnd = Math.random) {
     const a = ids.slice();
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -411,7 +469,8 @@ const Logic = (() => {
     return roles;
   }
   return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
-    TIERS, AUGS, augDesc, augPool, rollTier, rollAug, rollOffer, addAug, augVal, randomSpot };
+    TIERS, AUGS, augDesc, augPool, rollTier, rollAug, rollOffer, addAug, augVal, randomSpot, augArrowSec, augIntelSec,
+    interp, recommend, applySettings };
 })();
 // LOGIC END
 </script>
@@ -481,7 +540,7 @@ function showRoleReveal(role) {
   S.revealT = setTimeout(() => {
     $('#roleMsg').textContent = `당신은 ${ROLE_NAME[role]}!`;
     $('#roleMsg').className = 'big ' + role + '-t';
-    $('#roleSub').textContent = role === 'chaser' ? `${RULES.HIDE_SEC / 60}분 동안 제자리에서 기다리세요` : `${RULES.HIDE_SEC / 60}분 안에 숨으세요!`;
+    $('#roleSub').textContent = role === 'chaser' ? `${fmtDur(RULES.HIDE_SEC)} 동안 제자리에서 기다리세요` : `${fmtDur(RULES.HIDE_SEC)} 안에 숨으세요!`;
     $('#btnRoleOk').style.visibility = 'visible';
     flash(ROLE_RGBA[role]); vibrate(role === 'chaser' ? [200, 80, 200] : 200);
   }, 2700);
@@ -657,6 +716,7 @@ function enterRoom(code, pid, name) {
 function onRoom() {
   const room = S.room, me = room && room.players && room.players[S.pid];
   if (!me) return leaveLocal('방에서 나왔어요');
+  Logic.applySettings(room.settings && room.settings.game); // 방장이 정한 설정을 이 폰의 규칙에 적용
   if (room.result || room.status === 'ended') return renderResult();
   if (room.status === 'lobby') { if (S.screen !== 's-lobby') show('s-lobby'); return renderLobby(); }
   if (room.status === 'playing') {
@@ -667,12 +727,12 @@ function onRoom() {
 function onEvent(e) {
   if (e.type !== 'catch') return;
   const P = (S.room && S.room.players) || {}, by = (P[e.by] || {}).name || '?', tg = (P[e.target] || {}).name || '?';
-  const min = RULES.CATCH_COOLDOWN_SEC / 60;
+  const min = fmtDur(RULES.CATCH_COOLDOWN_SEC);
   if (e.target === S.pid) {
-    $('#ov-qr').classList.remove('on'); toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min}분 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); flash('rgba(255,77,79,.9)');
+    $('#ov-qr').classList.remove('on'); toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min} 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); flash('rgba(255,77,79,.9)');
     setTimeout(() => { if (S.room && S.room.status === 'playing' && Logic.alive({ ...S.room.players[S.pid], selfDmg: S.selfDmg }, (S.room.hits || {})[S.pid])) gainRandom('잡힘 보상'); }, 2500);
   }
-  else if (e.by === S.pid) { toast(`${tg} 잡았다! ${min}분 동안 제자리 대기`, true); vibrate(200); flash('rgba(60,207,122,.85)'); }
+  else if (e.by === S.pid) { toast(`${tg} 잡았다! ${min} 동안 제자리 대기`, true); vibrate(200); flash('rgba(60,207,122,.85)'); }
   else toast(`${by} → ${tg} 잡았어요!`);
 }
 async function leaveRoom() {
@@ -690,6 +750,7 @@ function leaveLocal(msg) {
   if (S.unsub) S.unsub();
   if (S.evUnsub) S.evUnsub();
   S.unsub = S.evUnsub = null; S.code = S.pid = S.room = S.gameKey = null;
+  Logic.applySettings(null);
   closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug'].forEach(s => $(s).classList.remove('on'));
   saveLocal({ name: S.name });
   show('s-home');
@@ -697,6 +758,72 @@ function leaveLocal(msg) {
 }
 $('#btnLeave1').onclick = leaveRoom;
 $('#btnLeave2').onclick = leaveRoom;
+
+/* ---------- 게임 설정 ---------- */
+const fmtDur = sec => { sec = Math.round(sec); const m = Math.floor(sec / 60), r = sec % 60; return m ? `${m}분${r ? ` ${r}초` : ''}` : `${r}초`; };
+const SET_FIELDS = [
+  { g: '시간', k: 'HIDE_SEC', name: '숨는 시간', step: 30, min: 60, max: 900, f: fmtDur },
+  { g: '시간', k: 'GAME_SEC', name: '게임 시간', step: 300, min: 600, max: 5400, f: fmtDur },
+  { g: '추적', k: 'ARROW_UNLOCK_SEC', name: '화살표 열리는 시간', step: 30, min: 0, max: 600, f: fmtDur },
+  { g: '추적', k: 'ARROW_EVERY_SEC', name: '화살표 주기', step: 5, min: 15, max: 180, f: fmtDur },
+  { g: '추적', k: 'MAP_EVERY_SEC', name: '도망자 미니맵 갱신', step: 5, min: 5, max: 120, f: fmtDur },
+  { g: '체력·잡기', k: 'CATCH_DMG', name: '잡힐 때 데미지', step: 5, min: 10, max: 100, f: v => `-${v}` },
+  { g: '체력·잡기', k: 'CATCH_COOLDOWN_SEC', name: '무적·정지 시간', step: 30, min: 30, max: 600, f: fmtDur },
+  { g: '체력·잡기', k: 'WAIT_MOVE_DMG', name: '대기 중 이동 벌칙', step: 1, min: 0, max: 50, f: v => `초당 -${v}` },
+  { g: '체력·잡기', k: 'ST_RUNNER', name: '도망자 스태미나', step: 10, min: 50, max: 300, f: v => `${v}` },
+  { g: '체력·잡기', k: 'ST_CHASER', name: '추격자 스태미나', step: 10, min: 50, max: 300, f: v => `${v}` },
+  { g: '증강', k: 'AUG_ON', name: '증강', toggle: true, f: v => (v ? '켜짐' : '꺼짐') },
+  { g: '증강', k: 'SPOT_COUNT', name: '증강 지점 수', step: 1, min: 0, max: 10, f: v => `${v}개`, aug: true },
+  { g: '증강', k: 'AUG_EVERY_SEC', name: '보상 선택 간격', step: 60, min: 120, max: 1800, f: fmtDur, aug: true }
+];
+const lobbyCounts = room => {
+  const n = Object.keys(room.players || {}).length;
+  return { n, ch: Math.min(Math.max(1, (room.settings && room.settings.chasers) || 1), Math.max(1, n - 1)) };
+};
+// 추천값 + 방장이 직접 바꾼 칸(custom)만 덮어쓴 최종 설정
+function mergedSettings(room) {
+  const st = room.settings || {}, area = st.area, { n, ch } = lobbyCounts(room);
+  const rec = Logic.recommend(area ? area.r : RULES.AREA_DEFAULT_M, Math.max(2, n), ch), cur = st.game || {}, custom = st.custom || {};
+  const out = {};
+  for (const k of Object.keys(rec)) out[k] = custom[k] && cur[k] != null ? cur[k] : rec[k];
+  return { rec, out, custom };
+}
+// 방장: 인원·범위·추격자 수가 바뀌면 직접 안 바꾼 칸을 추천값으로 자동 갱신
+function syncRecommend(room) {
+  if (room.hostId !== S.pid || S.recSending) return;
+  const { out } = mergedSettings(room), cur = (room.settings && room.settings.game) || {}, u = {};
+  for (const k of Object.keys(out)) if (cur[k] !== out[k]) u['game/' + k] = out[k];
+  if (!Object.keys(u).length) return;
+  S.recSending = true;
+  update(roomRef('settings'), u).catch(e => console.error(e)).finally(() => { S.recSending = false; });
+}
+function renderSettings(room, isHost) {
+  const { out, custom } = mergedSettings(room), nCustom = Object.keys(custom).filter(k => custom[k]).length;
+  $('#l-setSum').textContent = `숨기 ${fmtDur(out.HIDE_SEC)} · 게임 ${fmtDur(out.GAME_SEC)} · 화살표 ${fmtDur(out.ARROW_EVERY_SEC)} · ${nCustom ? `${nCustom}개 직접 설정` : '추천값'}`;
+  $('#l-setHint').textContent = isHost ? '인원·구역 반경·추격자 수에 맞춰 추천값이 자동으로 들어가요. 직접 바꾼 칸은 그대로 유지돼요.' : '설정은 방장이 정해요.';
+  let html = '', grp = '';
+  for (const fd of SET_FIELDS) {
+    if (fd.g !== grp) { grp = fd.g; html += `<div class="sgrp">${grp}</div>`; }
+    const v = out[fd.k], off = fd.aug && !out.AUG_ON, tag = custom[fd.k] ? '<i>수정</i>' : '';
+    const ctl = !isHost ? `<b>${fd.f(v)}</b>`
+      : fd.toggle ? `<div class="stepper"><button data-k="${fd.k}" data-t="1" style="width:auto;padding:6px 14px">${fd.f(v)}</button></div>`
+      : `<div class="row stepper"><button data-k="${fd.k}" data-d="-1">−</button><b>${fd.f(v)}</b><button data-k="${fd.k}" data-d="1">+</button></div>`;
+    html += `<div class="srow${off ? ' off' : ''}"><span>${fd.name}${tag}</span>${ctl}</div>`;
+  }
+  if ($('#l-setRows').innerHTML !== html) $('#l-setRows').innerHTML = html;
+  $('#btnRec').style.display = isHost && nCustom ? 'block' : 'none';
+}
+$('#l-setRows').onclick = safe(async e => {
+  const b = e.target.closest('[data-k]'), room = S.room;
+  if (!b || !room || room.hostId !== S.pid) return;
+  const fd = SET_FIELDS.find(x => x.k === b.dataset.k), { out } = mergedSettings(room);
+  const v = fd.toggle ? (out[fd.k] ? 0 : 1) : Math.min(fd.max, Math.max(fd.min, out[fd.k] + fd.step * +b.dataset.d));
+  await update(roomRef('settings'), { ['game/' + fd.k]: v, ['custom/' + fd.k]: true });
+});
+$('#btnRec').onclick = safe(async () => {
+  const room = S.room; if (!room || room.hostId !== S.pid) return;
+  await update(roomRef('settings'), { custom: null });
+});
 
 /* ---------- 로비 ---------- */
 function renderLobby() {
@@ -714,6 +841,8 @@ function renderLobby() {
   $('#l-rv').textContent = $('#l-r').value + 'm';
   ['#btnChMinus', '#btnChPlus', '#l-r'].forEach(s => { $(s).disabled = !isHost; });
   $('#l-areaHint').textContent = isHost ? '지도를 탭하면 구역 중심이 옮겨져요 (처음엔 내 위치)' : '추격자 수와 구역은 방장이 정해요';
+  renderSettings(room, isHost);
+  syncRecommend(room);
   const allReady = players.every(([, p]) => p.ready);
   $('#btnStart').style.display = isHost ? 'block' : 'none';
   $('#btnStart').disabled = !(n >= 2 && allReady && area);
@@ -766,8 +895,10 @@ $('#btnStart').onclick = safe(async () => {
   const room = S.room, ids = Object.keys(room.players), n = ids.length;
   if (n < 2) return toast('2명 이상이어야 해요');
   const roles = Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
-  const u = { status: 'playing', startAt: serverTimestamp(), result: null, hits: null, events: null, spots: {} };
-  for (let i = 0; i < RULES.SPOT_COUNT; i++) u.spots['s' + i] = { ...Logic.randomSpot(room.settings.area), at: 0 };
+  const game = mergedSettings(room).out; // 모든 폰이 같은 설정으로 시작
+  Logic.applySettings(game);
+  const u = { status: 'playing', startAt: serverTimestamp(), result: null, hits: null, events: null, spots: {}, 'settings/game': game };
+  if (game.AUG_ON) for (let i = 0; i < game.SPOT_COUNT; i++) u.spots['s' + i] = { ...Logic.randomSpot(room.settings.area), at: 0 };
   for (const id of ids) {
     u[`players/${id}/role`] = roles[id];
     u[`players/${id}/selfDmg`] = 0;
@@ -818,8 +949,8 @@ $('#btnFollow').onclick = () => { S.follow = true; drawMaps(); };
 /* ---------- 증강 ---------- */
 const av = id => Logic.augVal(S.augs, id);
 const stMaxOf = role => RULES.ST_MAX[role] + (av('chaserSt') || 0) + (av('runnerSt') || 0);
-const arrowEverySec = () => av('arrowBoost') || RULES.ARROW_EVERY_SEC;
-const intelSec = () => av('fastIntel') || RULES.MAP_EVERY_SEC;
+const arrowEverySec = () => { const v = av('arrowBoost'); return v ? Logic.augArrowSec(v) : RULES.ARROW_EVERY_SEC; };
+const intelSec = () => { const v = av('fastIntel'); return v ? Logic.augIntelSec(v) : RULES.MAP_EVERY_SEC; };
 const augLabel = (id, tier) => `[${Logic.TIERS[tier]}] ${Logic.AUGS[id].name}`;
 function gainAug(id, tier, source) {
   const me = S.room && S.room.players[S.pid]; if (!me) return;
@@ -832,7 +963,7 @@ function gainAug(id, tier, source) {
   renderGame();
 }
 function gainRandom(source) {
-  const me = S.room && S.room.players[S.pid]; if (!me || !me.role) return;
+  const me = S.room && S.room.players[S.pid]; if (!me || !me.role || !RULES.AUG_ON) return;
   const a = Logic.rollAug(me.role);
   gainAug(a.id, a.tier, source);
 }
@@ -880,7 +1011,7 @@ $('#augBar').onclick = e => {
 const offerList = o => (Array.isArray(o) ? o : Object.values(o || {}));
 // 10분 보상: 추격 시작 후 10분, 20분에 3개 중 1개 선택 (고른 기록은 저장돼서 새로고침해도 같은 후보)
 function checkOffer(me, t, ph) {
-  if (ph.phase !== 'chase') return;
+  if (ph.phase !== 'chase' || !RULES.AUG_ON) return;
   const due = Math.floor((t - (S.room.startAt + RULES.HIDE_SEC * 1000)) / (RULES.AUG_EVERY_SEC * 1000));
   if (!me.offer && due > (me.augPicks || 0) && !S.offerSent) {
     S.offerSent = true;
@@ -904,7 +1035,7 @@ $('#augCards').onclick = e => {
 // 증강 지점: 15m 안에 들어가면 획득, 그 지점은 3분 뒤 다른 곳에 다시 생김 (먼저 도착한 한 명만)
 function checkSpots(t) {
   const room = S.room, area = room.settings && room.settings.area;
-  if (S.spotBusy || !area) return;
+  if (S.spotBusy || !area || !RULES.AUG_ON) return;
   for (const [sid, sp] of Object.entries(room.spots || {})) {
     if ((sp.at || 0) > t || Logic.dist(S.fix, sp) > RULES.SPOT_PICK_M) continue;
     S.spotBusy = true;
@@ -933,13 +1064,19 @@ function drawSpots(mo) {
   }
 }
 function drawRadar(mo) {
-  (mo.radarM || []).forEach(m => m.remove()); mo.radarM = [];
+  if (!mo.radarG) mo.radarG = L.layerGroup().addTo(mo.map);
   const x = S.augs && S.augs.radar, room = S.room;
-  if (!x || (x.until || 0) <= now() || !room) return;
-  const hits = room.hits || {};
-  mo.radarM = Object.entries(room.players).filter(([id, p]) => p.role === 'runner' && p.lat != null && Logic.alive(p, hits[id]))
-    .map(([, p]) => L.circleMarker([p.lat, p.lng], { radius: 10, color: '#fff', weight: 2, fillColor: '#3ba3ff', fillOpacity: .9 })
-      .bindTooltip(esc(p.name), { permanent: true, direction: 'top', className: 'runnerTip' }).addTo(mo.map));
+  const list = !x || (x.until || 0) <= now() || !room ? [] : Object.entries(room.players)
+    .filter(([id, p]) => p.role === 'runner' && p.lat != null && Logic.alive(p, (room.hits || {})[id]));
+  // 도망자별 마커 하나를 유지하면서 위치만 갱신 (지웠다 다시 그리지 않음)
+  mo.radarM = mo.radarM || {};
+  const keep = new Set(list.map(([id]) => id));
+  for (const id of Object.keys(mo.radarM)) if (!keep.has(id)) { mo.radarG.removeLayer(mo.radarM[id]); delete mo.radarM[id]; }
+  for (const [id, p] of list) {
+    if (mo.radarM[id]) mo.radarM[id].setLatLng([p.lat, p.lng]);
+    else mo.radarM[id] = L.circleMarker([p.lat, p.lng], { radius: 10, color: '#fff', weight: 2, fillColor: '#3ba3ff', fillOpacity: .9 })
+      .bindTooltip(esc(p.name), { permanent: true, direction: 'top', className: 'runnerTip' }).addTo(mo.radarG);
+  }
 }
 
 function tick() {
