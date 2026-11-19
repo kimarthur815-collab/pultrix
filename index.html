@@ -131,6 +131,7 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 <section id="s-lobby" class="screen">
   <div class="row between"><h1>방 <span id="l-code" class="code"></span></h1><span id="l-count" class="dim"></span></div>
   <p class="dim">친구에게 방 코드를 알려주세요. 역할은 시작할 때 랜덤으로 정해져요.</p>
+  <button id="btnInvite">📨 친구 초대 (QR)</button>
   <ul id="l-list" class="plist"></ul>
   <button id="btnReady" class="primary">센서 켜기 (GPS·나침반)</button>
   <div class="card">
@@ -174,6 +175,7 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 
 <div id="ov-qr" class="ov"><div id="qrBox" class="qrbox"></div><p id="qrName" class="big"></p><p class="dim">추격자가 이 QR을 찍으면 잡혀요</p><button id="btnQrClose">닫기</button></div>
 <div id="ov-scan" class="ov"><video id="scanVideo" playsinline muted></video><p class="dim" style="margin-top:12px">도망자 폰의 QR을 비춰주세요</p><button id="btnScanClose">취소</button></div>
+<div id="ov-invite" class="ov"><p class="dim">친구가 폰 카메라로 찍으면 이 방으로 바로 들어와요</p><div id="inviteQR" class="qrbox" style="margin-top:12px"></div><p id="inviteCode" class="big code"></p><p id="inviteUrl" class="dim small" style="word-break:break-all;max-width:360px"></p><button id="btnCopyLink" class="primary">링크 복사</button><button id="btnInviteClose">닫기</button></div>
 <div id="ov-role" class="ov"><p class="dim">당신의 역할은…</p><div class="slot"><div id="reel" class="reel"></div></div><p id="roleMsg" class="big"></p><p id="roleSub" class="dim"></p><button id="btnRoleOk" class="primary">확인</button></div>
 <div id="flash"></div>
 <div id="ov-resume" class="ov"><h2>센서를 다시 켜야 해요</h2><p class="dim">GPS와 나침반을 켜려면 눌러주세요</p><button id="btnResume" class="primary">센서 켜기</button></div>
@@ -616,7 +618,7 @@ function leaveLocal(msg) {
   if (S.unsub) S.unsub();
   if (S.evUnsub) S.evUnsub();
   S.unsub = S.evUnsub = null; S.code = S.pid = S.room = S.gameKey = null;
-  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role'].forEach(s => $(s).classList.remove('on'));
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite'].forEach(s => $(s).classList.remove('on'));
   saveLocal({ name: S.name });
   show('s-home');
   if (msg) toast(msg);
@@ -658,6 +660,21 @@ function renderLobby() {
   }
   drawMaps();
 }
+// 친구 초대: 방 코드가 들어간 사이트 링크를 QR로 보여줌
+const inviteUrl = () => location.origin + location.pathname + '?room=' + S.code;
+$('#btnInvite').onclick = () => {
+  const url = inviteUrl(), qr = qrcode(0, 'M');
+  qr.addData(url); qr.make();
+  $('#inviteQR').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  $('#inviteCode').textContent = S.code;
+  $('#inviteUrl').textContent = url;
+  $('#ov-invite').classList.add('on');
+};
+$('#btnCopyLink').onclick = async () => {
+  try { await navigator.clipboard.writeText(inviteUrl()); toast('링크를 복사했어요'); }
+  catch (e) { toast('복사가 안 돼요. 위 링크를 길게 눌러 복사하세요'); }
+};
+$('#btnInviteClose').onclick = () => $('#ov-invite').classList.remove('on');
 $('#btnReady').onclick = safe(async () => { if (await startSensors()) { toast('GPS 신호를 기다리는 중…'); if (S.room) renderLobby(); } });
 const setChasers = safe(async d => {
   const room = S.room, n = Object.keys(room.players).length;
@@ -707,7 +724,7 @@ function enterGame() {
     if (now() - room.startAt < 15000 && Date.now() - (S.revealAt || 0) > 20000) { S.revealAt = Date.now(); showRoleReveal(me.role); }
   }
   if (S.screen !== 's-game') {
-    show('s-game');
+    show('s-game'); $('#ov-invite').classList.remove('on');
     const mo = getMap('gmap');
     if (!mo.bound) { mo.bound = true; mo.map.on('dragstart', () => { S.follow = false; }); }
     setTimeout(() => mo.map.invalidateSize(), 50);
@@ -945,7 +962,7 @@ const handleScan = safe(async text => {
 
 /* ---------- 결과 ---------- */
 function renderResult() {
-  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role'].forEach(s => $(s).classList.remove('on'));
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite'].forEach(s => $(s).classList.remove('on'));
   $('#arrowBox').className = 'arrowbox';
   show('s-result');
   const room = S.room, r = room.result || {}, me = room.players[S.pid], hits = room.hits || {};
@@ -964,7 +981,10 @@ function renderResult() {
   try { saved = JSON.parse(localStorage.getItem('gtag') || 'null'); } catch (e) {}
   if (saved && saved.name) $('#in-name').value = saved.name;
   show('s-home');
-  if (saved && saved.code && saved.pid) {
+  // 초대 링크(?room=코드)로 들어오면 방 코드를 미리 채움
+  const invited = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+  if (invited) { $('#in-code').value = invited; toast(`방 ${invited}에 초대받았어요. 닉네임을 넣고 참가를 누르세요`, true); }
+  if (saved && saved.code && saved.pid && (!invited || invited === saved.code)) {
     get(ref(db, `rooms/${saved.code}/players/${saved.pid}`))
       .then(s => { if (s.exists()) enterRoom(saved.code, saved.pid, saved.name); else saveLocal({ name: saved.name }); })
       .catch(e => console.error(e));
