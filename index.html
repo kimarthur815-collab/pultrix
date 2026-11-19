@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<title>GPS 술래잡기</title>
+<!--
+  ===== 설정 요약 =====
+  1) Firebase 콘솔에서 프로젝트 만들기 → Realtime Database 만들기
+  2) 데이터베이스 '규칙' 탭에 붙여넣기:
+     { "rules": { "rooms": { "$code": { ".read": true, ".write": true } } } }
+  3) 프로젝트 설정 → 웹 앱 추가 → firebaseConfig 값을 아래 FIREBASE_CONFIG에 붙여넣기
+  4) 이 파일을 HTTPS 주소(GitHub Pages 등)에 올리기 — GPS·카메라는 HTTPS에서만 동작해요
+-->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<style>
+:root{--bg:#111418;--panel:#1b2027;--line:#2a313b;--txt:#e9edf2;--dim:#8b95a3;--chaser:#ff4d4f;--runner:#3ba3ff;--ok:#3ccf7a;--warn:#ffb020}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-tap-highlight-color:transparent}
+body{overscroll-behavior:none}
+.screen{display:none;min-height:100%;padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto}
+.screen.on{display:block}
+h1{font-size:26px;margin:8px 0 4px}h2{font-size:17px;margin:18px 0 6px}
+.dim{color:var(--dim)}.small{font-size:13px}.big{font-size:22px;font-weight:700;margin:12px 0 4px}
+input{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:17px;margin:6px 0}
+input[type=range]{padding:0;border:0;background:none;accent-color:var(--warn)}
+button{width:100%;padding:15px;border:0;border-radius:12px;background:#2d3540;color:var(--txt);font-size:17px;font-weight:600;margin:6px 0;cursor:pointer}
+button.primary{background:var(--runner)}button.danger{background:var(--chaser)}button:disabled{opacity:.35}
+.row{display:flex;gap:8px;align-items:center}.between{justify-content:space-between}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0;line-height:1.5}
+.code{font-family:ui-monospace,Menlo,monospace;letter-spacing:3px;color:var(--warn)}
+.plist{list-style:none;margin:10px 0}.plist li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:6px 0}
+.ok{color:var(--ok)}.warnTxt{color:var(--warn);min-height:20px;margin-top:8px}
+.stepper button{width:44px;padding:8px;margin:0}.stepper b{min-width:28px;text-align:center;font-size:18px}
+.lmap{height:260px;border-radius:12px;margin-top:10px;overflow:hidden}
+/* 게임 화면 */
+#s-game{padding:0;max-width:none}
+#gmap{position:fixed;inset:0;z-index:1}
+.hud{position:fixed;top:0;left:0;right:0;z-index:1100;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;background:rgba(17,20,24,.88)}
+.badge{padding:4px 10px;border-radius:999px;font-weight:700;font-size:14px;white-space:nowrap}.badge.chaser{background:var(--chaser)}.badge.runner{background:var(--runner)}
+.time{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:700}
+.bar{position:relative;height:22px;background:#2a313b;border-radius:11px;overflow:hidden;margin-top:6px}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ok);transition:width .3s}
+.bar.st i{background:var(--warn)}
+.bar span{position:relative;font-size:13px;padding-left:10px;line-height:22px;text-shadow:0 1px 2px #000}
+.status{font-size:14px;margin-top:6px}
+.warn{color:var(--warn);font-weight:700;font-size:15px;white-space:pre-line}
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:8px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(17,20,24,.88)}
+.bottom .dim{text-align:center;font-size:15px;padding:4px 0}
+.fab{position:fixed;right:12px;bottom:calc(150px + env(safe-area-inset-bottom));z-index:1100;width:48px;height:48px;padding:0;border-radius:50%;font-size:22px;background:var(--panel)}
+.arrowbox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1050;width:250px;height:250px;border-radius:50%;background:rgba(17,20,24,.72);display:none;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.arrowbox.on{display:flex}
+#arrow{width:150px;height:150px;fill:var(--chaser);transition:transform .25s ease-out}
+#arrowTxt{font-weight:700;font-size:18px;text-align:center;padding:0 16px}
+/* 오버레이 */
+.ov{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.9);display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+.ov.on{display:flex}.ov button{max-width:360px}
+.qrbox{width:min(80vw,360px);aspect-ratio:1;background:#fff;border-radius:12px;padding:8px}.qrbox svg{width:100%;height:100%;display:block}
+#scanVideo{width:min(90vw,420px);aspect-ratio:1;object-fit:cover;border-radius:12px;background:#000}
+.toast{position:fixed;left:50%;top:calc(170px + env(safe-area-inset-top));transform:translateX(-50%);z-index:3000;background:#000c;border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:15px;max-width:90vw;text-align:center;display:none}
+.toast.on{display:block}.toast.big{font-size:20px;font-weight:700;border-color:var(--warn)}
+.leaflet-container{background:#1b2027}
+.chaserTip{background:var(--chaser);color:#fff;border:0;font-weight:700}
+</style>
+</head>
+<body>
+
+<section id="s-setup" class="screen">
+  <h1>GPS 술래잡기</h1>
+  <div class="card">
+    <p>아직 Firebase가 연결되지 않았어요.</p>
+    <p class="dim">이 HTML 파일 위쪽의 <b>FIREBASE_CONFIG</b>에 Firebase 웹 앱 설정값을 붙여넣은 뒤 다시 열어주세요.</p>
+  </div>
+</section>
+
+<section id="s-home" class="screen">
+  <h1>GPS 술래잡기</h1>
+  <p class="dim">현실에서 하는 증강 술래잡기</p>
+  <h2>닉네임</h2>
+  <input id="in-name" maxlength="10" placeholder="닉네임">
+  <button id="btnCreate" class="primary">방 만들기</button>
+  <h2>방 참가</h2>
+  <input id="in-code" maxlength="5" placeholder="방 코드 5자리" autocapitalize="characters" autocomplete="off">
+  <button id="btnJoin">참가</button>
+  <div class="card dim small">게임 중에는 화면을 켜 둔 채로 이 페이지를 열어 두세요. 카카오톡 같은 앱 안에서 열었다면 <b>다른 브라우저로 열기</b>(사파리·크롬)를 눌러주세요.</div>
+</section>
+
+<section id="s-lobby" class="screen">
+  <div class="row between"><h1>방 <span id="l-code" class="code"></span></h1><span id="l-count" class="dim"></span></div>
+  <p class="dim">친구에게 방 코드를 알려주세요. 역할은 시작할 때 랜덤으로 정해져요.</p>
+  <ul id="l-list" class="plist"></ul>
+  <button id="btnReady" class="primary">센서 켜기 (GPS·나침반)</button>
+  <div class="card">
+    <div class="row between"><span>추격자 수</span>
+      <div class="row stepper"><button id="btnChMinus">−</button><b id="l-chasers">1</b><button id="btnChPlus">+</button></div></div>
+    <p class="dim small">도망자 <span id="l-runners">0</span>명</p>
+    <div class="row between" style="margin-top:10px"><span>구역 반경</span><b id="l-rv"></b></div>
+    <input id="l-r" type="range" min="100" max="1000" step="50">
+    <div id="lmap" class="lmap"></div>
+    <p id="l-areaHint" class="dim small" style="margin-top:6px"></p>
+  </div>
+  <p id="l-hint" class="warnTxt"></p>
+  <button id="btnStart" class="danger">게임 시작</button>
+  <button id="btnLeave1">나가기</button>
+</section>
+
+<section id="s-game" class="screen">
+  <div id="gmap"></div>
+  <div class="hud">
+    <div class="row"><span id="g-role" class="badge"></span><span id="g-phase"></span><span id="g-time" class="time"></span></div>
+    <div class="bar"><i id="g-hp"></i><span>체력 <b id="g-hpv"></b></span></div>
+    <div class="bar st"><i id="g-st"></i><span>스태미나 <b id="g-stv"></b></span></div>
+    <div id="g-status" class="status dim"></div>
+    <div id="g-warn" class="warn"></div>
+  </div>
+  <div id="arrowBox" class="arrowbox"><svg id="arrow" viewBox="0 0 100 100"><path d="M50 6 L84 74 L50 58 L16 74 Z"/></svg><div id="arrowTxt"></div></div>
+  <button id="btnFollow" class="fab" title="내 위치">📍</button>
+  <div class="bottom">
+    <div id="g-info" class="dim"></div>
+    <button id="btnScan" class="danger">📷 QR 찍어서 잡기</button>
+    <button id="btnShowQR" class="primary">내 QR 보여주기</button>
+  </div>
+</section>
+
+<section id="s-result" class="screen">
+  <h1 id="r-title"></h1>
+  <p id="r-sub" class="dim"></p>
+  <ul id="r-list" class="plist"></ul>
+  <button id="btnLeave2" class="primary">처음으로</button>
+</section>
+
+<div id="ov-qr" class="ov"><div id="qrBox" class="qrbox"></div><p id="qrName" class="big"></p><p class="dim">추격자가 이 QR을 찍으면 잡혀요</p><button id="btnQrClose">닫기</button></div>
+<div id="ov-scan" class="ov"><video id="scanVideo" playsinline muted></video><p class="dim" style="margin-top:12px">도망자 폰의 QR을 비춰주세요</p><button id="btnScanClose">취소</button></div>
+<div id="ov-resume" class="ov"><h2>센서를 다시 켜야 해요</h2><p class="dim">GPS와 나침반을 켜려면 눌러주세요</p><button id="btnResume" class="primary">센서 켜기</button></div>
+<div id="toast" class="toast"></div>
+
+<script>
+/* ▼▼▼ Firebase 콘솔 → 프로젝트 설정 → 내 앱(웹)에서 복사한 값을 붙여넣으세요 ▼▼▼ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCgZhJaJVDDUXujjKkqDiqGhpKU6607UqU",
+  authDomain: "pultrix-49254.firebaseapp.com",
+  databaseURL: "https://pultrix-49254-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "pultrix-49254",
+  storageBucket: "pultrix-49254.firebasestorage.app",
+  messagingSenderId: "935671390514",
+  appId: "1:935671390514:web:99ed8122b7ea3d9ac1372b"
+};
+</script>
+
+<script>
+// LOGIC START — 게임 규칙 (숫자를 바꾸면 밸런스가 바뀌어요)
+const RULES = {
+  HP_MAX: 100,
+  HIDE_SEC: 300,             // 도망자 숨는 시간 (추격자 대기)
+  GAME_SEC: 1800,            // 숨는 시간이 끝난 뒤 제한시간 — 버티면 도망자 승리
+  CATCH_DMG: 40,             // 잡힐 때 도망자 체력 감소
+  CATCH_COOLDOWN_SEC: 180,   // 잡은 추격자 정지 + 잡힌 도망자 무적 시간
+  CATCH_MAX_DIST_M: 20,      // QR 찍을 때 GPS 거리가 이보다 멀면 무효 (꼼수 방지)
+  WAIT_MOVE_M: 15,           // 대기 중 처음 자리에서 이만큼 벗어나면
+  WAIT_MOVE_GRACE_SEC: 3,    // 이 시간 이상 이어질 때부터
+  WAIT_MOVE_DMG: 10,         // 초당 체력 감소
+  RULE_WARN_SEC: 10,         // 구역 밖·탈것: 경고 시간
+  RULE_DMG: 5,               // 경고 후 초당 체력 감소
+  VEHICLE_KMH: 25,           // 이 속도를 넘으면 탈것으로 판단
+  WALK_KMH: 7,               // 이 속도 이하(걷기)는 스태미나 소모 없음
+  ST_MAX: { runner: 100, chaser: 150 },
+  ST_PER_MS: 1,              // 걷기 속도를 넘는 1m/s당 초당 스태미나 소모 (조깅≈1, 전력질주≈3)
+  ARROW_UNLOCK_SEC: 120,     // 추격 시작(또는 정지 해제) 후 화살표가 열리는 시간
+  ARROW_EVERY_SEC: 45,       // 화살표 주기
+  ARROW_SHOW_SEC: 10,        // 화살표가 보이는 시간
+  ARROW_NEAR_M: 15,          // 이 거리 안이면 화살표 대신 '근처에 있어요!'
+  ARROW_RECOVER: 15,         // 화살표가 뜰 때 추격자 스태미나 회복
+  MAP_EVERY_SEC: 20,         // 도망자 미니맵의 추격자 위치 갱신 간격
+  MAP_RECOVER: 10,           // 갱신될 때 도망자 스태미나 회복
+  MAX_PLAYERS: 10,
+  AREA_DEFAULT_M: 300
+};
+
+const Logic = (() => {
+  const R = 6371000, rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+
+  function dist(a, b) {
+    const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
+  function bearing(a, b) {
+    const y = Math.sin(rad(b.lng - a.lng)) * Math.cos(rad(b.lat));
+    const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lng - a.lng));
+    return (deg(Math.atan2(y, x)) + 360) % 360;
+  }
+  // 속도(m/s) → 초당 스태미나 소모. 걷기는 0, 탈것 속도에서 상한.
+  function staminaCostPerSec(speed) {
+    const walk = RULES.WALK_KMH / 3.6, cap = RULES.VEHICLE_KMH / 3.6;
+    const v = Math.min(Math.max(speed || 0, 0), cap);
+    return v > walk ? (v - walk) * RULES.ST_PER_MS : 0;
+  }
+  // 스태미나가 모자라면 모자란 만큼 체력에서 1:1로 깎임
+  function spendStamina(st, cost) {
+    return st >= cost ? { st: st - cost, hpLoss: 0 } : { st: 0, hpLoss: cost - st };
+  }
+  function phaseAt(now, startAt) {
+    const hideEnd = startAt + RULES.HIDE_SEC * 1000, end = hideEnd + RULES.GAME_SEC * 1000;
+    if (now < hideEnd) return { phase: 'hide', remainMs: hideEnd - now };
+    if (now < end) return { phase: 'chase', remainMs: end - now };
+    return { phase: 'over', remainMs: 0 };
+  }
+  // 화살표 기준 시각: 숨는 시간 끝 또는 잡은 뒤 정지가 풀리는 시각 중 늦은 쪽
+  function arrowBase(me, startAt) {
+    return Math.max(startAt + RULES.HIDE_SEC * 1000, me.frozenUntil || 0);
+  }
+  function arrowState(now, base) {
+    const unlockAt = base + RULES.ARROW_UNLOCK_SEC * 1000;
+    if (now < unlockAt) return { unlocked: false, visible: false, idx: -1, nextInMs: unlockAt - now, showLeftMs: 0 };
+    const every = RULES.ARROW_EVERY_SEC * 1000, show = RULES.ARROW_SHOW_SEC * 1000;
+    const t = now - unlockAt, idx = Math.floor(t / every), into = t - idx * every, visible = into < show;
+    return { unlocked: true, visible, idx, nextInMs: visible ? 0 : every - into, showLeftMs: visible ? show - into : 0 };
+  }
+  function mapRevealIdx(now, startAt) {
+    return Math.floor((now - startAt) / (RULES.MAP_EVERY_SEC * 1000));
+  }
+  function hpOf(p, hit) {
+    const caught = p.role === 'runner' ? ((hit && hit.catches) || 0) : 0;
+    return Math.max(0, RULES.HP_MAX - (p.selfDmg || 0) - caught * RULES.CATCH_DMG);
+  }
+  const alive = (p, hit) => hpOf(p, hit) > 0;
+  // 살아 있고 무적이 아닌 도망자 중 가장 가까운 사람
+  function nearestRunner(pos, players, hits, now) {
+    let best = null;
+    for (const [id, p] of Object.entries(players || {})) {
+      if (p.role !== 'runner' || p.lat == null) continue;
+      const h = (hits || {})[id];
+      if (!alive(p, h) || ((h && h.invUntil) || 0) > now) continue;
+      const d = dist(pos, p);
+      if (!best || d < best.d) best = { id, p, d };
+    }
+    return best;
+  }
+  function winner(players, hits, now, startAt) {
+    const list = Object.entries(players || {}).filter(([, p]) => p.role);
+    const runners = list.filter(([, p]) => p.role === 'runner'), chasers = list.filter(([, p]) => p.role === 'chaser');
+    if (!runners.length || !chasers.length) return null;
+    const h = hits || {};
+    if (!runners.some(([id, p]) => alive(p, h[id]))) return { winner: 'chaser', reason: '도망자 전원 탈락' };
+    if (!chasers.some(([id, p]) => alive(p, h[id]))) return { winner: 'runner', reason: '추격자 전원 탈락' };
+    if (phaseAt(now, startAt).phase === 'over') return { winner: 'runner', reason: `${RULES.GAME_SEC / 60}분 생존` };
+    return null;
+  }
+  function parseQR(text) {
+    const m = /^GTAG1\|([A-Z0-9]+)\|([A-Za-z0-9]+)\|([A-Za-z0-9]+)$/.exec(text || '');
+    return m ? { code: m[1], pid: m[2], token: m[3] } : null;
+  }
+  // 잡기 가능 여부. 문제가 있으면 이유(문자열), 괜찮으면 null
+  function checkCatch(room, code, chaserId, qr, now, myPos, mySelfDmg) {
+    if (!qr) return '술래잡기 QR이 아니에요';
+    if (qr.code !== code) return '다른 방의 QR이에요';
+    const players = room.players || {}, hits = room.hits || {};
+    const me = players[chaserId], t = players[qr.pid];
+    if (!me || me.role !== 'chaser') return '추격자만 잡을 수 있어요';
+    if (!alive({ ...me, selfDmg: mySelfDmg ?? me.selfDmg }, hits[chaserId])) return '탈락해서 잡을 수 없어요';
+    const ph = phaseAt(now, room.startAt).phase;
+    if (ph === 'hide') return '아직 도망자가 숨는 시간이에요';
+    if (ph === 'over') return '게임이 끝났어요';
+    if ((me.frozenUntil || 0) > now) return '정지 시간에는 잡을 수 없어요';
+    if (!t || t.role !== 'runner') return '도망자 QR이 아니에요';
+    if (t.qr !== qr.token) return '지난 게임의 QR이에요';
+    if (!alive(t, hits[qr.pid])) return '이미 탈락한 도망자예요';
+    if (((hits[qr.pid] && hits[qr.pid].invUntil) || 0) > now) return '방금 잡힌 도망자라 아직 무적이에요';
+    const pos = myPos || me;
+    if (pos.lat == null || t.lat == null) return 'GPS 위치를 아직 못 받았어요';
+    const d = dist(pos, t);
+    if (d > RULES.CATCH_MAX_DIST_M) return `GPS상 ${Math.round(d)}m 떨어져 있어서 잡을 수 없어요`;
+    return null;
+  }
+  function assignRoles(ids, nChasers, rnd = Math.random) {
+    const a = ids.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    const n = Math.min(Math.max(1, nChasers), Math.max(1, a.length - 1));
+    const roles = {};
+    a.forEach((id, i) => { roles[id] = i < n ? 'chaser' : 'runner'; });
+    return roles;
+  }
+  return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, assignRoles };
+})();
+// LOGIC END
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, get, set, update, push, remove, onValue, onChildAdded, query, limitToLast, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const $ = s => document.querySelector(s);
+const ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const CODECH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const rid = (n, abc = CODECH) => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => abc[b % abc.length]).join('');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const vibrate = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+
+const S = {
+  offset: 0, screen: null,
+  fix: null, prevFix: null, fixAt: 0, speed: 0, heading: null, compass: false, sensorsOn: false, watchId: null, wake: null,
+  code: null, pid: null, name: '', room: null, unsub: null, evUnsub: null, readySent: null,
+  gameKey: null, st: 0, selfDmg: 0, anchor: null, waitOut: 0, ruleSec: 0, lastMapIdx: null, lastArrowKey: null,
+  snap: [], dead: {}, warn: [], lastTick: 0, lastWrite: 0, winSent: false, follow: true, arrowRot: 0,
+  stream: null, scanning: false
+};
+
+const cfgOk = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
+let db = null;
+if (cfgOk) {
+  db = getDatabase(initializeApp(FIREBASE_CONFIG));
+  onValue(ref(db, '.info/serverTimeOffset'), s => { S.offset = s.val() || 0; });
+}
+const now = () => Date.now() + S.offset;
+const roomRef = p => ref(db, `rooms/${S.code}` + (p ? '/' + p : ''));
+const meRef = () => roomRef(`players/${S.pid}`);
+const safe = fn => async (...a) => { try { await fn(...a); } catch (e) { console.error(e); toast('연결 오류: ' + (e.message || e), true); } };
+
+let toastT;
+function toast(msg, big) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast on' + (big ? ' big' : '');
+  clearTimeout(toastT); toastT = setTimeout(() => { t.className = 'toast'; }, big ? 4000 : 2600);
+}
+function show(id) {
+  document.querySelectorAll('.screen').forEach(e => e.classList.toggle('on', e.id === id));
+  S.screen = id;
+}
+function saveLocal(v) { try { localStorage.setItem('gtag', JSON.stringify(v)); } catch (e) {} }
+
+/* ---------- 센서 ---------- */
+async function startSensors() {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== 'granted') toast('나침반 권한이 없어서 화살표가 북쪽 기준으로 보여요');
+    }
+  } catch (e) {}
+  if (!S.orientBound) {
+    S.orientBound = true;
+    window.addEventListener('deviceorientationabsolute', onOrient, true);
+    window.addEventListener('deviceorientation', onOrient, true);
+  }
+  if (!navigator.geolocation) { toast('이 브라우저는 GPS를 지원하지 않아요', true); return false; }
+  if (S.watchId == null) S.watchId = navigator.geolocation.watchPosition(onFix, onFixErr, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+  await requestWake();
+  S.sensorsOn = true;
+  return true;
+}
+async function requestWake() {
+  try { if ('wakeLock' in navigator) S.wake = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.sensorsOn) requestWake(); });
+
+let arrowRaf = 0;
+function onOrient(e) {
+  let h = null;
+  if (typeof e.webkitCompassHeading === 'number') h = e.webkitCompassHeading;
+  else if ((e.absolute || e.type === 'deviceorientationabsolute') && e.alpha != null) h = 360 - e.alpha;
+  if (h == null) return;
+  const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  h = (h + ang + 360) % 360;
+  if (S.heading == null) S.heading = h;
+  else { const d = ((h - S.heading + 540) % 360) - 180; S.heading = (S.heading + d * 0.3 + 360) % 360; }
+  S.compass = true;
+  if (!arrowRaf) arrowRaf = requestAnimationFrame(() => { arrowRaf = 0; if (S.screen === 's-game') drawArrow(); });
+}
+
+function onFix(p) {
+  const c = p.coords, t = Date.now();
+  const fix = { lat: c.latitude, lng: c.longitude, acc: c.accuracy || 999 };
+  // 속도: 기기가 주는 값 우선, 없으면 3초 이상 간격의 이동거리로 계산 (GPS 튐 완화)
+  let v = null;
+  if (typeof c.speed === 'number' && c.speed >= 0 && fix.acc <= 30) v = c.speed;
+  else if (S.prevFix && fix.acc <= 30 && t - S.prevFix.t >= 3000) v = Logic.dist(S.prevFix, fix) / ((t - S.prevFix.t) / 1000);
+  if (v != null) S.speed = S.speed * 0.5 + v * 0.5;
+  if (!S.prevFix || t - S.prevFix.t >= 3000) S.prevFix = { ...fix, t };
+  S.fix = fix; S.fixAt = t;
+  const room = S.room, me = room && room.players && room.players[S.pid];
+  if (room && me && room.status === 'lobby') {
+    if (!me.ready && S.readySent !== S.code) { S.readySent = S.code; update(meRef(), { ready: true }); }
+    if (room.hostId === S.pid && !(room.settings && room.settings.area) && !S.areaSent) {
+      S.areaSent = true;
+      update(roomRef('settings'), { area: { lat: fix.lat, lng: fix.lng, r: RULES.AREA_DEFAULT_M } });
+    }
+    renderLobby();
+  }
+  drawMaps();
+}
+function onFixErr(e) {
+  if (e.code === 1) toast('위치 권한이 거부됐어요. 브라우저 설정에서 위치를 허용해 주세요', true);
+}
+
+/* ---------- 지도 ---------- */
+const maps = {};
+function getMap(id) {
+  if (maps[id]) return maps[id];
+  const map = L.map(id, { zoomControl: false }).setView([37.5665, 126.978], 16);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  return (maps[id] = { map, self: null, acc: null, area: null, others: [], centered: false });
+}
+function drawSelf(mo, color) {
+  if (!S.fix) return;
+  const ll = [S.fix.lat, S.fix.lng], r = Math.min(S.fix.acc, 200);
+  if (!mo.self) {
+    mo.acc = L.circle(ll, { radius: r, stroke: false, fillColor: color, fillOpacity: .15, interactive: false }).addTo(mo.map);
+    mo.self = L.circleMarker(ll, { radius: 9, color: '#fff', weight: 3, fillColor: color, fillOpacity: 1, interactive: false }).addTo(mo.map);
+  } else {
+    mo.self.setLatLng(ll).setStyle({ fillColor: color });
+    mo.acc.setLatLng(ll).setRadius(r).setStyle({ fillColor: color });
+  }
+  if (!mo.centered) { mo.map.setView(ll, 17); mo.centered = true; }
+}
+function drawArea(mo, area, fit) {
+  if (!area) { if (mo.area) { mo.area.remove(); mo.area = null; } return; }
+  const ll = [area.lat, area.lng];
+  if (!mo.area) mo.area = L.circle(ll, { radius: area.r, color: '#ffb020', weight: 3, fill: false, dashArray: '8 8', interactive: false }).addTo(mo.map);
+  else mo.area.setLatLng(ll).setRadius(area.r);
+  const key = `${area.lat},${area.lng},${area.r}`;
+  if (fit && mo.areaKey !== key) { mo.areaKey = key; mo.map.fitBounds(mo.area.getBounds(), { padding: [10, 10] }); mo.centered = true; }
+  if (!mo.centered) { mo.map.setView(ll, 16); mo.centered = true; }
+}
+function drawMaps() {
+  const room = S.room; if (!room) return;
+  const area = room.settings && room.settings.area;
+  if (S.screen === 's-lobby' && maps.lmap) { drawSelf(maps.lmap, '#3ba3ff'); drawArea(maps.lmap, area, true); }
+  if (S.screen === 's-game' && maps.gmap) {
+    const me = room.players && room.players[S.pid], mo = maps.gmap;
+    drawSelf(mo, me && me.role === 'chaser' ? '#ff4d4f' : '#3ba3ff'); drawArea(mo, area);
+    if (S.follow && S.fix) mo.map.panTo([S.fix.lat, S.fix.lng], { animate: false });
+  }
+}
+function takeSnapshot() {
+  const room = S.room; if (!room) return;
+  const hits = room.hits || {};
+  S.snap = Object.entries(room.players || {})
+    .filter(([id, p]) => p.role === 'chaser' && p.lat != null && Logic.alive(p, hits[id]))
+    .map(([, p]) => ({ name: p.name, lat: p.lat, lng: p.lng }));
+  drawSnap();
+}
+function drawSnap() {
+  const mo = maps.gmap; if (!mo) return;
+  mo.others.forEach(m => m.remove());
+  mo.others = S.snap.map(c => L.circleMarker([c.lat, c.lng], { radius: 10, color: '#fff', weight: 2, fillColor: '#ff4d4f', fillOpacity: .9 })
+    .bindTooltip(esc(c.name), { permanent: true, direction: 'top', className: 'chaserTip' }).addTo(mo.map));
+}
+
+/* ---------- 홈 / 방 ---------- */
+function getName() {
+  const n = $('#in-name').value.trim();
+  if (!n) { toast('닉네임을 입력하세요'); return null; }
+  S.name = n; return n;
+}
+$('#btnCreate').onclick = safe(async () => {
+  const name = getName(); if (!name) return;
+  const pid = rid(10, ALNUM);
+  let code = rid(5);
+  for (let i = 0; i < 5 && (await get(ref(db, `rooms/${code}`))).exists(); i++) code = rid(5);
+  await set(ref(db, `rooms/${code}`), {
+    hostId: pid, status: 'lobby', createdAt: serverTimestamp(),
+    settings: { chasers: 1 },
+    players: { [pid]: { name, joinedAt: serverTimestamp() } }
+  });
+  enterRoom(code, pid, name);
+});
+$('#btnJoin').onclick = safe(async () => {
+  const name = getName(); if (!name) return;
+  const code = $('#in-code').value.trim().toUpperCase();
+  if (!code) return toast('방 코드를 입력하세요');
+  const snap = await get(ref(db, `rooms/${code}`));
+  if (!snap.exists()) return toast('없는 방이에요');
+  const room = snap.val();
+  if (room.status !== 'lobby') return toast('이미 시작한 게임이에요');
+  if (Object.keys(room.players || {}).length >= RULES.MAX_PLAYERS) return toast(`최대 ${RULES.MAX_PLAYERS}명까지예요`);
+  const pid = rid(10, ALNUM);
+  await set(ref(db, `rooms/${code}/players/${pid}`), { name, joinedAt: serverTimestamp() });
+  enterRoom(code, pid, name);
+});
+
+function enterRoom(code, pid, name) {
+  S.code = code; S.pid = pid; S.name = name; S.areaSent = false;
+  saveLocal({ code, pid, name });
+  if (S.unsub) S.unsub();
+  if (S.evUnsub) S.evUnsub();
+  S.unsub = onValue(roomRef(), snap => { S.room = snap.val(); onRoom(); });
+  const since = now() - 5000;
+  S.evUnsub = onChildAdded(query(roomRef('events'), limitToLast(20)), s => { const e = s.val(); if (e && (e.at || 0) >= since) onEvent(e); });
+}
+function onRoom() {
+  const room = S.room, me = room && room.players && room.players[S.pid];
+  if (!me) return leaveLocal('방에서 나왔어요');
+  if (room.result || room.status === 'ended') return renderResult();
+  if (room.status === 'lobby') { if (S.screen !== 's-lobby') show('s-lobby'); return renderLobby(); }
+  if (room.status === 'playing') {
+    if (!me.role) return leaveLocal('이미 시작한 게임이에요');
+    enterGame(); renderGame();
+  }
+}
+function onEvent(e) {
+  if (e.type !== 'catch') return;
+  const P = (S.room && S.room.players) || {}, by = (P[e.by] || {}).name || '?', tg = (P[e.target] || {}).name || '?';
+  const min = RULES.CATCH_COOLDOWN_SEC / 60;
+  if (e.target === S.pid) { $('#ov-qr').classList.remove('on'); toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min}분 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); }
+  else if (e.by === S.pid) { toast(`${tg} 잡았다! ${min}분 동안 제자리 대기`, true); vibrate(200); }
+  else toast(`${by} → ${tg} 잡았어요!`);
+}
+async function leaveRoom() {
+  const room = S.room, code = S.code, pid = S.pid;
+  try {
+    if (room && room.status === 'lobby' && room.hostId === pid) {
+      const others = Object.keys(room.players || {}).filter(id => id !== pid);
+      if (others.length) await update(ref(db, `rooms/${code}`), { hostId: others[0], [`players/${pid}`]: null });
+      else await remove(ref(db, `rooms/${code}`));
+    } else await remove(ref(db, `rooms/${code}/players/${pid}`));
+  } catch (e) { console.error(e); }
+  leaveLocal();
+}
+function leaveLocal(msg) {
+  if (S.unsub) S.unsub();
+  if (S.evUnsub) S.evUnsub();
+  S.unsub = S.evUnsub = null; S.code = S.pid = S.room = S.gameKey = null;
+  closeScanner(); $('#ov-qr').classList.remove('on'); $('#ov-resume').classList.remove('on');
+  saveLocal({ name: S.name });
+  show('s-home');
+  if (msg) toast(msg);
+}
+$('#btnLeave1').onclick = leaveRoom;
+$('#btnLeave2').onclick = leaveRoom;
+
+/* ---------- 로비 ---------- */
+function renderLobby() {
+  const room = S.room, isHost = room.hostId === S.pid, players = Object.entries(room.players || {}), n = players.length;
+  $('#l-code').textContent = S.code;
+  $('#l-count').textContent = `${n}/${RULES.MAX_PLAYERS}명`;
+  $('#l-list').innerHTML = players.map(([id, p]) =>
+    `<li><span>${id === room.hostId ? '👑 ' : ''}${esc(p.name)}${id === S.pid ? ' (나)' : ''}</span><span class="${p.ready ? 'ok' : 'dim'}">${p.ready ? '준비 ✓' : '센서 대기'}</span></li>`).join('');
+  $('#btnReady').style.display = S.sensorsOn ? 'none' : 'block';
+  const ch = Math.min(Math.max(1, (room.settings && room.settings.chasers) || 1), Math.max(1, n - 1));
+  $('#l-chasers').textContent = ch;
+  $('#l-runners').textContent = Math.max(0, n - ch);
+  const area = room.settings && room.settings.area, r = area ? area.r : RULES.AREA_DEFAULT_M;
+  if (document.activeElement !== $('#l-r')) $('#l-r').value = r;
+  $('#l-rv').textContent = $('#l-r').value + 'm';
+  ['#btnChMinus', '#btnChPlus', '#l-r'].forEach(s => { $(s).disabled = !isHost; });
+  $('#l-areaHint').textContent = isHost ? '지도를 탭하면 구역 중심이 옮겨져요 (처음엔 내 위치)' : '추격자 수와 구역은 방장이 정해요';
+  const allReady = players.every(([, p]) => p.ready);
+  $('#btnStart').style.display = isHost ? 'block' : 'none';
+  $('#btnStart').disabled = !(n >= 2 && allReady && area);
+  $('#l-hint').textContent = n < 2 ? '2명 이상이어야 시작할 수 있어요'
+    : !allReady ? '모두 센서를 켜야 시작할 수 있어요'
+    : !area ? (S.sensorsOn ? 'GPS 위치를 기다리는 중…' : '방장이 센서를 켜면 구역이 정해져요') : '';
+  const mo = getMap('lmap');
+  if (!mo.bound) {
+    mo.bound = true;
+    mo.map.on('click', safe(async e => {
+      if (!S.room || S.room.hostId !== S.pid) return;
+      const a = S.room.settings && S.room.settings.area;
+      await update(roomRef('settings'), { area: { lat: e.latlng.lat, lng: e.latlng.lng, r: a ? a.r : RULES.AREA_DEFAULT_M } });
+    }));
+    setTimeout(() => mo.map.invalidateSize(), 50);
+  }
+  drawMaps();
+}
+$('#btnReady').onclick = safe(async () => { if (await startSensors()) { toast('GPS 신호를 기다리는 중…'); if (S.room) renderLobby(); } });
+const setChasers = safe(async d => {
+  const room = S.room, n = Object.keys(room.players).length;
+  const c = Math.min(Math.max(1, ((room.settings && room.settings.chasers) || 1) + d), Math.max(1, n - 1));
+  await update(roomRef('settings'), { chasers: c });
+});
+$('#btnChMinus').onclick = () => setChasers(-1);
+$('#btnChPlus').onclick = () => setChasers(1);
+$('#l-r').oninput = () => { $('#l-rv').textContent = $('#l-r').value + 'm'; };
+$('#l-r').onchange = safe(async () => {
+  const a = S.room && S.room.settings && S.room.settings.area;
+  if (!a) return toast('먼저 구역 중심을 정하세요');
+  await update(roomRef('settings/area'), { r: +$('#l-r').value });
+  $('#l-r').blur();
+});
+$('#btnStart').onclick = safe(async () => {
+  const room = S.room, ids = Object.keys(room.players), n = ids.length;
+  if (n < 2) return toast('2명 이상이어야 해요');
+  const roles = Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
+  const u = { status: 'playing', startAt: serverTimestamp(), result: null, hits: null, events: null };
+  for (const id of ids) {
+    u[`players/${id}/role`] = roles[id];
+    u[`players/${id}/selfDmg`] = 0;
+    u[`players/${id}/st`] = RULES.ST_MAX[roles[id]];
+    u[`players/${id}/frozenUntil`] = 0;
+    u[`players/${id}/anchor`] = null;
+    u[`players/${id}/qr`] = roles[id] === 'runner' ? rid(12, ALNUM) : null;
+  }
+  await update(roomRef(), u);
+});
+
+/* ---------- 게임 ---------- */
+function enterGame() {
+  const room = S.room, me = room.players[S.pid], key = S.code + ':' + room.startAt;
+  if (S.gameKey !== key) {
+    S.gameKey = key;
+    Object.assign(S, {
+      selfDmg: me.selfDmg || 0, st: me.st ?? RULES.ST_MAX[me.role], anchor: me.anchor || null,
+      waitOut: 0, ruleSec: 0, lastMapIdx: null, lastArrowKey: null, snap: [], dead: {}, warn: [],
+      lastTick: 0, lastWrite: 0, winSent: false
+    });
+    const hits = room.hits || {};
+    for (const [id, p] of Object.entries(room.players)) {
+      if (p.role && Logic.hpOf(id === S.pid ? { ...p, selfDmg: S.selfDmg } : p, hits[id]) <= 0) S.dead[id] = true;
+    }
+  }
+  if (S.screen !== 's-game') {
+    show('s-game');
+    const mo = getMap('gmap');
+    if (!mo.bound) { mo.bound = true; mo.map.on('dragstart', () => { S.follow = false; }); }
+    setTimeout(() => mo.map.invalidateSize(), 50);
+    if (me.role === 'runner') takeSnapshot();
+  }
+  $('#ov-resume').classList.toggle('on', !S.sensorsOn);
+}
+$('#btnResume').onclick = safe(async () => { await startSensors(); $('#ov-resume').classList.remove('on'); });
+$('#btnFollow').onclick = () => { S.follow = true; drawMaps(); };
+
+function tick() {
+  const room = S.room;
+  if (!room || room.status !== 'playing' || room.result || S.screen !== 's-game') return;
+  const me = room.players && room.players[S.pid]; if (!me || !me.role) return;
+  const t = now(), hits = room.hits || {}, ph = Logic.phaseAt(t, room.startAt);
+  const real = Date.now(), dt = S.lastTick ? Math.min(Math.max((real - S.lastTick) / 1000, 0), 2) : 0;
+  S.lastTick = real;
+  const stMax = RULES.ST_MAX[me.role];
+  const meAlive = Logic.alive({ ...me, selfDmg: S.selfDmg }, hits[S.pid]);
+
+  // 도망자: 미니맵 추격자 위치 갱신 + 그때마다 스태미나 회복
+  if (me.role === 'runner') {
+    const idx = Logic.mapRevealIdx(t, room.startAt);
+    if (S.lastMapIdx == null) S.lastMapIdx = idx;
+    else if (idx > S.lastMapIdx) { S.lastMapIdx = idx; takeSnapshot(); if (meAlive) S.st = Math.min(stMax, S.st + RULES.MAP_RECOVER); }
+  }
+  checkWin();
+  if (!meAlive || ph.phase === 'over' || !S.fix) return renderGame();
+  if (real - S.fixAt > 5000) S.speed *= 0.5;
+
+  let dmg = 0;
+  const warn = [];
+  // 1) 추격자 대기 규칙: 숨는 시간 + 잡은 뒤 정지 시간
+  const waiting = me.role === 'chaser' && (ph.phase === 'hide' || (me.frozenUntil || 0) > t);
+  if (waiting) {
+    if (!S.anchor) { S.anchor = { lat: S.fix.lat, lng: S.fix.lng }; update(meRef(), { anchor: S.anchor }); }
+    const d = Logic.dist(S.fix, S.anchor);
+    if (d > RULES.WAIT_MOVE_M) {
+      S.waitOut += dt;
+      if (S.waitOut >= RULES.WAIT_MOVE_GRACE_SEC) { dmg += RULES.WAIT_MOVE_DMG * dt; warn.push(`대기 중 이동! 체력 감소 중 (${Math.round(d)}m)`); }
+      else warn.push(`대기 중이에요! 제자리로 (${Math.round(d)}m)`);
+    } else S.waitOut = 0;
+  } else {
+    S.waitOut = 0;
+    if (S.anchor) { S.anchor = null; update(meRef(), { anchor: null }); }
+  }
+  // 2) 구역 밖 / 탈것
+  const area = room.settings && room.settings.area;
+  const outside = !!area && Logic.dist(S.fix, area) > area.r;
+  const vehicle = S.speed * 3.6 > RULES.VEHICLE_KMH;
+  if (outside || vehicle) {
+    S.ruleSec += dt;
+    const what = outside ? '구역 밖' : '탈것 감지', left = RULES.RULE_WARN_SEC - S.ruleSec;
+    if (left > 0) warn.push(`${what}! ${Math.ceil(left)}초 안에 돌아오세요`);
+    else { dmg += RULES.RULE_DMG * dt; warn.push(`${what}! 체력 감소 중`); }
+  } else S.ruleSec = 0;
+  // 3) 스태미나 (뛸 때만 소모, 0이면 체력으로)
+  const sp = Logic.spendStamina(S.st, Logic.staminaCostPerSec(S.speed) * dt);
+  S.st = sp.st; dmg += sp.hpLoss;
+  if (sp.hpLoss > 0) warn.push('스태미나 0! 뛰면 체력이 닳아요');
+  // 4) 추격자: 화살표가 뜰 때 스태미나 회복
+  if (me.role === 'chaser' && ph.phase === 'chase' && !waiting) {
+    const base = Logic.arrowBase(me, room.startAt), a = Logic.arrowState(t, base), key = base + ':' + a.idx;
+    if (a.visible && S.lastArrowKey !== key) { S.lastArrowKey = key; S.st = Math.min(stMax, S.st + RULES.ARROW_RECOVER); }
+  }
+
+  S.selfDmg += dmg; S.warn = warn;
+  const dead = !Logic.alive({ ...me, selfDmg: S.selfDmg }, hits[S.pid]);
+  if (dead) { toast('체력 0 — 탈락했어요', true); vibrate([300, 100, 300]); }
+  if (dead || real - S.lastWrite >= 2000) {
+    S.lastWrite = real;
+    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10 });
+  }
+  renderGame();
+}
+setInterval(tick, 1000);
+
+function checkWin() {
+  const room = S.room;
+  if (!room || room.result || room.status !== 'playing' || S.winSent) return;
+  const players = { ...room.players };
+  if (players[S.pid]) players[S.pid] = { ...players[S.pid], selfDmg: S.selfDmg };
+  const w = Logic.winner(players, room.hits, now(), room.startAt);
+  if (!w) return;
+  S.winSent = true;
+  runTransaction(roomRef('result'), cur => (cur ? undefined : { ...w, at: now() }))
+    .then(() => update(roomRef(), { status: 'ended' }))
+    .catch(e => { S.winSent = false; console.error(e); });
+}
+
+function renderGame() {
+  const room = S.room; if (!room || S.screen !== 's-game') return;
+  const me = room.players && room.players[S.pid]; if (!me || !me.role) return;
+  const t = now(), hits = room.hits || {}, ph = Logic.phaseAt(t, room.startAt), isC = me.role === 'chaser';
+  const hp = Logic.hpOf({ ...me, selfDmg: S.selfDmg }, hits[S.pid]), alive = hp > 0, stMax = RULES.ST_MAX[me.role];
+  const frozen = (me.frozenUntil || 0) > t, inv = ((hits[S.pid] && hits[S.pid].invUntil) || 0) - t;
+  $('#g-role').textContent = isC ? '추격자' : '도망자';
+  $('#g-role').className = 'badge ' + me.role;
+  $('#g-phase').textContent = ph.phase === 'hide' ? (isC ? '도망자 숨는 중' : '숨는 시간') : ph.phase === 'chase' ? '추격 중' : '종료';
+  $('#g-time').textContent = fmt(ph.remainMs);
+  $('#g-hp').style.width = hp + '%'; $('#g-hpv').textContent = Math.ceil(hp);
+  $('#g-st').style.width = (S.st / stMax * 100) + '%'; $('#g-stv').textContent = `${Math.floor(S.st)}/${stMax}`;
+
+  const st = [];
+  if (!alive) st.push('탈락했어요 · 결과를 기다리는 중');
+  else if (isC && ph.phase === 'hide') st.push(`제자리 대기 · ${RULES.WAIT_MOVE_M}m 넘게 움직이면 체력 감소`);
+  else if (isC && frozen) st.push(`잡은 뒤 정지 ${fmt(me.frozenUntil - t)} · 제자리 대기`);
+  else if (!isC && inv > 0) st.push(`무적 ${fmt(inv)} · 지금 도망가세요!`);
+  if (!S.fix) st.push('GPS 신호 기다리는 중…');
+  else if (S.fix.acc > 30) st.push(`GPS 약함 (±${Math.round(S.fix.acc)}m)`);
+  $('#g-status').textContent = st.join(' · ');
+  $('#g-warn').textContent = alive ? S.warn.join('\n') : '';
+
+  $('#btnScan').style.display = isC && alive ? 'block' : 'none';
+  $('#btnScan').disabled = !(ph.phase === 'chase' && !frozen);
+  $('#btnShowQR').style.display = !isC && alive ? 'block' : 'none';
+
+  let info = '';
+  if (isC) info = drawArrow();
+  else {
+    $('#arrowBox').className = 'arrowbox';
+    const next = room.startAt + (Logic.mapRevealIdx(t, room.startAt) + 1) * RULES.MAP_EVERY_SEC * 1000;
+    info = `추격자 위치 갱신까지 ${Math.ceil((next - t) / 1000)}초`;
+  }
+  $('#g-info').textContent = alive ? info : '';
+
+  for (const [id, p] of Object.entries(room.players)) {
+    if (!p.role || S.dead[id]) continue;
+    const php = id === S.pid ? hp : Logic.hpOf(p, hits[id]);
+    if (php <= 0) { S.dead[id] = true; if (id !== S.pid) toast(`${p.name} 탈락!`); }
+  }
+  drawMaps();
+}
+
+function rotateArrow(deg) {
+  const d = ((deg - S.arrowRot) % 360 + 540) % 360 - 180;
+  S.arrowRot += d;
+  $('#arrow').style.transform = `rotate(${S.arrowRot}deg)`;
+}
+function drawArrow() {
+  const box = $('#arrowBox'), room = S.room;
+  const off = (txt = '') => { box.className = 'arrowbox'; return txt; };
+  if (!room || room.status !== 'playing') return off();
+  const me = room.players && room.players[S.pid], t = now(), hits = room.hits || {};
+  if (!me || me.role !== 'chaser' || !Logic.alive({ ...me, selfDmg: S.selfDmg }, hits[S.pid])) return off();
+  const ph = Logic.phaseAt(t, room.startAt);
+  if (ph.phase === 'hide') return off(`추격 시작까지 ${fmt(ph.remainMs)}`);
+  if (ph.phase !== 'chase') return off();
+  if ((me.frozenUntil || 0) > t) return off('정지가 풀리면 다시 쫓을 수 있어요');
+  const a = Logic.arrowState(t, Logic.arrowBase(me, room.startAt));
+  if (!a.unlocked) return off(`화살표 열리기까지 ${fmt(a.nextInMs)}`);
+  if (!a.visible) return off(`다음 화살표까지 ${fmt(a.nextInMs)}`);
+  box.className = 'arrowbox on';
+  const arrow = $('#arrow'), txt = $('#arrowTxt');
+  const tg = S.fix ? Logic.nearestRunner(S.fix, room.players, hits, t) : null;
+  if (!S.fix) { arrow.style.display = 'none'; txt.textContent = 'GPS 기다리는 중'; }
+  else if (!tg) { arrow.style.display = 'none'; txt.textContent = '잡을 수 있는 도망자가 없어요'; }
+  else if (tg.d <= RULES.ARROW_NEAR_M) { arrow.style.display = 'none'; txt.textContent = '근처에 있어요!'; }
+  else {
+    arrow.style.display = 'block';
+    const b = Logic.bearing(S.fix, tg.p);
+    rotateArrow(S.compass && S.heading != null ? b - S.heading : b);
+    txt.textContent = S.compass ? '' : '나침반 없음 · 화면 위쪽이 북쪽';
+  }
+  return `화살표 표시 중 ${Math.ceil(a.showLeftMs / 1000)}초`;
+}
+
+/* ---------- QR ---------- */
+$('#btnShowQR').onclick = () => {
+  const me = S.room.players[S.pid];
+  const qr = qrcode(0, 'M'); qr.addData(`GTAG1|${S.code}|${S.pid}|${me.qr}`); qr.make();
+  $('#qrBox').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  $('#qrName').textContent = me.name;
+  $('#ov-qr').classList.add('on');
+};
+$('#btnQrClose').onclick = () => $('#ov-qr').classList.remove('on');
+
+$('#btnScan').onclick = safe(async () => {
+  const ov = $('#ov-scan'), v = $('#scanVideo');
+  ov.classList.add('on');
+  try { S.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); }
+  catch (e) { closeScanner(); return toast('카메라를 열 수 없어요. 카메라 권한을 확인하세요', true); }
+  v.srcObject = S.stream;
+  await v.play().catch(() => {});
+  const c = document.createElement('canvas'), ctx = c.getContext('2d', { willReadFrequently: true });
+  S.scanning = true;
+  const loop = () => {
+    if (!S.scanning) return;
+    if (v.readyState >= 2 && v.videoWidth) {
+      const w = 640, h = Math.round(v.videoHeight * w / v.videoWidth);
+      c.width = w; c.height = h; ctx.drawImage(v, 0, 0, w, h);
+      const found = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+      if (found && found.data) { closeScanner(); handleScan(found.data); return; }
+    }
+    requestAnimationFrame(loop);
+  };
+  loop();
+});
+function closeScanner() {
+  S.scanning = false;
+  if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
+  $('#ov-scan').classList.remove('on');
+}
+$('#btnScanClose').onclick = closeScanner;
+
+const handleScan = safe(async text => {
+  const qr = Logic.parseQR(text), t = now();
+  const err = Logic.checkCatch(S.room, S.code, S.pid, qr, t, S.fix, S.selfDmg);
+  if (err) return toast(err, true);
+  const res = await runTransaction(ref(db, `rooms/${S.code}/hits/${qr.pid}`), cur => {
+    cur = cur || { catches: 0, invUntil: 0 };
+    if ((cur.invUntil || 0) > t) return; // 다른 추격자가 먼저 잡음
+    return { catches: (cur.catches || 0) + 1, invUntil: t + RULES.CATCH_COOLDOWN_SEC * 1000, by: S.pid };
+  });
+  if (!res.committed) return toast('방금 다른 추격자가 잡았어요');
+  S.anchor = { lat: S.fix.lat, lng: S.fix.lng }; S.waitOut = 0;
+  await update(meRef(), { frozenUntil: t + RULES.CATCH_COOLDOWN_SEC * 1000, anchor: S.anchor });
+  await push(roomRef('events'), { type: 'catch', by: S.pid, target: qr.pid, at: serverTimestamp() });
+});
+
+/* ---------- 결과 ---------- */
+function renderResult() {
+  closeScanner(); $('#ov-qr').classList.remove('on'); $('#ov-resume').classList.remove('on');
+  $('#arrowBox').className = 'arrowbox';
+  show('s-result');
+  const room = S.room, r = room.result || {}, me = room.players[S.pid], hits = room.hits || {};
+  $('#r-title').textContent = r.winner === 'chaser' ? '추격자 승리!' : r.winner === 'runner' ? '도망자 승리!' : '게임 종료';
+  $('#r-sub').textContent = [r.reason, me.role ? (me.role === r.winner ? '이겼어요 🎉' : '졌어요') : ''].filter(Boolean).join(' · ');
+  $('#r-list').innerHTML = Object.entries(room.players).filter(([, p]) => p.role).map(([id, p]) => {
+    const hp = Logic.hpOf(id === S.pid && S.gameKey ? { ...p, selfDmg: S.selfDmg } : p, hits[id]);
+    return `<li><span><span class="badge ${p.role}">${p.role === 'chaser' ? '추격자' : '도망자'}</span> ${esc(p.name)}</span><span class="${hp > 0 ? 'ok' : 'dim'}">${hp > 0 ? '체력 ' + Math.ceil(hp) : '탈락'}</span></li>`;
+  }).join('');
+}
+
+/* ---------- 시작 ---------- */
+(function boot() {
+  if (!cfgOk) return show('s-setup');
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('gtag') || 'null'); } catch (e) {}
+  if (saved && saved.name) $('#in-name').value = saved.name;
+  show('s-home');
+  if (saved && saved.code && saved.pid) {
+    get(ref(db, `rooms/${saved.code}/players/${saved.pid}`))
+      .then(s => { if (s.exists()) enterRoom(saved.code, saved.pid, saved.name); else saveLocal({ name: saved.name }); })
+      .catch(e => console.error(e));
+  }
+})();
+</script>
+</body>
+</html>
