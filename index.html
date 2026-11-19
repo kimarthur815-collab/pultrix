@@ -205,7 +205,7 @@ button.augcard{display:flex;gap:12px;align-items:center;text-align:left;padding:
 <div id="ov-qr" class="ov"><div id="qrBox" class="qrbox"></div><p id="qrName" class="big"></p><p class="dim">추격자가 이 QR을 찍으면 잡혀요</p><button id="btnQrClose">닫기</button></div>
 <div id="ov-scan" class="ov"><video id="scanVideo" playsinline muted></video><p class="dim" style="margin-top:12px">도망자 폰의 QR을 비춰주세요</p><button id="btnScanClose">취소</button></div>
 <div id="ov-invite" class="ov"><p class="dim">친구가 폰 카메라로 찍으면 이 방으로 바로 들어와요</p><div id="inviteQR" class="qrbox" style="margin-top:12px"></div><p id="inviteCode" class="big code"></p><p id="inviteUrl" class="dim small" style="word-break:break-all;max-width:360px"></p><button id="btnCopyLink" class="primary">링크 복사</button><button id="btnInviteClose">닫기</button></div>
-<div id="ov-aug" class="ov"><p class="dim">10분 보상</p><h2>증강을 하나 고르세요</h2><div id="augCards" class="cards"></div></div>
+<div id="ov-aug" class="ov"><p id="augTitle" class="dim">정기 보상</p><h2>증강을 하나 고르세요</h2><div id="augCards" class="cards"></div></div>
 <div id="ov-role" class="ov"><p class="dim">당신의 역할은…</p><div class="slot"><div id="reel" class="reel"></div></div><p id="roleMsg" class="big"></p><p id="roleSub" class="dim"></p><button id="btnRoleOk" class="primary">확인</button></div>
 <div id="flash"></div>
 <div id="ov-resume" class="ov"><h2>센서를 다시 켜야 해요</h2><p class="dim">GPS와 나침반을 켜려면 눌러주세요</p><button id="btnResume" class="primary">센서 켜기</button></div>
@@ -244,7 +244,7 @@ const RULES = {
   ST_PER_MS: 1,              // 걷기 속도를 넘는 1m/s당 초당 스태미나 소모 (조깅≈1, 전력질주≈3)
   ARROW_UNLOCK_SEC: 120,     // 추격 시작(또는 정지 해제) 후 화살표가 열리는 시간
   ARROW_EVERY_SEC: 45,       // 화살표 주기
-  ARROW_SHOW_SEC: 10,        // 화살표가 보이는 시간
+  ARROW_SHOW_SEC: 10,        // 화살표가 보이는 시간 (주기 45초 기준, 주기에 비례해서 바뀜)
   ARROW_NEAR_M: 15,          // 이 거리 안이면 화살표 대신 '근처에 있어요!'
   ARROW_RECOVER: 15,         // 화살표가 뜰 때 추격자 스태미나 회복
   MAP_EVERY_SEC: 20,         // 도망자 미니맵의 추격자 위치 갱신 간격
@@ -253,12 +253,13 @@ const RULES = {
   AREA_DEFAULT_M: 300,
   GPS_MAX_SPEED_MS: 8,       // 이보다 빠르게 '순간이동'한 GPS 값은 튄 값으로 보고 무시 (같은 쪽으로 3번 연속이면 인정)
   GPS_BAD_ACC: 30,           // GPS 오차가 이 값(m)보다 크면 대기·구역 벌칙 판정을 잠시 멈춤
-  AUG_EVERY_SEC: 600,        // 추격 시작 후 이 간격마다 증강 3개 중 1개 선택 (10분, 20분)
+  AUG_EVERY_SEC: 600,        // 추격 시작 후 이 간격마다 증강 3개 중 1개 선택 (기본: 게임 시간 ÷ 3)
   SPOT_COUNT: 2,             // 구역 안 증강 지점 수
   SPOT_PICK_M: 15,           // 지점에서 이 거리 안에 들어가면 획득
   SPOT_RESPAWN_SEC: 180,     // 먹힌 지점이 다른 곳에 다시 생기는 시간
   TIER_ODDS: [0.6, 0.3, 0.1], // 증강 등급 확률 B / A / S
-  AUG_ON: 1                  // 증강 켜기(1) / 끄기(0)
+  AUG_ON: 1,                 // 증강 켜기(1) / 끄기(0)
+  AREA_R: 300                // 현재 구역 반경 (방 설정에서 자동으로 들어옴, 경보기 거리 계산용)
 };
 // 위 값들은 기본값이에요. 실제 게임에서는 방장이 로비에서 정한 설정(추천값 또는 직접 수정)이 덮어써요.
 const RULE_DEFAULTS = JSON.parse(JSON.stringify(RULES));
@@ -292,6 +293,10 @@ const Logic = (() => {
     if (now < end) return { phase: 'chase', remainMs: end - now };
     return { phase: 'over', remainMs: 0 };
   }
+  // 화살표가 보이는 시간: 주기의 약 22% (기본 45초 → 10초), 최소 5초
+  function arrowShowSec(everySec) {
+    return Math.max(5, Math.round(everySec * RULE_DEFAULTS.ARROW_SHOW_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
+  }
   // 화살표 기준 시각: 숨는 시간 끝 또는 잡은 뒤 정지가 풀리는 시각 중 늦은 쪽
   function arrowBase(me, startAt) {
     return Math.max(startAt + RULES.HIDE_SEC * 1000, me.frozenUntil || 0);
@@ -299,7 +304,7 @@ const Logic = (() => {
   function arrowState(now, base, everySec = RULES.ARROW_EVERY_SEC) {
     const unlockAt = base + RULES.ARROW_UNLOCK_SEC * 1000;
     if (now < unlockAt) return { unlocked: false, visible: false, idx: -1, nextInMs: unlockAt - now, showLeftMs: 0 };
-    const every = everySec * 1000, show = RULES.ARROW_SHOW_SEC * 1000;
+    const every = everySec * 1000, show = arrowShowSec(everySec) * 1000;
     const t = now - unlockAt, idx = Math.floor(t / every), into = t - idx * every, visible = into < show;
     return { unlocked: true, visible, idx, nextInMs: visible ? 0 : every - into, showLeftMs: visible ? show - into : 0 };
   }
@@ -381,7 +386,7 @@ const Logic = (() => {
     radar:        { name: '레이더', role: 'chaser', once: true, v: [5, 10, 20], d: v => `${v}초 동안 모든 도망자 위치 표시` },
     chaserSt:     { name: '추격 본능', role: 'chaser', v: [30, 50, 80], d: v => `스태미나 최대치 +${v}, 즉시 가득` },
     stealth:      { name: '은신', role: 'runner', once: true, v: [30, 60, 120], d: v => `${v}초 동안 추격자 화살표에 안 잡힘` },
-    alarm:        { name: '경보기', role: 'runner', v: [30, 50, 80], d: v => `추격자가 ${v}m 안에 오면 진동` },
+    alarm:        { name: '경보기', role: 'runner', v: [30, 50, 80], d: v => `추격자가 ${augAlarmM(v)}m 안에 오면 진동` },
     fastIntel:    { name: '빠른 정보', role: 'runner', v: [15, 10, 5], d: v => `미니맵 추격자 위치 ${augIntelSec(v)}초마다 갱신 (기본 ${RULES.MAP_EVERY_SEC}초)` },
     runnerSt:     { name: '질주 체질', role: 'runner', v: [20, 30, 50], d: v => `스태미나 최대치 +${v}, 즉시 가득` },
     heal:         { name: '응급 회복', role: 'all', once: true, v: [15, 30, 50], d: v => `체력 +${v}` },
@@ -390,7 +395,9 @@ const Logic = (() => {
     ironman:      { name: '철인', role: 'all', v: [0.7, 0.5, 0.25], d: v => `스태미나 0일 때 체력 감소 ${Math.round(v * 100)}%로` }
   };
   // 화살표 강화·빠른 정보는 방장이 정한 기본 주기에 비례해서 줄어듦 (기본값 45초·20초 기준 수치)
-  const augArrowSec = v => Math.max(5, Math.round(v * RULES.ARROW_EVERY_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
+  const augArrowSec = v => Math.max(15, Math.round(v * RULES.ARROW_EVERY_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
+  // 경보기 거리는 구역 반경에 비례 (300m 기준 수치), 15~200m
+  const augAlarmM = v => Math.min(200, Math.max(15, Math.round(v * RULES.AREA_R / RULE_DEFAULTS.AREA_R)));
   const augIntelSec = v => Math.max(3, Math.round(v * RULES.MAP_EVERY_SEC / RULE_DEFAULTS.MAP_EVERY_SEC));
   const augDesc = (id, tier) => AUGS[id].d(AUGS[id].v[tier], tier);
   const augPool = role => Object.keys(AUGS).filter(id => AUGS[id].role === role || AUGS[id].role === 'all');
@@ -453,6 +460,16 @@ const Logic = (() => {
       AUG_EVERY_SEC: gameMin * 60 / 3
     };
   }
+  // 추천값에 방장이 직접 바꾼 칸을 덮어쓴 최종 설정.
+  // 미니맵 갱신(화살표 주기 연동)과 보상 간격(게임 시간 ÷ 3)은 직접 안 바꿨다면 '최종' 화살표 주기·게임 시간을 따라감
+  function mergeSettings(rec, cur, custom) {
+    cur = cur || {}; custom = custom || {};
+    const out = {};
+    for (const k of Object.keys(rec)) out[k] = custom[k] && cur[k] != null ? cur[k] : rec[k];
+    if (!custom.MAP_EVERY_SEC) out.MAP_EVERY_SEC = Math.max(10, roundTo(out.ARROW_EVERY_SEC * 0.45, 5));
+    if (!custom.AUG_EVERY_SEC) out.AUG_EVERY_SEC = out.GAME_SEC / 3;
+    return out;
+  }
   // 방에 저장된 설정을 RULES에 적용 (없는 값은 기본값)
   const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON'];
   function applySettings(g) {
@@ -470,7 +487,7 @@ const Logic = (() => {
   }
   return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     TIERS, AUGS, augDesc, augPool, rollTier, rollAug, rollOffer, addAug, augVal, randomSpot, augArrowSec, augIntelSec,
-    interp, recommend, applySettings };
+    interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
 })();
 // LOGIC END
 </script>
@@ -717,6 +734,7 @@ function onRoom() {
   const room = S.room, me = room && room.players && room.players[S.pid];
   if (!me) return leaveLocal('방에서 나왔어요');
   Logic.applySettings(room.settings && room.settings.game); // 방장이 정한 설정을 이 폰의 규칙에 적용
+  RULES.AREA_R = (room.settings && room.settings.area && room.settings.area.r) || RULE_DEFAULTS.AREA_R;
   if (room.result || room.status === 'ended') return renderResult();
   if (room.status === 'lobby') { if (S.screen !== 's-lobby') show('s-lobby'); return renderLobby(); }
   if (room.status === 'playing') {
@@ -750,7 +768,7 @@ function leaveLocal(msg) {
   if (S.unsub) S.unsub();
   if (S.evUnsub) S.evUnsub();
   S.unsub = S.evUnsub = null; S.code = S.pid = S.room = S.gameKey = null;
-  Logic.applySettings(null);
+  Logic.applySettings(null); RULES.AREA_R = RULE_DEFAULTS.AREA_R;
   closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug'].forEach(s => $(s).classList.remove('on'));
   saveLocal({ name: S.name });
   show('s-home');
@@ -783,10 +801,8 @@ const lobbyCounts = room => {
 // 추천값 + 방장이 직접 바꾼 칸(custom)만 덮어쓴 최종 설정
 function mergedSettings(room) {
   const st = room.settings || {}, area = st.area, { n, ch } = lobbyCounts(room);
-  const rec = Logic.recommend(area ? area.r : RULES.AREA_DEFAULT_M, Math.max(2, n), ch), cur = st.game || {}, custom = st.custom || {};
-  const out = {};
-  for (const k of Object.keys(rec)) out[k] = custom[k] && cur[k] != null ? cur[k] : rec[k];
-  return { rec, out, custom };
+  const rec = Logic.recommend(area ? area.r : RULES.AREA_DEFAULT_M, Math.max(2, n), ch), custom = st.custom || {};
+  return { rec, out: Logic.mergeSettings(rec, st.game, custom), custom };
 }
 // 방장: 인원·범위·추격자 수가 바뀌면 직접 안 바꾼 칸을 추천값으로 자동 갱신
 function syncRecommend(room) {
@@ -1009,7 +1025,7 @@ $('#augBar').onclick = e => {
 };
 // Firebase가 배열을 객체로 돌려줄 때도 있어서 둘 다 처리
 const offerList = o => (Array.isArray(o) ? o : Object.values(o || {}));
-// 10분 보상: 추격 시작 후 10분, 20분에 3개 중 1개 선택 (고른 기록은 저장돼서 새로고침해도 같은 후보)
+// 정기 보상: 추격 시작 후 보상 간격(기본 게임 시간 ÷ 3)마다 3개 중 1개 선택 (고른 기록은 저장돼서 새로고침해도 같은 후보)
 function checkOffer(me, t, ph) {
   if (ph.phase !== 'chase' || !RULES.AUG_ON) return;
   const due = Math.floor((t - (S.room.startAt + RULES.HIDE_SEC * 1000)) / (RULES.AUG_EVERY_SEC * 1000));
@@ -1020,6 +1036,7 @@ function checkOffer(me, t, ph) {
   if (me.offer && !$('#ov-aug').classList.contains('on')) {
     $('#augCards').innerHTML = offerList(me.offer).map((o, i) =>
       `<button class="augcard" data-pick="${i}"><span class="tier t${Logic.TIERS[o.tier]}">${Logic.TIERS[o.tier]}</span><span><b>${Logic.AUGS[o.id].name}${S.augs[o.id] ? ' (등급 업)' : ''}</b><small>${Logic.augDesc(o.id, o.tier)}</small></span></button>`).join('');
+    $('#augTitle').textContent = `정기 보상 (${fmtDur(RULES.AUG_EVERY_SEC)}마다)`;
     $('#ov-aug').classList.add('on'); vibrate([80, 60, 80]);
   }
 }
@@ -1030,7 +1047,7 @@ $('#augCards').onclick = e => {
   if (!o) return;
   $('#ov-aug').classList.remove('on');
   update(meRef(), { offer: null, augPicks: (me.augPicks || 0) + 1 });
-  gainAug(o.id, o.tier, '10분 보상');
+  gainAug(o.id, o.tier, '정기 보상');
 };
 // 증강 지점: 15m 안에 들어가면 획득, 그 지점은 3분 뒤 다른 곳에 다시 생김 (먼저 도착한 한 명만)
 function checkSpots(t) {
@@ -1143,7 +1160,7 @@ function tick() {
     if (a.visible && S.lastArrowKey !== key) { S.lastArrowKey = key; S.st = Math.min(stMax, S.st + RULES.ARROW_RECOVER * recMul); }
   }
   // 5) 도망자 경보기: 잡을 수 있는 상태의 추격자가 가까이 오면 진동
-  const alarmM = av('alarm');
+  const alarmM = av('alarm') && Logic.augAlarmM(av('alarm'));
   if (me.role === 'runner' && alarmM && ph.phase === 'chase') {
     let nd = Infinity;
     for (const [id, p] of Object.entries(room.players)) {
@@ -1155,7 +1172,7 @@ function tick() {
       if (real - S.alarmAt > 3000) { S.alarmAt = real; vibrate([150, 80, 150]); }
     }
   }
-  // 6) 증강 지점 줍기, 10분 보상
+  // 6) 증강 지점 줍기, 정기 보상
   if (gpsOk) checkSpots(t);
   checkOffer(me, t, ph);
 
