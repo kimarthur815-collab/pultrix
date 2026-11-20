@@ -404,12 +404,13 @@ const Logic = (() => {
   let clock = () => Date.now();
   const setClock = fn => { clock = fn; };
   // 최후의 발악이 준비돼 있으면(쿨타임 끝) 체력이 0 이하가 돼도 1로 봄 (본인 폰이 곧 발동 처리)
+  // 단, 이미 탈락 처리된 사람(탈락 시각 기록됨)은 나중에 쿨타임이 끝나도 다시 살아나지 않음 (피의 서약만 살릴 수 있음)
   function hpOf(p, hit) {
     if (p.forfeit) return 0; // 기권
-    const raw = hpRaw(p, hit), ls = p.augs && p.augs.lastStand;
-    if (raw <= 0 && ls && (ls.readyAt || 0) <= clock()) return 1;
+    const raw = hpRaw(p, hit), died = !!(p.stats && p.stats.diedAt), ls = p.augs && p.augs.lastStand;
+    if (raw <= 0 && !died && ls && (ls.readyAt || 0) <= clock()) return 1;
     const cb = p.augs && p.augs.comeback;
-    if (raw <= 0 && cb && (cb.readyAt || 0) <= clock()) return 1;
+    if (raw <= 0 && !died && cb && (cb.readyAt || 0) <= clock()) return 1;
     if (raw <= 0 && hit && (hit.pendUntil || 0) > clock()) return 1; // 흔들어 탈출 판정 중엔 탈락 보류
     return Math.min(RULES.HP_MAX, Math.max(0, raw));
   }
@@ -1390,6 +1391,7 @@ function syncFromDb(room, me) {
   if (me.revive && me.revive.at !== S.reviveAt) {
     S.reviveAt = me.revive.at; S.selfDmg = me.selfDmg || 0; S.aliveWas = true; S.specOn = false;
     delete S.dead[S.pid]; if (S.stats) delete S.stats.diedAt;
+    $('#ov-qr').classList.remove('on'); // 띄워 둔 부활용 QR 창 닫기
     const by = (room.players[me.revive.by] || {}).name || '?';
     toast(`🩸 피의 서약! ${by} 덕분에 부활했어요 (체력 ${Math.ceil(me.revive.hp)})`, true); flash('rgba(220,38,38,.95)'); vibrate([300, 100, 300]); sfx('augS');
   }
@@ -1456,6 +1458,8 @@ const ICONS = {
   booster: '<path d="M12 2c3 3 5 7 5 11l-2 3H9l-2-3c0-4 2-8 5-11z"/><circle cx="12" cy="10" r="2"/><path d="M9 16l-3 4M15 16l3 4M12 17v5"/>',
   fakePing: '<path d="M12 22s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z"/><path d="M10 9a2 2 0 1 1 2.5 1.9c-.4.2-.5.5-.5 1.1M12 14.5v.01"/>',
   detector: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5M11 7v4l3 2"/>',
+  comeback: '<path d="M12 20.5s-7.5-4.6-9.2-9.6C1.6 7.3 4 4 7.4 4c2 0 3.6 1.1 4.6 2.6C13 5.1 14.6 4 16.6 4c3.4 0 5.8 3.3 4.6 6.9-1.7 5-9.2 9.6-9.2 9.6z"/><path d="M12 15.5V9.5M9.3 12l2.7-2.7 2.7 2.7"/>',
+  bloodOath: '<path d="M12 2.5c3.6 4.6 6.5 8.1 6.5 12a6.5 6.5 0 0 1-13 0c0-3.9 2.9-7.4 6.5-12z"/><path d="M12 11.5v6M9 14.5h6"/>',
   snipe: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.5"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/>'
 };
 const icon = id => `<svg viewBox="0 0 24 24">${ICONS[id] || ''}</svg>`;
@@ -1883,7 +1887,7 @@ function showInsight(ids) {
 }
 // 최후의 발악: 준비돼 있을 때 체력이 0 이하가 되면 자동으로 1로 버티고, 정해진 시간 동안 1 밑으로 안 내려감
 function lastStandCheck(me, hits, t) {
-  const x = S.augs && S.augs.lastStand; if (!x) return;
+  const x = S.augs && S.augs.lastStand; if (!x || S.stats.diedAt) return; // 이미 탈락했으면 쿨타임이 끝나도 발동 안 함
   const raw = Logic.hpRaw({ ...me, selfDmg: S.selfDmg }, hits[S.pid]);
   if (raw > 0 || ((hits[S.pid] && hits[S.pid].pendUntil) || 0) > t) return; // 흔들어 탈출 판정이 끝난 뒤에 발동
   if (Logic.augReady(x, t)) {
@@ -1900,7 +1904,7 @@ function lastStandCheck(me, hits, t) {
 }
 // 기사회생: 준비돼 있을 때 체력이 0 이하가 되면 체력 50으로 (최후의 발악보다 먼저)
 function comebackCheck(me, hits, t) {
-  const x = S.augs && S.augs.comeback; if (!x || !Logic.augReady(x, t) || me.forfeit) return;
+  const x = S.augs && S.augs.comeback; if (!x || !Logic.augReady(x, t) || me.forfeit || S.stats.diedAt) return;
   const raw = Logic.hpRaw({ ...me, selfDmg: S.selfDmg }, hits[S.pid]);
   if (raw > 0 || ((hits[S.pid] && hits[S.pid].pendUntil) || 0) > t) return; // 흔들어 탈출 판정이 끝난 뒤에
   const v = av('comeback'); S.selfDmg -= v - raw;
@@ -1933,13 +1937,17 @@ function companionNear(me, hits, t) {
     && (mine || (p.augs && p.augs.companion)) && Logic.dist(S.fix, p) <= m);
 }
 // CCTV: 상대 CCTV 반경 안에 새로 들어갈 때마다 추격자들에게 알림 (도망자 본인은 모름)
+// 경계에서 GPS가 흔들려 알림이 반복되지 않게: 30m 안에 들어오면 알림, 40m 밖으로 나가야 다시 알림 가능
 function checkCams(me, t) {
   if (me.role !== 'runner') return;
+  const r = Logic.AUGS.cctv.v;
   for (const [cid, c] of Object.entries(S.room.cams || {})) {
     if (c.role === me.role || (c.until || 0) <= t) continue;
-    const inside = Logic.dist(S.fix, c) <= Logic.AUGS.cctv.v;
-    if (inside && !S.camIn[cid]) push(roomRef('events'), { type: 'cam', target: S.pid, cam: cid, lat: S.fix.lat, lng: S.fix.lng, at: serverTimestamp() });
-    S.camIn[cid] = inside;
+    const d = Logic.dist(S.fix, c);
+    if (!S.camIn[cid] && d <= r) {
+      S.camIn[cid] = true;
+      push(roomRef('events'), { type: 'cam', target: S.pid, cam: cid, lat: S.fix.lat, lng: S.fix.lng, at: serverTimestamp() });
+    } else if (S.camIn[cid] && d > r + 10) S.camIn[cid] = false;
   }
 }
 // 발자국 추적용: 도망자들의 진짜 위치를 1분 동안 기록
