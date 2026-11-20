@@ -1,0 +1,25 @@
+{
+  "rules": {
+    "rooms": {
+      "$code": {
+        ".read": "$code.matches(/^[A-Z0-9]{5}$/)",
+        ".write": "$code.matches(/^[A-Z0-9]{5}$/) && (newData.exists() ? (data.exists() || newData.hasChildren(['hostId', 'players'])) : data.child('players').numChildren() <= 1)",
+        "hostId": { ".validate": "newData.isString() && newData.val().length <= 20" },
+        "players": {
+          "$pid": {
+            ".validate": "$pid.matches(/^[A-Za-z0-9]{6,20}$/)",
+            "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 10" }
+          }
+        },
+        "settings": {
+          "memo": { ".validate": "newData.isString() && newData.val().length <= 300" }
+        },
+        "events": {
+          "$eid": {
+            "text": { ".validate": "newData.isString() && newData.val().length <= 20" }
+          }
+        }
+      }
+    }
+  }
+}
