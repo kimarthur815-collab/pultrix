@@ -326,7 +326,7 @@ const RULES = {
   HP_MAX: 100,
   HIDE_SEC: 300,             // 도망자 숨는 시간 (추격자 대기)
   GAME_SEC: 1800,            // 숨는 시간이 끝난 뒤 제한시간 — 버티면 도망자 승리
-  CATCH_DMG: 40,             // 잡힐 때 도망자 체력 감소
+  CATCH_DMG: 50,             // 잡힐 때 도망자 체력 감소
   CATCH_COOLDOWN_SEC: 180,   // 잡은 추격자 정지 + 잡힌 도망자 무적 시간
   CATCH_MAX_DIST_M: 20,      // QR 찍을 때 GPS 거리가 이보다 멀면 무효 (꼼수 방지) — 두 폰의 GPS 오차만큼 더 인정
   CATCH_MAX_DIST_CAP_M: 80,  // 실내처럼 GPS가 부정확할 때도 최대 이 거리까지만 인정
@@ -1429,7 +1429,7 @@ function renderLobby() {
   // 게임 모드
   const mode = modeOf(room);
   document.querySelectorAll('#l-mode [data-mode]').forEach(b => { b.classList.toggle('on', b.dataset.mode === mode); b.disabled = !isHost; });
-  $('#l-modeHint').textContent = MODE_HINT[mode] + (mode === 'police' ? (room.settings.jail ? ' · 감옥 위치 정해짐' : ' · 감옥: 안 정하면 구역 중심') : '');
+  $('#l-modeHint').textContent = (mode === 'classic' ? `잡히면 체력 -${mergedSettings(room).out.CATCH_DMG}, 체력 0이면 탈락` : MODE_HINT[mode]) + (mode === 'police' ? (room.settings.jail ? ' · 감옥 위치 정해짐' : ' · 감옥: 안 정하면 구역 중심') : '');
   $('#btnJail').style.display = isHost && mode === 'police' ? 'block' : 'none';
   $('#btnJail').textContent = S.jailPick ? '지도를 탭하면 감옥이 돼요 (취소하려면 다시 누르기)' : '🔒 감옥 위치 찍기';
   renderSettings(room, isHost);
@@ -1459,7 +1459,6 @@ function renderLobby() {
   drawMaps();
 }
 const MODE_HINT = {
-  classic: '잡히면 체력 -40, 체력 0이면 탈락',
   zombie: '잡히면 바로 좀비(추격자)가 돼서 같이 쫓아요. 시간 끝까지 버틴 사람 모두 승리',
   police: `잡히면 감옥(반경 ${Logic.MODE_RULES.JAIL_R}m)행, 팀원이 QR을 찍어 주면 탈옥. 도둑 전원이 동시에 갇히면 경찰 승리`
 };
