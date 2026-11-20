@@ -338,7 +338,9 @@ const RULES = {
   VEHICLE_KMH: 25,           // 이 속도를 넘으면 탈것으로 판단
   WALK_KMH: 6,               // 이 속도 이하(걷기)는 스태미나 소모 없음
   ST_MAX: { runner: 100, chaser: 150 },
-  ST_PER_MS: 2,              // 스태미나 소모 배율: 걷기 속도를 넘는 1m/s당 초당 소모 (방장이 ×0.5~×4로 바꿀 수 있음)
+  EXHAUST_WARN_SEC: 5,       // 스태미나 0에서 뛰면 이 시간 동안은 경고만 (GPS 속도가 늦게 반영될 수 있어서)
+  EXHAUST_RESET_SEC: 3,      // 이 시간 이상 걷거나 멈추면 경고 시간이 다시 처음부터
+  ST_PER_MS: 1.5,            // 스태미나 소모 배율: 걷기 속도를 넘는 1m/s당 초당 소모 (방장이 ×0.5~×4로 바꿀 수 있음)
   ARROW_UNLOCK_SEC: 120,     // 추격 시작(또는 정지 해제) 후 화살표가 열리는 시간
   ARROW_EVERY_SEC: 45,       // 화살표 주기
   ARROW_SHOW_SEC: 10,        // 화살표가 보이는 시간 (주기 45초 기준, 주기에 비례해서 바뀜)
@@ -386,6 +388,15 @@ const Logic = (() => {
   // 스태미나가 모자라면 모자란 만큼 체력에서 1:1로 깎임
   function spendStamina(st, cost) {
     return st >= cost ? { st: st - cost, hpLoss: 0 } : { st: 0, hpLoss: cost - st };
+  }
+  // 스태미나 0에서 뛰기: 이어서 EXHAUST_WARN_SEC 동안은 경고만(left: 남은 초), 그 뒤부터 체력 감소(hurt)
+  // EXHAUST_RESET_SEC 이상 걷거나 멈춰야(running=false) 다시 처음부터 (잠깐 속도가 떨어진 걸로는 안 됨)
+  function exhaust(x, hpLoss, running, dt) {
+    x = { run: 0, rest: 0, ...x };
+    const prev = x.run;
+    if (hpLoss > 0) { x.run += dt; x.rest = 0; }
+    else if (!running) { x.rest += dt; if (x.rest >= RULES.EXHAUST_RESET_SEC) x.run = 0; }
+    return { ...x, hurt: hpLoss > 0 && prev >= RULES.EXHAUST_WARN_SEC, left: RULES.EXHAUST_WARN_SEC - prev };
   }
   // shift: 시간 도둑으로 늘거나 줄어든 게임 시간(ms)
   function phaseAt(now, startAt, shift = 0) {
@@ -758,7 +769,7 @@ const Logic = (() => {
     a.forEach((id, i) => { roles[id] = i < n ? 'chaser' : 'runner'; });
     return roles;
   }
-  return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
+  return { dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec, spotStale, spotStaleMs, moveSpot,
     MODES, MODE_RULES, setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
@@ -2849,8 +2860,12 @@ function tick() {
   if (companionNear(me, hits, t)) cost *= 0.5;                                  // 동행
   if (S.augs.booster && (S.augs.booster.until || 0) > t) cost = 0;              // 부스터
   const sp = Logic.spendStamina(S.st, cost * dt);
-  S.st = sp.st; dmg += sp.hpLoss * (av('ironman') || 1); // 아드레날린: 체력 감소 줄임
-  if (sp.hpLoss > 0) { alarm('스태미나 0! 뛰면 체력이 닳아요'); hurt = { why: '스태미나 0에서 뛰기' }; }
+  S.st = sp.st; S.exh = Logic.exhaust(S.exh, sp.hpLoss, cost > 0, dt);
+  if (sp.hpLoss > 0 && !S.exh.hurt) alarm(`스태미나 0! ${Math.ceil(S.exh.left)}초 뒤부터 체력이 닳아요 · 걷거나 멈추세요`);
+  else if (sp.hpLoss > 0) {
+    dmg += sp.hpLoss * (av('ironman') || 1); // 아드레날린: 체력 감소 줄임
+    alarm('스태미나 0! 뛰면 체력이 닳아요'); hurt = { why: '스태미나 0에서 뛰기' };
+  }
   // 4) 추격자: 화살표가 뜰 때 스태미나 회복
   if (me.role === 'chaser' && ph.phase === 'chase' && !waiting) {
     const base = Logic.arrowBase(me, room.startAt), a = Logic.arrowState(t, base, arrowEverySec(), av('foresight') || 0), key = base + ':' + a.idx;
@@ -3224,7 +3239,7 @@ const TUT = () => [
   { a: 'roles', t: 'PULTRIX에 오신 걸 환영해요', b: '실제로 밖에서 뛰면서 하는 <b>GPS 술래잡기</b>예요.<br>시작하면 <b style="color:#ff4d4f">추격자</b>와 <b style="color:#3ba3ff">도망자</b>가 랜덤으로 정해져요. 방장은 로비에서 구역과 게임 설정을 정할 수 있어요.' },
   { a: 'hide', t: '숨는 시간', b: `처음 <b>${fmtDur(RULES.HIDE_SEC)}</b>은 도망자가 숨는 시간이에요.<br>추격자는 제자리에서 기다려야 하고, <b>${RULES.WAIT_MOVE_M}m 넘게 3초 이상 움직이면 초당 체력 -${RULES.WAIT_MOVE_DMG}</b>이에요.` },
   { a: 'catch', t: '잡기는 QR로', b: `만나면 도망자가 <b>내 QR 보여주기</b>, 추격자가 <b>QR 찍어서 잡기</b>를 눌러요.<br>잡히면 체력 <b>-${RULES.CATCH_DMG}</b>, 도망자는 <b>${fmtDur(RULES.CATCH_COOLDOWN_SEC)} 무적</b>, 잡은 추격자는 같은 시간 동안 제자리 정지예요.` },
-  { a: 'bars', t: '체력과 스태미나', b: `체력은 100이고 0이 되면 탈락이에요.<br><b>뛰면 스태미나</b>가 줄고, 스태미나가 0인데 계속 뛰면 <b>체력이 닳아요</b>. 걷기는 괜찮아요.` },
+  { a: 'bars', t: '체력과 스태미나', b: `체력은 100이고 0이 되면 탈락이에요.<br><b>뛰면 스태미나</b>가 줄고, 스태미나가 0인데 계속 뛰면 <b>${RULES.EXHAUST_WARN_SEC}초 경고 뒤 체력이 닳아요</b>. 걷기는 괜찮아요.` },
   { a: 'info', t: '서로의 위치', b: `<b style="color:#ff4d4f">추격자</b>: 추격 시작 ${fmtDur(RULES.ARROW_UNLOCK_SEC)} 뒤부터 <b>${fmtDur(RULES.ARROW_EVERY_SEC)}마다</b> 가장 가까운 도망자 방향 화살표가 잠깐 떠요.<br><b style="color:#3ba3ff">도망자</b>: 미니맵에 추격자 위치가 <b>${fmtDur(RULES.MAP_EVERY_SEC)}마다</b> 갱신돼요.<br>위치가 표시될 때마다 스태미나가 회복돼요.` },
   { a: 'augs', t: '증강', b: `지도의 <b style="color:#ffcf40">노란 지점</b>(${RULES.SPOT_PICK_M}m 안), <b>정기 보상</b>(3개 중 1개), <b>잡거나 잡힐 때</b> 증강을 얻어요.<br>등급은 D·C·B·A·S·SS, 사기일수록 높아요. <b>사용</b> 버튼이 있는 건 쿨타임 스킬이고, 칩을 누르면 설명이 나와요.` },
   { a: 'rules', t: '이러면 체력이 깎여요', b: `<b>구역 밖</b>으로 나가거나 <b>탈것</b>(시속 ${RULES.VEHICLE_KMH}km 이상)을 타면 ${RULES.RULE_WARN_SEC}초 경고 뒤 초당 체력 -${RULES.RULE_DMG}이에요.<br>게임 중에는 <b>화면을 켜 두세요</b>. 화면이 꺼지면 GPS가 멈춰요.` },
