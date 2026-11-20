@@ -1566,6 +1566,11 @@ function augBan(role) {
   if (role === 'runner' && !mates.some(([id, p]) => Logic.alive(p, hits[id]))) ban.push('swap');
   if (role === 'runner' && !mates.length) ban.push('bloodOath');
   if (foes.length < 2) ban.push('fakePing');
+  // 1대1처럼 팀원이 없거나 상대 팀이 혼자일 때 쓸모없는 증강
+  const foeTeam = all.filter(([, p]) => p.role !== role).length;
+  if (role === 'runner' && !mates.length) ban.push('companion');        // 동행: 붙어 있을 팀원이 없음
+  if (foeTeam < 2) ban.push('eavesdrop');                                // 도청: 상대가 혼자라 팀 핑을 안 찍음
+  if (role === 'runner' && foeTeam < 2) ban.push('disguise');            // 위장: 추격자가 혼자면 '다른 추격자' = 나라는 게 들통
   return ban;
 }
 function gainRandom(source) {
@@ -1857,10 +1862,10 @@ function loseAug(k) {
 const augLabelOf = id => ({ name: `[${Logic.AUGS[id].grade}] ${Logic.AUGS[id].name}` });
 function openReroll() {
   const me = S.room.players[S.pid];
-  const ids = Object.keys(S.augs).filter(k => k !== 'reroll' && Logic.AUGS[k] && Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade));
+  const ban = augBan(me.role), ids = Object.keys(S.augs).filter(k => k !== 'reroll' && Logic.AUGS[k] && Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade, Math.random, ban));
   if (!ids.length) return toast('바꿀 수 있는 증강이 없어요');
   openPick('🔄 리롤', '바꿀 증강을 고르세요 (같은 등급의 다른 증강으로)', ids.map(k => [k, augLabelOf(k), Logic.augDesc(k)]), k => {
-    const nx = Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade);
+    const nx = Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade, Math.random, ban);
     if (!nx || !Logic.augReady(S.augs.reroll, now())) return;
     setCooldown('reroll'); loseAug(k); gainAug(nx, '🔄 리롤');
   });
@@ -1870,7 +1875,7 @@ function openAlchemy() {
   if (ids.length < 2) return toast('연금술에 쓸 증강이 2개 있어야 해요');
   openPick('⚗️ 연금술 (1/2)', '버릴 증강 첫 번째', ids.map(k => [k, augLabelOf(k), Logic.augDesc(k)]), a => {
     openPick('⚗️ 연금술 (2/2)', '버릴 증강 두 번째', ids.filter(k => k !== a).map(k => [k, augLabelOf(k), Logic.augDesc(k)]), b => {
-      const g = Logic.upGrade(a, b), nx = Logic.rollGrade(me.role, S.augs, g, Math.random, [a, b]);
+      const g = Logic.upGrade(a, b), nx = Logic.rollGrade(me.role, S.augs, g, Math.random, [a, b, ...augBan(me.role)]);
       if (!nx) return toast(`${g}등급에 남은 증강이 없어요`);
       if (!Logic.augReady(S.augs.alchemy, now())) return;
       setCooldown('alchemy'); loseAug(a); loseAug(b); gainAug(nx, `⚗️ 연금술 → ${g}`);
@@ -2141,7 +2146,8 @@ function checkSupplies(me, t) {
     S.supBusy = true;
     runTransaction(roomRef('supplies/' + id), cur => (cur ? null : undefined)).then(r => {
       if (!r.committed) return;
-      const g = Logic.rollGrade(me.role, S.augs, 'SS') || Logic.rollGrade(me.role, S.augs, 'S') || Logic.rollAug(me.role, S.augs);
+      const ban = augBan(me.role);
+      const g = Logic.rollGrade(me.role, S.augs, 'SS', Math.random, ban) || Logic.rollGrade(me.role, S.augs, 'S', Math.random, ban) || Logic.rollAug(me.role, S.augs, Math.random, ban);
       push(roomRef('events'), { type: 'supplyGot', by: S.pid, at: serverTimestamp() });
       if (g) gainAug(g, '📦 보급 상자');
     }).catch(e => console.error(e)).finally(() => { S.supBusy = false; });
@@ -2173,10 +2179,20 @@ function renderAugBar(alive) {
   const html = parts.join('');
   if (html !== S.augBarHtml) { S.augBarHtml = html; $('#augBar').innerHTML = html; }
 }
+// 쿨타임 글자가 1초마다 바뀌면서 증강 바가 다시 그려지면, 누르는 도중에 버튼이 바뀌어 탭이 사라질 수 있음
+// → 손가락을 댄 순간의 버튼을 기억해 두고, 뗐을 때 버튼을 못 찾으면 그걸로 처리
+let augDown = null;
+$('#augBar').addEventListener('pointerdown', e => {
+  const el = e.target.closest('[data-use],[data-info]');
+  augDown = el ? { use: el.dataset.use, info: el.dataset.info, at: Date.now() } : null;
+});
 $('#augBar').onclick = e => {
-  const u = e.target.closest('[data-use]'); if (u) return useAug(u.dataset.use);
-  const i = e.target.closest('[data-info]');
-  if (i && S.augs[i.dataset.info]) { const id = i.dataset.info; toast(`${augLabel(id)}: ${Logic.augDesc(id)}`); }
+  const el = e.target.closest('[data-use],[data-info]');
+  const d = el ? { use: el.dataset.use, info: el.dataset.info } : augDown && Date.now() - augDown.at < 800 ? augDown : null;
+  augDown = null;
+  if (!d) return;
+  if (d.use) return useAug(d.use);
+  if (d.info && S.augs[d.info]) toast(`${augLabel(d.info)}: ${Logic.augDesc(d.info)}`);
 };
 // Firebase가 배열을 객체로 돌려줄 때도 있어서 둘 다 처리
 const offerList = o => (Array.isArray(o) ? o : Object.values(o || {}));
