@@ -702,7 +702,7 @@ const Logic = (() => {
   const augAlarmM = v => Math.min(200, Math.max(15, Math.round(v * RULES.AREA_R / RULE_DEFAULTS.AREA_R)));
   const augIntelSec = v => Math.max(3, Math.round(v * RULES.MAP_EVERY_SEC / RULE_DEFAULTS.MAP_EVERY_SEC));
   const fmtSec = sec => { sec = Math.round(sec); const m = Math.floor(sec / 60), r = sec % 60; return m ? `${m}분${r ? ` ${r}초` : ''}` : `${r}초`; };
-  const augCdMs = id => (AUGS[id].cd ? AUGS[id].cd * 60000 * RULES.GAME_SEC / RULE_DEFAULTS.GAME_SEC : 0);
+  const augCdMs = id => (!AUGS[id].cd ? 0 : AUGS[id].role === 'job' ? AUGS[id].cd * 60000 : AUGS[id].cd * 60000 * RULES.GAME_SEC / RULE_DEFAULTS.GAME_SEC); // 마피아 직업 능력은 정한 시간 그대로
   const augDesc = id => AUGS[id].d(AUGS[id].v) + (AUGS[id].cd ? ` · 쿨타임 ${fmtSec(augCdMs(id) / 1000)}` : '');
   const augPool = role => Object.keys(AUGS).filter(id => AUGS[id].role === role || AUGS[id].role === 'all');
   // 이미 가진 증강은 다시 안 나옴. 등급 확률로 등급을 고르고(남은 증강이 있는 등급만), 그 등급 안에서 무작위
@@ -1266,7 +1266,7 @@ function onFix(p) {
   S.fix = fix; S.fixAt = t;
   const room = S.room, me = room && room.players && room.players[S.pid];
   if (room && me && room.status === 'lobby') {
-    if (!me.ready && S.readySent !== S.code) { S.readySent = S.code; update(meRef(), { ready: true }); }
+    if (!me.ready && (S.readySent !== S.code || Date.now() - (S.readyAt || 0) > 3000)) { S.readySent = S.code; S.readyAt = Date.now(); update(meRef(), { ready: true }); } // 저장이 안 됐으면 3초 뒤 다시
     if (room.hostId === S.pid && !(room.settings && room.settings.area) && !S.areaSent) {
       S.areaSent = true;
       update(roomRef('settings'), { area: { lat: fix.lat, lng: fix.lng, r: RULES.AREA_DEFAULT_M } });
