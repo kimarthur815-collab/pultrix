@@ -360,7 +360,9 @@ const RULES = {
   ARROW_UNLOCK_SEC: 120,     // 추격 시작(또는 정지 해제) 후 화살표가 열리는 시간
   ARROW_EVERY_SEC: 45,       // 화살표 주기
   ARROW_SHOW_SEC: 10,        // 화살표가 보이는 시간 (주기 45초 기준, 주기에 비례해서 바뀜)
-  ARROW_NEAR_M: 15,          // 이 거리 안이면 화살표 대신 '근처에 있어요!'
+  ARROW_NEAR_M: 15,
+  ALT_NEAR_M: 30,            // 화살표: 도망자가 이 거리 안이면 높이 차이도 표시 (GPS 고도)
+  ALT_DIFF_M: 6,             // 높이 차이가 이보다 클 때만 (약 2층, GPS 고도 오차 때문)          // 이 거리 안이면 화살표 대신 '근처에 있어요!'
   ARROW_RECOVER: 15,         // 화살표가 뜰 때 추격자 스태미나 회복
   MAP_EVERY_SEC: 20,         // 도망자 미니맵의 추격자 위치 갱신 간격
   MAP_RECOVER: 10,           // 갱신될 때 도망자 스태미나 회복
@@ -497,6 +499,12 @@ const Logic = (() => {
       if (!best || d < best.d) best = { id, p, d };
     }
     return best;
+  }
+  // 화살표 높이 표시: 상대가 나보다 ALT_DIFF_M 넘게 높거나 낮으면 '▲ 약 9m 위' / '▼ 약 9m 아래' (고도 없으면 '')
+  function altLabel(myAlt, theirAlt) {
+    if (typeof myAlt !== 'number' || typeof theirAlt !== 'number') return '';
+    const d = theirAlt - myAlt, m = Math.round(Math.abs(d));
+    return Math.abs(d) <= RULES.ALT_DIFF_M ? '' : d > 0 ? `▲ 약 ${m}m 위` : `▼ 약 ${m}m 아래`;
   }
   // 게임 모드: classic(기본) · zombie(잡히면 좀비가 됨) · police(경찰과 도둑: 잡히면 감옥)
   const MODES = { classic: '기본', zombie: '🧟 좀비', police: '🚓 경찰과 도둑' };
@@ -793,7 +801,7 @@ const Logic = (() => {
     a.forEach((id, i) => { roles[id] = i < n ? 'chaser' : 'runner'; });
     return roles;
   }
-  return { edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
+  return { altLabel, edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec, spotStale, spotStaleMs, moveSpot,
     MODES, MODE_RULES, setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
@@ -1154,6 +1162,8 @@ function onFix(p) {
     v = d < 4 || bad ? 0 : d / ((t - S.prevFix.t) / 1000);
   }
   if (v != null) S.speed = S.speed * 0.5 + v * 0.5;
+  // GPS 고도: 주는 폰만, 고도 오차 40m 넘는 값은 버리고 부드럽게
+  if (typeof c.altitude === 'number' && !(c.altitudeAccuracy > 40)) S.alt = S.alt == null ? c.altitude : S.alt * 0.7 + c.altitude * 0.3;
   if (!S.prevFix || t - S.prevFix.t >= 4000) S.prevFix = { ...fix, t };
   S.fix = fix; S.fixAt = t;
   const room = S.room, me = room && room.players && room.players[S.pid];
@@ -3093,7 +3103,7 @@ function tick() {
   S.warnWas = warn.length > 0;
   if (dead || real - S.lastWrite >= 2000) {
     S.lastWrite = real;
-    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
+    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), alt: S.alt == null ? null : Math.round(S.alt * 10) / 10, selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
       stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
   }
   renderGame();
@@ -3256,6 +3266,9 @@ function drawArrow() {
     if (tg && !jammed) detectedBy(tg.id, 'arrow'); // 역탐지
   }
   const arrow = $('#arrow'), txt = $('#arrowTxt');
+  // 30m 안이면 높이 차이도 (분신·자리 바꾸기로 보이는 자리가 진짜가 아니면 안 보여 줌)
+  const p0 = tg && room.players[tg.id], real = p0 && tg.p.lat === p0.lat && tg.p.lng === p0.lng;
+  const altTxt = real && tg.d <= RULES.ALT_NEAR_M ? Logic.altLabel(S.alt, p0.alt) : '';
   if (!S.fix) { arrow.style.display = 'none'; txt.textContent = 'GPS 신호를 기다리는 중…'; }
   else if (jammed) {
     arrow.style.display = 'block';
@@ -3264,14 +3277,14 @@ function drawArrow() {
     txt.textContent = '???';
   }
   else if (!tg) { arrow.style.display = 'none'; txt.textContent = '잡을 수 있는 도망자가 없어요'; }
-  else if (tg.d <= RULES.ARROW_NEAR_M) { arrow.style.display = 'none'; txt.textContent = '근처에 있어요!'; }
+  else if (tg.d <= RULES.ARROW_NEAR_M) { arrow.style.display = 'none'; txt.textContent = ['근처에 있어요!', altTxt].filter(Boolean).join(' · '); }
   else {
     arrow.style.display = 'block';
     const b = Logic.bearing(S.fix, tg.p);
     rotateArrow(S.compass && S.heading != null ? b - S.heading : b);
     const unit = av('distance'); // 공간 지각 증강
     const dTxt = unit ? (unit === 1 ? `${Math.round(tg.d)}m` : `약 ${Math.max(unit, Math.round(tg.d / unit) * unit)}m`) : '';
-    txt.textContent = [dTxt, S.compass ? '' : '나침반 없음 · 화면 위쪽이 북쪽'].filter(Boolean).join(' · ');
+    txt.textContent = [altTxt, dTxt, S.compass ? '' : '나침반 없음 · 화면 위쪽이 북쪽'].filter(Boolean).join(' · ');
   }
   return `화살표 표시 중 ${Math.ceil(a.showLeftMs / 1000)}초`;
 }
