@@ -314,7 +314,8 @@ const RULES = {
   GAME_SEC: 1800,            // 숨는 시간이 끝난 뒤 제한시간 — 버티면 도망자 승리
   CATCH_DMG: 40,             // 잡힐 때 도망자 체력 감소
   CATCH_COOLDOWN_SEC: 180,   // 잡은 추격자 정지 + 잡힌 도망자 무적 시간
-  CATCH_MAX_DIST_M: 20,      // QR 찍을 때 GPS 거리가 이보다 멀면 무효 (꼼수 방지)
+  CATCH_MAX_DIST_M: 20,      // QR 찍을 때 GPS 거리가 이보다 멀면 무효 (꼼수 방지) — 두 폰의 GPS 오차만큼 더 인정
+  CATCH_MAX_DIST_CAP_M: 80,  // 실내처럼 GPS가 부정확할 때도 최대 이 거리까지만 인정
   WAIT_MOVE_M: 15,           // 대기 중 처음 자리에서 이만큼 벗어나면
   WAIT_MOVE_GRACE_SEC: 3,    // 이 시간 이상 이어질 때부터
   WAIT_MOVE_DMG: 10,         // 초당 체력 감소
@@ -467,9 +468,15 @@ const Logic = (() => {
     if (((hits[qr.pid] && hits[qr.pid].invUntil) || 0) > now) return '방금 잡힌 도망자라 아직 무적이에요';
     const pos = myPos || me;
     if (pos.lat == null || t.lat == null) return 'GPS 위치를 아직 못 받았어요';
-    const d = dist(pos, t);
-    if (d > RULES.CATCH_MAX_DIST_M) return `GPS상 ${Math.round(d)}m 떨어져 있어서 잡을 수 없어요`;
+    const d = dist(pos, t), lim = nearLimit(pos, t);
+    if (d > lim) return `GPS상 ${Math.round(d)}m 떨어져 있어서 잡을 수 없어요 (지금 GPS로는 ${Math.round(lim)}m까지 인정)`;
     return null;
+  }
+  // QR로 만날 때(잡기·피의 서약) 인정하는 GPS 거리: 기본 거리 + 두 폰의 GPS 오차, 최대 CATCH_MAX_DIST_CAP_M
+  // QR을 찍었다는 것 자체가 바로 옆이라는 증거라서, 실내처럼 GPS가 틀릴 땐 그만큼 넉넉하게 봄 (멀리서 QR 사진으로 잡는 꼼수만 막음)
+  const accOf = p => Math.min(60, Math.max(0, (p && (p.rawAcc ?? p.racc ?? p.acc)) || 0));
+  function nearLimit(a, b, base = RULES.CATCH_MAX_DIST_M) {
+    return Math.min(base + accOf(a) + accOf(b), base + RULES.CATCH_MAX_DIST_CAP_M - RULES.CATCH_MAX_DIST_M);
   }
   // GPS 튐 보정: 오차(acc)가 큰 값일수록 덜 반영하는 칼만 필터 + 순간이동 같은 값은 무시
   // k: 이전 상태(없으면 null), fix: {lat,lng,acc}, speedHint: 현재 속도(m/s) — 빠를수록 새 값을 더 빨리 따라감
@@ -681,7 +688,7 @@ const Logic = (() => {
   }
   return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec,
-    setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable,
+    setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
 })();
 // LOGIC END
@@ -884,7 +891,9 @@ function onFix(p) {
   let v = devSpeed;
   if (v == null && S.prevFix && t - S.prevFix.t >= 4000) {
     const d = Logic.dist(S.prevFix, fix);
-    v = d < 4 ? 0 : d / ((t - S.prevFix.t) / 1000);
+    // GPS가 부정확할 때(실내 등)는 위치가 튀는 걸 뛴 걸로 착각하지 않게 제자리로 봄
+    const bad = acc > RULES.GPS_BAD_ACC || S.prevFix.rawAcc > RULES.GPS_BAD_ACC;
+    v = d < 4 || bad ? 0 : d / ((t - S.prevFix.t) / 1000);
   }
   if (v != null) S.speed = S.speed * 0.5 + v * 0.5;
   if (!S.prevFix || t - S.prevFix.t >= 4000) S.prevFix = { ...fix, t };
@@ -1767,8 +1776,8 @@ const handleRevive = safe(async text => {
   if (Logic.alive(tp, hits[qr.pid])) return toast('아직 살아 있는 팀원이에요', true);
   if (!S.augs.bloodOath || !Logic.augReady(S.augs.bloodOath, t)) return;
   if (tp.lat == null || !S.fix) return toast('GPS 위치를 아직 못 받았어요', true);
-  const d = Logic.dist(S.fix, tp);
-  if (d > Logic.AUGS.bloodOath.v) return toast(`GPS상 ${Math.round(d)}m 떨어져 있어서 못 살려요`, true);
+  const d = Logic.dist(S.fix, tp), lim = Logic.nearLimit(S.fix, tp, Logic.AUGS.bloodOath.v); // GPS가 부정확하면 오차만큼 넉넉하게
+  if (d > lim) return toast(`GPS상 ${Math.round(d)}m 떨어져 있어서 못 살려요 (지금 GPS로는 ${Math.round(lim)}m까지 인정)`, true);
   const give = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]) / 2;
   S.selfDmg += give; S.lastWrite = 0;
   const h = hits[qr.pid] || {}, theirSelf = RULES.HP_MAX - give - (h.catches || 0) * RULES.CATCH_DMG - (h.ext || 0);
@@ -2304,14 +2313,15 @@ function tick() {
   }
   checkWin();
   // 탈락해도 위치는 계속 보냄 (피의 서약 부활 거리 판정용)
-  if (!meAlive && S.fix && real - S.lastWrite >= 2000) { S.lastWrite = real; update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc) }); }
+  if (!meAlive && S.fix && real - S.lastWrite >= 2000) { S.lastWrite = real; update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc) }); }
   if (!meAlive || ph.phase === 'over' || ph.phase === 'pre' || !S.fix) return renderGame();
-  // 통계: 뛴 거리(1초에 60m 넘게 튄 건 제외), 최고 속도 / 러너스 하이
-  if (S.statPos) {
+  // 통계: 뛴 거리(1초에 60m 넘게 튄 건 제외, GPS가 부정확할 때는 안 셈), 최고 속도 / 러너스 하이
+  const distOk = S.fix.rawAcc <= RULES.GPS_BAD_ACC;
+  if (S.statPos && distOk) {
     const d = Logic.dist(S.statPos, S.fix);
     if (d < 60 * Math.max(dt, 1)) { S.stats.dist = (S.stats.dist || 0) + d; if (av('runnersHigh')) runnersHigh(me, hits, d); }
   }
-  S.statPos = { lat: S.fix.lat, lng: S.fix.lng };
+  S.statPos = distOk ? { lat: S.fix.lat, lng: S.fix.lng } : null;
   if (S.fix.rawAcc <= RULES.GPS_BAD_ACC) S.stats.vmax = Math.max(S.stats.vmax || 0, Math.min(S.speed * 3.6, 45));
   if (real - S.fixAt > 5000) S.speed *= 0.5;
 
@@ -2399,7 +2409,7 @@ function tick() {
   S.warnWas = warn.length > 0;
   if (dead || real - S.lastWrite >= 2000) {
     S.lastWrite = real;
-    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
+    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
       stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
   }
   renderGame();
