@@ -331,9 +331,9 @@ const RULES = {
   RULE_WARN_SEC: 10,         // 구역 밖·탈것: 경고 시간
   RULE_DMG: 5,               // 경고 후 초당 체력 감소
   VEHICLE_KMH: 25,           // 이 속도를 넘으면 탈것으로 판단
-  WALK_KMH: 7,               // 이 속도 이하(걷기)는 스태미나 소모 없음
+  WALK_KMH: 6,               // 이 속도 이하(걷기)는 스태미나 소모 없음
   ST_MAX: { runner: 100, chaser: 150 },
-  ST_PER_MS: 1,              // 걷기 속도를 넘는 1m/s당 초당 스태미나 소모 (조깅≈1, 전력질주≈3)
+  ST_PER_MS: 2,              // 스태미나 소모 배율: 걷기 속도를 넘는 1m/s당 초당 소모 (방장이 ×0.5~×4로 바꿀 수 있음)
   ARROW_UNLOCK_SEC: 120,     // 추격 시작(또는 정지 해제) 후 화살표가 열리는 시간
   ARROW_EVERY_SEC: 45,       // 화살표 주기
   ARROW_SHOW_SEC: 10,        // 화살표가 보이는 시간 (주기 45초 기준, 주기에 비례해서 바뀜)
@@ -693,6 +693,7 @@ const Logic = (() => {
       WAIT_MOVE_DMG: RULE_DEFAULTS.WAIT_MOVE_DMG,
       ST_RUNNER: RULE_DEFAULTS.ST_MAX.runner,
       ST_CHASER: RULE_DEFAULTS.ST_MAX.chaser,
+      ST_PER_MS: RULE_DEFAULTS.ST_PER_MS,
       AUG_ON: 1,
       SPOT_COUNT: Math.min(6, Math.max(2, Math.ceil(n / 2)) + (r > 600 ? 1 : 0)),
       AUG_EVERY_SEC: gameMin * 60 / 3
@@ -709,7 +710,7 @@ const Logic = (() => {
     return out;
   }
   // 방에 저장된 설정을 RULES에 적용 (없는 값은 기본값)
-  const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON'];
+  const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON', 'ST_PER_MS'];
   function applySettings(g) {
     g = g || {};
     for (const k of SETTING_KEYS) RULES[k] = g[k] ?? RULE_DEFAULTS[k];
@@ -1307,6 +1308,7 @@ const SET_FIELDS = [
   { g: '체력·잡기', k: 'WAIT_MOVE_DMG', name: '대기 중 이동 벌칙', step: 1, min: 0, max: 50, f: v => `초당 -${v}` },
   { g: '체력·잡기', k: 'ST_RUNNER', name: '도망자 스태미나', step: 10, min: 50, max: 300, f: v => `${v}` },
   { g: '체력·잡기', k: 'ST_CHASER', name: '추격자 스태미나', step: 10, min: 50, max: 300, f: v => `${v}` },
+  { g: '체력·잡기', k: 'ST_PER_MS', name: '스태미나 소모 배율', step: 0.5, min: 0.5, max: 4, f: v => `×${v}` },
   { g: '증강', k: 'AUG_ON', name: '증강', toggle: true, f: v => (v ? '켜짐' : '꺼짐') },
   { g: '증강', k: 'SPOT_COUNT', name: '증강 지점 수', step: 1, min: 0, max: 10, f: v => `${v}개`, aug: true },
   { g: '증강', k: 'AUG_EVERY_SEC', name: '보상 선택 간격', step: 60, min: 120, max: 1800, f: fmtDur, aug: true }
@@ -2694,7 +2696,8 @@ function tick() {
   if (real - S.fixAt > 5000) S.speed *= 0.5;
 
   let dmg = 0;
-  const warn = [];
+  const warn = [], buzz = []; // buzz: 체력이 깎이는(또는 곧 깎일) 경고 → 진동
+  const alarm = m => { warn.push(m); buzz.push(m); };
   // 1) 추격자 대기 규칙: 숨는 시간 + 잡은 뒤 정지 시간
   // GPS가 약할 때는 억울한 벌칙이 없도록 위치 판정을 잠시 멈춤 (멀리 가 있었다면 신호가 돌아오는 즉시 다시 적용)
   const gpsOk = S.fix.rawAcc <= RULES.GPS_BAD_ACC;
@@ -2707,10 +2710,10 @@ function tick() {
       if (d > RULES.WAIT_MOVE_M) {
         S.waitOut += dt;
         if (S.waitOut >= RULES.WAIT_MOVE_GRACE_SEC) {
-          dmg += RULES.WAIT_MOVE_DMG * dt; warn.push(`대기 중 이동! 체력 감소 중 (${Math.round(d)}m)`);
+          dmg += RULES.WAIT_MOVE_DMG * dt; alarm(`대기 중 이동! 체력 감소 중 (${Math.round(d)}m)`);
           if (ph.phase === 'hide') hideWaitDmg = RULES.WAIT_MOVE_DMG * dt;
         }
-        else warn.push(`대기 중이에요! 제자리로 (${Math.round(d)}m)`);
+        else alarm(`대기 중이에요! 제자리로 (${Math.round(d)}m)`);
       } else S.waitOut = 0;
     }
   } else {
@@ -2727,8 +2730,8 @@ function tick() {
   if (outside || vehicle) {
     S.ruleSec += dt;
     const what = outside ? (areaD > area.r ? '구역 밖' : '🌀 자기장 밖') : '탈것 감지', left = RULES.RULE_WARN_SEC - S.ruleSec;
-    if (left > 0) warn.push(`${what}! ${Math.ceil(left)}초 안에 돌아오세요`);
-    else { dmg += RULES.RULE_DMG * dt; warn.push(`${what}! 체력 감소 중`); }
+    if (left > 0) alarm(`${what}! ${Math.ceil(left)}초 안에 돌아오세요`);
+    else { dmg += RULES.RULE_DMG * dt; alarm(`${what}! 체력 감소 중`); }
   } else if (gpsOk) S.ruleSec = 0;
   // 경찰과 도둑: 갇힌 도둑은 감옥(반경 15m) 안에 — 처음 2분은 가는 시간, 들어간 뒤 나가면 10초 경고 후 체력 감소
   const jl = me.role === 'runner' && modeOf(room) === 'police' ? me.jailed : null;
@@ -2739,8 +2742,8 @@ function tick() {
     else if (!S.jailIn && t - jl.at < MR.JAIL_GO_SEC * 1000) warn.push(`🔒 감옥으로 가세요! ${fmt(MR.JAIL_GO_SEC * 1000 - (t - jl.at))} 남음 (${Math.round(jd)}m)`);
     else {
       S.jailOut += dt; const left = RULES.RULE_WARN_SEC - S.jailOut;
-      if (S.jailIn && left > 0) warn.push(`🔒 감옥 밖! ${Math.ceil(left)}초 안에 돌아가세요`);
-      else { dmg += RULES.RULE_DMG * dt; warn.push('🔒 감옥 밖! 체력 감소 중'); }
+      if (S.jailIn && left > 0) alarm(`🔒 감옥 밖! ${Math.ceil(left)}초 안에 돌아가세요`);
+      else { dmg += RULES.RULE_DMG * dt; alarm('🔒 감옥 밖! 체력 감소 중'); }
     }
   }
   // 3) 스태미나 (뛸 때만 소모, 0이면 체력으로)
@@ -2756,7 +2759,7 @@ function tick() {
   if (S.augs.booster && (S.augs.booster.until || 0) > t) cost = 0;              // 부스터
   const sp = Logic.spendStamina(S.st, cost * dt);
   S.st = sp.st; dmg += sp.hpLoss * (av('ironman') || 1); // 아드레날린: 체력 감소 줄임
-  if (sp.hpLoss > 0) warn.push('스태미나 0! 뛰면 체력이 닳아요');
+  if (sp.hpLoss > 0) alarm('스태미나 0! 뛰면 체력이 닳아요');
   // 4) 추격자: 화살표가 뜰 때 스태미나 회복
   if (me.role === 'chaser' && ph.phase === 'chase' && !waiting) {
     const base = Logic.arrowBase(me, room.startAt), a = Logic.arrowState(t, base, arrowEverySec(), av('foresight') || 0), key = base + ':' + a.idx;
@@ -2795,6 +2798,11 @@ function tick() {
   }
 
   S.selfDmg += dmg; S.warn = warn;
+  // 위험 경고: 처음엔 크게 알림 + 진동, 계속되면 3초마다 진동
+  if (buzz.length) {
+    if (!S.buzzAt) toast(`⚠️ ${buzz[0]}`, true);
+    if (!S.buzzAt || real - S.buzzAt >= 3000) { S.buzzAt = real; vibrate([250, 100, 250]); }
+  } else S.buzzAt = 0;
   // 처음 숨는 시간의 대기 벌칙으로는 체력 1 밑으로 안 내려감 (GPS가 가끔 튀어서)
   if (hideWaitDmg > 0) {
     const hp = Logic.hpRaw({ ...me, selfDmg: S.selfDmg }, hits[S.pid]);
