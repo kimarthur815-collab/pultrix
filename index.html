@@ -15,6 +15,7 @@
 -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <style>
@@ -52,6 +53,9 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 .bottom{position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:8px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(17,20,24,.88)}
 .bottom .dim{text-align:center;font-size:15px;padding:4px 0}
 .fab{position:fixed;right:12px;bottom:calc(190px + env(safe-area-inset-bottom));z-index:1100;width:48px;height:48px;padding:0;border-radius:50%;font-size:22px;background:var(--panel)}
+#btnNorth{bottom:calc(246px + env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:center}
+#btnNorth svg{width:30px;height:30px;transition:transform .1s linear}
+#btnNorth.on{box-shadow:0 0 0 2px #3ba3ff}
 .arrowbox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1050;width:250px;height:250px;border-radius:50%;background:rgba(17,20,24,.72);display:none;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
 .arrowbox.on{display:flex}
 #arrow{width:150px;height:150px;fill:var(--chaser);transition:transform .25s ease-out}
@@ -261,6 +265,7 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
   </div>
   <div id="arrowBox" class="arrowbox"><svg id="arrow" viewBox="0 0 100 100"><path d="M50 6 L84 74 L50 58 L16 74 Z"/></svg><div id="arrowTxt"></div></div>
   <button id="btnFollow" class="fab" title="내 위치">📍</button>
+  <button id="btnNorth" class="fab on" title="지도 방향: 내 방향 ↔ 북쪽 고정"><svg viewBox="0 0 40 40"><path d="M20 3 L27 20 L13 20 Z" fill="#ff4d4f"/><path d="M20 37 L13 20 L27 20 Z" fill="#cbd5e1"/></svg></button>
   <div class="bottom">
     <ul id="specList" class="plist spec"></ul>
     <div id="augBar" class="augbar"></div>
@@ -350,6 +355,8 @@ const RULES = {
   SPOT_COUNT: 2,             // 구역 안 증강 지점 수
   SPOT_PICK_M: 15,           // 지점에서 이 거리 안에 들어가면 획득
   SPOT_RESPAWN_SEC: 180,     // 먹힌 지점이 다른 곳에 다시 생기는 시간
+  SPOT_STALE_SEC: 600,       // 이 시간 동안 아무도 못 먹은 지점은 못 들어가는 곳으로 보고 옮김 (30분 게임 기준, 게임 시간에 비례)
+  SPOT_MOVE_M: 50,           // 옮길 때 원래 자리에서 이 거리보다 멀리
   GRADE_ODDS: { D: 0.25, C: 0.22, B: 0.25, A: 0.17, S: 0.08, SS: 0.03 }, // 증강 등급 확률
   AUG_ON: 1,                 // 증강 켜기(1) / 끄기(0)
   AREA_R: 300                // 현재 구역 반경 (방 설정에서 자동으로 들어옴, 육감 거리 계산용)
@@ -668,6 +675,19 @@ const Logic = (() => {
     const r = area.r * 0.85 * Math.sqrt(rnd()), th = rnd() * 2 * Math.PI;
     return { lat: area.lat + r * Math.cos(th) / 111195, lng: area.lng + r * Math.sin(th) / (111195 * Math.cos(rad(area.lat))) };
   }
+  // 증강 지점이 너무 오래 안 먹혔는지: 나타난 때(at, 처음 지점은 게임 시작)부터 SPOT_STALE_SEC(게임 시간 비례)
+  const spotStaleMs = () => RULES.SPOT_STALE_SEC * 1000 * RULES.GAME_SEC / RULE_DEFAULTS.GAME_SEC;
+  const spotStale = (sp, startAt, now) => now - Math.max(sp.at || 0, startAt || 0) >= spotStaleMs();
+  // 구역 안 새 자리, 원래 자리에서 SPOT_MOVE_M보다 멀리 (구역이 작아 못 찾으면 가장 먼 곳)
+  function moveSpot(area, old, rnd = Math.random) {
+    let best = null;
+    for (let i = 0; i < 40; i++) {
+      const p = randomSpot(area, rnd), d = dist(p, old);
+      if (d > RULES.SPOT_MOVE_M) return p;
+      if (!best || d > best.d) best = { p, d };
+    }
+    return best.p;
+  }
   // ===== 게임 설정 추천값: 반경(r)·인원(n)·추격자 수 기준 =====
   function interp(table, x) {
     if (x <= table[0][0]) return table[0][1];
@@ -739,7 +759,7 @@ const Logic = (() => {
     return roles;
   }
   return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
-    GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec,
+    GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec, spotStale, spotStaleMs, moveSpot,
     MODES, MODE_RULES, setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
 })();
@@ -760,7 +780,7 @@ const vibrate = p => { try { navigator.vibrate && navigator.vibrate(p); } catch 
 
 const S = {
   offset: 0, screen: null,
-  fix: null, prevFix: null, fixAt: 0, speed: 0, heading: null, compass: false, sensorsOn: false, watchId: null, wake: null,
+  fix: null, prevFix: null, fixAt: 0, speed: 0, heading: null, compass: false, northUp: false, sensorsOn: false, watchId: null, wake: null,
   code: null, pid: null, name: '', room: null, unsub: null, evUnsub: null, readySent: null,
   gameKey: null, st: 0, selfDmg: 0, anchor: null, waitOut: 0, ruleSec: 0, lastMapIdx: null, lastArrowKey: null,
   snap: [], dead: {}, warn: [], lastTick: 0, lastWrite: 0, winSent: false, follow: true, arrowRot: 0,
@@ -945,7 +965,19 @@ function onOrient(e) {
   if (S.heading == null) S.heading = h;
   else { const d = ((h - S.heading + 540) % 360) - 180; S.heading = (S.heading + d * 0.3 + 360) % 360; }
   S.compass = true;
-  if (!arrowRaf) arrowRaf = requestAnimationFrame(() => { arrowRaf = 0; if (S.screen === 's-game') drawArrow(); });
+  if (!arrowRaf) arrowRaf = requestAnimationFrame(() => { arrowRaf = 0; if (S.screen === 's-game') { drawArrow(); applyBearing(); } });
+}
+// 지도 회전: 기본은 내가 보는 방향이 위, 버튼으로 북쪽 고정 (나침반이 없으면 북쪽 고정)
+let bearAt = 0, bearTimer = 0;
+function applyBearing(force) {
+  const mo = maps.gmap; if (!mo || !mo.map.setBearing || S.screen !== 's-game') return;
+  const hu = !S.northUp && S.compass && S.heading != null, want = hu ? (360 - S.heading) % 360 : 0;
+  $('#btnNorth').classList.toggle('on', hu);
+  const d = Math.abs(((want - mo.map.getBearing() + 540) % 360) - 180), t = Date.now();
+  if (!force && d < 1.5) return;
+  if (!force && t - bearAt < 100) { if (!bearTimer) bearTimer = setTimeout(() => { bearTimer = 0; applyBearing(); }, 100); return; }
+  bearAt = t; mo.map.setBearing(want);
+  $('#btnNorth svg').style.transform = `rotate(${want}deg)`; // 바늘(빨강)이 화면 속 북쪽을 가리킴
 }
 
 function onFix(p) {
@@ -985,7 +1017,9 @@ function onFixErr(e) {
 const maps = {};
 function getMap(id) {
   if (maps[id]) return maps[id];
-  const map = L.map(id, { zoomControl: false }).setView([37.5665, 126.978], 16);
+  // 게임 지도만 회전 가능 (손가락 회전·컨트롤은 끄고, 나침반 방향으로만 돌림)
+  const rot = id === 'gmap' ? { rotate: true, touchRotate: false, shiftKeyRotate: false, rotateControl: false } : {};
+  const map = L.map(id, { zoomControl: false, ...rot }).setView([37.5665, 126.978], 16);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   return (maps[id] = { map, self: null, acc: null, area: null, others: [], centered: false });
 }
@@ -1526,7 +1560,7 @@ function enterGame() {
     show('s-game'); $('#ov-invite').classList.remove('on');
     const mo = getMap('gmap');
     if (!mo.bound) { mo.bound = true; mo.map.on('dragstart', () => { S.follow = false; }); bindLongPress(mo); }
-    setTimeout(() => mo.map.invalidateSize(), 50);
+    setTimeout(() => { mo.map.invalidateSize(); applyBearing(true); }, 50);
     if (me.role === 'runner') takeSnapshot();
   }
   $('#ov-resume').classList.toggle('on', !S.sensorsOn);
@@ -1549,6 +1583,11 @@ function syncFromDb(room, me) {
 }
 $('#btnResume').onclick = safe(async () => { await startSensors(); $('#ov-resume').classList.remove('on'); });
 $('#btnFollow').onclick = () => { S.follow = true; drawMaps(); };
+$('#btnNorth').onclick = () => {
+  if (!S.northUp && !S.compass) return toast('나침반을 쓸 수 없어서 북쪽 고정이에요');
+  S.northUp = !S.northUp;
+  toast(S.northUp ? '지도: 북쪽 고정' : '지도: 내가 보는 방향이 위'); applyBearing(true);
+};
 
 /* ---------- 증강 ---------- */
 Logic.setClock(now);
@@ -1773,7 +1812,7 @@ function useAug(id) {
     if (!best) return toast('끌어올 증강 지점이 없어요');
     runTransaction(roomRef(best.path), cur => {
       if (!cur || (cur.at || 0) > t || (cur.until != null && cur.until <= t)) return;
-      return { ...cur, ...Logic.pullToward(cur, here, v) };
+      return { ...cur, ...Logic.pullToward(cur, here, v), ...(best.path.startsWith('spots/') ? { at: t } : {}) }; // 끌어온 지점은 리셋 시간도 새로
     }).catch(e => console.error(e));
     setCooldown(id); toast(`🧲 자석! 증강 지점을 ${Math.round(Math.min(v, best.d))}m 끌어왔어요`, true); sfx('magnet');
   } else if (id === 'ink') {
@@ -2391,6 +2430,21 @@ function checkSpots(t) {
     return;
   }
 }
+// 증강 지점: 오래(30분 게임 기준 10분) 아무도 못 먹으면 못 들어가는 곳으로 보고, 구역 안 50m 넘게 떨어진 새 자리로 옮김 (먼저 본 한 명이 옮김)
+function moveStaleSpots(t) {
+  const room = S.room, area = room.settings && room.settings.area;
+  if (S.spotMoveBusy || !area || !RULES.AUG_ON || !room.startAt) return;
+  for (const [sid, sp] of Object.entries(room.spots || {})) {
+    if (!Logic.spotStale(sp, room.startAt, t)) continue;
+    S.spotMoveBusy = true;
+    runTransaction(roomRef('spots/' + sid), cur => {
+      if (!cur || !Logic.spotStale(cur, room.startAt, t)) return;
+      return { ...Logic.moveSpot(area, cur), at: t };
+    }).catch(e => console.error(e))
+      .finally(() => { S.spotMoveBusy = false; });
+    return;
+  }
+}
 // 덫: 상대 팀 덫 10m 안에 들어가면 발동 (먼저 밟은 한 명), 스태미나 0 + 설치한 사람에게 위치 알림
 function checkTraps(me, t) {
   if (S.trapBusy) return;
@@ -2817,6 +2871,7 @@ function tick() {
     }
   }
   // 6) 증강 지점 줍기, 상대 덫·가짜 보물, 정기 보상
+  moveStaleSpots(t);
   if (gpsOk) { checkSpots(t); checkTraps(me, t); checkFakes(me, t); checkCams(me, t); checkSupplies(me, t); }
   // 은신처: 반경 안에서 가만히 있으면 체력·스태미나 회복
   const ho = S.augs.hideout;
