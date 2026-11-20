@@ -157,6 +157,16 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 .insaugs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .spotTip{background:#ffcf40;color:#111;border:0;font-weight:800}
 .runnerTip{background:var(--runner);color:#fff;border:0;font-weight:700}
+/* 새 능력: 먹물 · 무궁화 · 흔들어 탈출 · 도청 */
+#ink{position:fixed;inset:0;z-index:1040;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 28% 34%,#020305 0 20%,transparent 21%),radial-gradient(circle at 72% 58%,#020305 0 26%,transparent 27%),radial-gradient(circle at 44% 78%,#020305 0 17%,transparent 18%),rgba(4,6,9,.97)}
+#ink.on{display:flex;animation:inkin .4s ease-out}#ink b{color:#6b7380;font-size:20px;text-align:center}
+@keyframes inkin{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+#mugung{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:1990;width:min(92vw,420px);display:none;text-align:center;pointer-events:none;background:rgba(17,20,24,.95);border:3px solid #ff7ad9;border-radius:18px;padding:16px 14px;box-shadow:0 0 40px rgba(255,122,217,.55)}
+#mugung.on{display:block}#mugung b{display:block;font-size:30px;line-height:1.25;word-break:keep-all;color:#ffb3ec}
+#mugung.judge{border-color:var(--chaser);box-shadow:0 0 40px rgba(255,77,79,.55)}#mugung.judge b{color:#fff}#mugung small{display:block;color:var(--dim);font-size:14px;margin-top:6px}
+.shakedots{font-size:44px;letter-spacing:10px;color:var(--warn);margin:10px 0}
+#ov-shake h2{font-size:28px;animation:blink .5s infinite}
+.pingTip.enemyPing{border-color:var(--chaser)}
 </style>
 </head>
 <body>
@@ -263,6 +273,10 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 <div id="ov-insight" class="ov"><h2>통찰</h2><p id="insSub" class="dim"></p><div id="insList" class="cards"></div><button id="btnInsGo" class="primary">보기</button><button id="btnInsClose">닫기</button></div>
 <div id="ov-role" class="ov"><p class="dim">당신의 역할은…</p><div class="slot"><div id="reel" class="reel"></div></div><p id="roleMsg" class="big"></p><p id="roleSub" class="dim"></p><button id="btnRoleOk" class="primary">확인</button></div>
 <div id="flash"></div>
+<div id="ink"><b id="inkTxt"></b></div>
+<div id="mugung"></div>
+<div id="ov-shake" class="ov"><h2>📳 폰을 세게 흔드세요!</h2><p class="dim">3번 흔들면 50% 확률로 탈출</p><div id="shakeDots" class="shakedots"></div><p id="shakeLeft" class="big"></p></div>
+<div id="ov-pick" class="ov"><h2 id="pickTitle"></h2><p id="pickSub" class="dim"></p><div id="pickList" class="cards"></div><button id="btnPickClose">취소</button></div>
 <div id="ov-resume" class="ov"><h2>센서를 다시 켜야 해요</h2><p class="dim">GPS와 나침반을 켜려면 눌러주세요</p><button id="btnResume" class="primary">센서 켜기</button></div>
 <div id="toast" class="toast"></div>
 
@@ -343,8 +357,9 @@ const Logic = (() => {
   function spendStamina(st, cost) {
     return st >= cost ? { st: st - cost, hpLoss: 0 } : { st: 0, hpLoss: cost - st };
   }
-  function phaseAt(now, startAt) {
-    const hideEnd = startAt + RULES.HIDE_SEC * 1000, end = hideEnd + RULES.GAME_SEC * 1000;
+  // shift: 시간 도둑으로 늘거나 줄어든 게임 시간(ms)
+  function phaseAt(now, startAt, shift = 0) {
+    const hideEnd = startAt + RULES.HIDE_SEC * 1000, end = hideEnd + RULES.GAME_SEC * 1000 + (shift || 0);
     if (now < startAt) return { phase: 'pre', remainMs: startAt - now };
     if (now < hideEnd) return { phase: 'hide', remainMs: hideEnd - now };
     if (now < end) return { phase: 'chase', remainMs: end - now };
@@ -380,11 +395,17 @@ const Logic = (() => {
     if (p.forfeit) return 0; // 기권
     const raw = hpRaw(p, hit), ls = p.augs && p.augs.lastStand;
     if (raw <= 0 && ls && (ls.readyAt || 0) <= clock()) return 1;
+    if (raw <= 0 && hit && (hit.pendUntil || 0) > clock()) return 1; // 흔들어 탈출 판정 중엔 탈락 보류
     return Math.min(RULES.HP_MAX, Math.max(0, raw));
   }
   const alive = (p, hit) => hpOf(p, hit) > 0;
-  // 분신이 켜져 있으면 상대 화면(화살표·미니맵·순간 포착)에는 분신 위치가 보임
-  const shownPos = (p, now) => (p.decoy && (p.decoy.until || 0) > now ? { ...p, lat: p.decoy.lat, lng: p.decoy.lng } : p);
+  // 상대 화면(화살표·미니맵·순간 포착)에 보이는 위치: 분신이 켜져 있으면 분신 자리, 자리 바꾸기 중이면 바꾼 팀원 자리
+  function shownPos(p, now, players) {
+    if (p.decoy && (p.decoy.until || 0) > now) return { ...p, lat: p.decoy.lat, lng: p.decoy.lng };
+    const sw = p.swap, q = sw && (sw.until || 0) > now && players && players[sw.with];
+    if (q && q.lat != null) return { ...p, lat: q.lat, lng: q.lng };
+    return p;
+  }
   // 살아 있고 무적·투명화가 아닌 도망자 중 (보이는 위치 기준) 가장 가까운 사람
   function nearestRunner(pos, players, hits, now) {
     let best = null;
@@ -392,19 +413,19 @@ const Logic = (() => {
       if (p0.role !== 'runner' || p0.lat == null) continue;
       const h = (hits || {})[id];
       if (!alive(p0, h) || ((h && h.invUntil) || 0) > now || (p0.stealthUntil || 0) > now) continue;
-      const p = shownPos(p0, now), d = dist(pos, p);
+      const p = shownPos(p0, now, players), d = dist(pos, p);
       if (!best || d < best.d) best = { id, p, d };
     }
     return best;
   }
-  function winner(players, hits, now, startAt) {
+  function winner(players, hits, now, startAt, shift = 0) {
     const list = Object.entries(players || {}).filter(([, p]) => p.role);
     const runners = list.filter(([, p]) => p.role === 'runner'), chasers = list.filter(([, p]) => p.role === 'chaser');
     if (!runners.length || !chasers.length) return null;
     const h = hits || {};
     if (!runners.some(([id, p]) => alive(p, h[id]))) return { winner: 'chaser', reason: '도망자 전원 탈락' };
     if (!chasers.some(([id, p]) => alive(p, h[id]))) return { winner: 'runner', reason: '추격자 전원 탈락' };
-    if (phaseAt(now, startAt).phase === 'over') return { winner: 'runner', reason: `${RULES.GAME_SEC / 60}분 생존` };
+    if (phaseAt(now, startAt, shift).phase === 'over') return { winner: 'runner', reason: `${Math.round((RULES.GAME_SEC * 1000 + (shift || 0)) / 60000)}분 생존` };
     return null;
   }
   function parseQR(text) {
@@ -419,7 +440,7 @@ const Logic = (() => {
     const me = players[chaserId], t = players[qr.pid];
     if (!me || me.role !== 'chaser') return '추격자만 잡을 수 있어요';
     if (!alive({ ...me, selfDmg: mySelfDmg ?? me.selfDmg }, hits[chaserId])) return '탈락해서 잡을 수 없어요';
-    const ph = phaseAt(now, room.startAt).phase;
+    const ph = phaseAt(now, room.startAt, room.timeShift).phase;
     if (ph === 'pre') return '아직 시작 전이에요';
     if (ph === 'hide') return '아직 도망자가 숨는 시간이에요';
     if (ph === 'over') return '게임이 끝났어요';
@@ -475,7 +496,18 @@ const Logic = (() => {
     foresight:    { name: '예측', grade: 'C', role: 'chaser', v: 3, d: v => `화살표 보이는 시간 +${v}초` },
     footsteps:    { name: '발소리', grade: 'C', role: 'runner', v: 5, d: () => '미니맵에 추격자 이동 방향도 같이 표시' },
     selfDestruct: { name: '자폭', grade: 'C', role: 'all', cd: 5, v: 30, r: 15, d: v => `내 체력이 절반이 되고, 반경 15m 안 상대 전원 체력 -${v} (무적인 도망자는 제외)` },
-    domain:       { name: '영역전개', grade: 'SS', role: 'all', cd: 6, v: 25, sec: 30, walk: 3, mult: 5, d: v => `쓴 자리에 반경 ${v}m 영역 30초. 안에 들어온 상대는 걷기만 해도 초당 3, 뛰면 5배로 스태미나 소모` }
+    domain:       { name: '영역전개', grade: 'SS', role: 'all', cd: 6, v: 25, sec: 30, walk: 3, mult: 5, d: v => `쓴 자리에 반경 ${v}m 영역 30초. 안에 들어온 상대는 걷기만 해도 초당 3, 뛰면 5배로 스태미나 소모` },
+    mugung:       { name: '무궁화 꽃이 피었습니다', grade: 'S', role: 'chaser', cd: 6, v: 10, warn: 2, ms: 1, reveal: 20, d: v => `도망자에게 2초 예고 후 ${v}초 판정. 그동안 초속 1m 넘게 움직인 도망자는 스태미나 0 + 20초 동안 추격자 전원에게 위치 공개` },
+    shake:        { name: '흔들어 탈출', grade: 'B', role: 'runner', cd: 3, auto: true, v: 50, win: 3, n: 3, inv: 10, d: v => `잡힌 뒤 3초 안에 폰을 세게 3번 흔들면 ${v}% 확률로 잡기 취소 + 10초 무적 (흔들면 쿨타임 시작)` },
+    jam:          { name: '나침반 교란', grade: 'A', role: 'runner', cd: 4, v: 30, d: v => `${v}초 동안 모든 추격자 화살표가 엉뚱한 방향을 가리키고 거리는 ???로 보임` },
+    counterIntel: { name: '역탐지', grade: 'B', role: 'runner', v: 5, d: v => `추격자가 화살표·순간 포착으로 나를 보면 알림 + 그 추격자 위치 ${v}초 표시` },
+    wanted:       { name: '현상수배', grade: 'A', role: 'chaser', cd: 4, v: 30, d: v => `도망자 1명을 골라 ${v}초 동안 추격자 전원 지도에 진짜 위치 공개 (투명화·분신·자리 바꾸기 무시)` },
+    eavesdrop:    { name: '도청', grade: 'C', role: 'all', v: 1, d: () => '상대 팀 핑도 내 지도에 보임' },
+    swap:         { name: '자리 바꾸기', grade: 'A', role: 'runner', cd: 4, v: 30, d: v => `팀원 1명을 골라 ${v}초 동안 상대 화면에서 서로 위치가 바뀌어 보임` },
+    fakeTreasure: { name: '가짜 보물', grade: 'B', role: 'all', cd: 3, v: 300, d: () => '쓴 자리에 상대에게만 보이는 가짜 증강 지점 (5분). 밟은 상대는 스태미나 0 + 30초 동안 나에게 위치가 들킴' },
+    magnet:       { name: '자석', grade: 'C', role: 'all', cd: 2, v: 50, d: v => `가장 가까운 증강 지점을 내 쪽으로 ${v}m 끌어옴` },
+    timeThief:    { name: '시간 도둑', grade: 'S', role: 'all', cd: 8, v: 2, d: v => `도망자가 쓰면 남은 시간 -${v}분, 추격자가 쓰면 +${v}분 (1분 밑으로는 안 줄어듦)` },
+    ink:          { name: '먹물', grade: 'B', role: 'all', cd: 2, v: 10, d: v => `가장 가까운 상대의 지도를 ${v}초 동안 먹물로 가림` }
   };
   // 정밀 추적·고속 스캔은 방장이 정한 기본 주기에 비례 (기본값 45초·20초 기준 수치)
   const augArrowSec = v => Math.max(15, Math.round(v * RULES.ARROW_EVERY_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
@@ -487,8 +519,9 @@ const Logic = (() => {
   const augDesc = id => AUGS[id].d(AUGS[id].v) + (AUGS[id].cd ? ` · 쿨타임 ${fmtSec(augCdMs(id) / 1000)}` : '');
   const augPool = role => Object.keys(AUGS).filter(id => AUGS[id].role === role || AUGS[id].role === 'all');
   // 이미 가진 증강은 다시 안 나옴. 등급 확률로 등급을 고르고(남은 증강이 있는 등급만), 그 등급 안에서 무작위
-  function rollAug(role, owned, rnd = Math.random) {
-    const free = augPool(role).filter(id => !(owned || {})[id]);
+  // ban: 지금 상황에서 쓸 수 없는 증강 (예: 살아 있는 팀원이 없으면 자리 바꾸기)
+  function rollAug(role, owned, rnd = Math.random, ban) {
+    const free = augPool(role).filter(id => !(owned || {})[id] && !(ban || []).includes(id));
     const grades = GRADES.filter(g => (RULES.GRADE_ODDS[g] || 0) > 0 && free.some(id => AUGS[id].grade === g));
     if (!grades.length) return null;
     let r = rnd() * grades.reduce((sum, g) => sum + RULES.GRADE_ODDS[g], 0), pick = grades[grades.length - 1];
@@ -496,9 +529,9 @@ const Logic = (() => {
     const list = free.filter(id => AUGS[id].grade === pick);
     return list[Math.floor(rnd() * list.length)];
   }
-  function rollOffer(role, owned, rnd = Math.random) {
+  function rollOffer(role, owned, rnd = Math.random, ban) {
     const taken = { ...(owned || {}) }, out = [];
-    while (out.length < 3) { const id = rollAug(role, taken, rnd); if (!id) break; out.push(id); taken[id] = 1; }
+    while (out.length < 3) { const id = rollAug(role, taken, rnd, ban); if (!id) break; out.push(id); taken[id] = 1; }
     return out;
   }
   function addAug(augs, id, t) {
@@ -507,6 +540,18 @@ const Logic = (() => {
   }
   const augVal = (augs, id) => ((augs || {})[id] ? AUGS[id].v : null);
   const augReady = (x, now) => !!x && (x.readyAt || 0) <= now;
+  // 시간 도둑: 바뀐 뒤의 timeShift(ms). 도망자 -mins분 / 추격자 +mins분, 남은 시간은 1분 밑으로 안 줄임. 못 줄이면 null
+  function stealTime(role, shift, now, startAt, mins) {
+    const end = startAt + (RULES.HIDE_SEC + RULES.GAME_SEC) * 1000 + (shift || 0);
+    if (role === 'chaser') return (shift || 0) + mins * 60000;
+    const newEnd = Math.max(end - mins * 60000, now + 60000);
+    return newEnd < end ? (shift || 0) - (end - newEnd) : null;
+  }
+  // 자석: from을 to 쪽으로 m미터 (넘으면 to에 딱 붙음)
+  function pullToward(from, to, m) {
+    const d = dist(from, to), k = d > 0 ? Math.min(1, m / d) : 1;
+    return { lat: from.lat + (to.lat - from.lat) * k, lng: from.lng + (to.lng - from.lng) * k };
+  }
   // 구역 안(가장자리 15% 제외) 아무 곳
   function randomSpot(area, rnd = Math.random) {
     const r = area.r * 0.85 * Math.sqrt(rnd()), th = rnd() * 2 * Math.PI;
@@ -583,7 +628,7 @@ const Logic = (() => {
   }
   return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec,
-    setClock, shownPos, survivalMs, mvp,
+    setClock, shownPos, survivalMs, mvp, stealTime, pullToward,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
 })();
 // LOGIC END
@@ -666,7 +711,15 @@ const SFX = {
   trap: [[180, .08, 'square', .15], [120, .35, 'sawtooth', .15, .07]],
   boom: [[90, .5, 'sawtooth', .2], [60, .55, 'square', .14, .05]],
   win: [[523, .12, 'square', .12], [659, .12, 'square', .12, .12], [784, .12, 'square', .12, .24], [1047, .45, 'square', .12, .36]],
-  lose: [[392, .2, 'triangle', .13], [330, .2, 'triangle', .13, .2], [262, .5, 'triangle', .13, .4]]
+  lose: [[392, .2, 'triangle', .13], [330, .2, 'triangle', .13, .2], [262, .5, 'triangle', .13, .4]],
+  mugung: [[784, .16, 'triangle', .13], [784, .16, 'triangle', .13, .18], [659, .16, 'triangle', .13, .36], [659, .16, 'triangle', .13, .54], [784, .16, 'triangle', .13, .72], [880, .16, 'triangle', .13, .9], [784, .16, 'triangle', .13, 1.08], [659, .16, 'triangle', .13, 1.26], [523, .4, 'triangle', .14, 1.44]],
+  escape: [[440, .08, 'square', .12], [660, .08, 'square', .12, .08], [880, .08, 'square', .12, .16], [1320, .3, 'triangle', .13, .24]],
+  detect: [[1800, .05, 'sine', .15], [1800, .05, 'sine', .15, .12], [2400, .08, 'sine', .13, .24]],
+  wanted: [[700, .18, 'square', .1], [950, .18, 'square', .1, .2], [700, .18, 'square', .1, .4], [950, .18, 'square', .1, .6]],
+  ink: [[160, .25, 'sawtooth', .14], [90, .45, 'sine', .18, .05]],
+  swap: [[523, .07, 'triangle', .13], [784, .07, 'triangle', .13, .08], [523, .07, 'triangle', .13, .16], [784, .12, 'triangle', .13, .24]],
+  time: [[1200, .04, 'square', .12], [900, .04, 'square', .12, .25], [1200, .04, 'square', .12, .5], [600, .35, 'triangle', .14, .75]],
+  magnet: [[200, .3, 'sine', .14], [400, .3, 'sine', .12, .1], [800, .2, 'sine', .1, .2]]
 };
 function sfx(name) {
   if (muted) return;
@@ -713,16 +766,20 @@ function saveLocal(v) { try { localStorage.setItem('gtag', JSON.stringify(v)); }
 
 /* ---------- 센서 ---------- */
 async function startSensors() {
+  // 아이폰: 나침반(방향)·흔들기(가속도) 권한을 한 번에 요청 (버튼을 누른 순간에 둘 다 불러야 함)
   try {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      const r = await DeviceOrientationEvent.requestPermission();
-      if (r !== 'granted') toast('나침반 권한이 없어서 화살표가 북쪽 기준으로 보여요');
-    }
+    const DO = typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission;
+    const DM = typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission;
+    const pO = typeof DO === 'function' ? DeviceOrientationEvent.requestPermission().catch(() => 'denied') : null;
+    const pM = typeof DM === 'function' ? DeviceMotionEvent.requestPermission().catch(() => 'denied') : null;
+    if (pO && (await pO) !== 'granted') toast('나침반 권한이 없어서 화살표가 북쪽 기준으로 보여요');
+    if (pM) await pM;
   } catch (e) {}
   if (!S.orientBound) {
     S.orientBound = true;
     window.addEventListener('deviceorientationabsolute', onOrient, true);
     window.addEventListener('deviceorientation', onOrient, true);
+    window.addEventListener('devicemotion', onMotion);
   }
   if (!navigator.geolocation) { toast('이 브라우저는 GPS를 지원하지 않아요', true); return false; }
   if (S.watchId == null) S.watchId = navigator.geolocation.watchPosition(onFix, onFixErr, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
@@ -827,7 +884,7 @@ function takeSnapshot() {
   const prev = {}; (S.snap || []).forEach(c => { prev[c.id] = c; });
   S.snap = Object.entries(room.players || {})
     .filter(([id, p]) => p.role === 'chaser' && p.lat != null && Logic.alive(p, hits[id]))
-    .map(([id, p]) => { const q = Logic.shownPos(p, now()); return { id, name: p.name, lat: q.lat, lng: q.lng, prev: prev[id] }; });
+    .map(([id, p]) => { const q = Logic.shownPos(p, now(), room.players); return { id, name: p.name, lat: q.lat, lng: q.lng, prev: prev[id] }; });
   drawSnap();
 }
 function drawSnap() {
@@ -897,7 +954,8 @@ function onRoom() {
   if (room.status === 'lobby') {
     if (S.gameKey) { // 한 판 더: 지난 게임 상태 정리
       S.gameKey = null; S.resultKey = null;
-      ['#ov-qr', '#ov-role', '#ov-aug', '#ov-insight', '#ov-mega', '#ov-ping', '#ov-forfeit'].forEach(x => $(x).classList.remove('on'));
+      ['#ov-qr', '#ov-role', '#ov-aug', '#ov-insight', '#ov-mega', '#ov-ping', '#ov-forfeit', '#ov-pick', '#ov-shake'].forEach(x => $(x).classList.remove('on'));
+      S.shake = null;
       closeScanner();
     }
     if (S.screen !== 's-lobby') show('s-lobby');
@@ -922,13 +980,57 @@ function onEvent(e) {
     else if (e.by !== S.pid) toast(`💥 ${who(e.by)}가 자폭했어요`);
     return;
   }
-  if (e.type === 'trap') {
+  if (e.type === 'trap') { // 덫·가짜 보물 발동 → 설치한 사람에게 30초 위치 표시
     if (e.by === S.pid) {
       const name = ((S.room && S.room.players[e.target]) || {}).name || '?';
       S.trapReveals = [...(S.trapReveals || []), { name, lat: e.lat, lng: e.lng, until: now() + 30000 }];
-      toast(`덫 발동! ${name} 위치를 30초 동안 표시해요`, true); flash('rgba(255,122,69,.9)'); vibrate([150, 60, 150]);
+      toast(`${e.fake ? '가짜 보물' : '덫'} 발동! ${name} 위치를 30초 동안 표시해요`, true); flash('rgba(255,122,69,.9)'); vibrate([150, 60, 150]);
       drawMaps();
     }
+    return;
+  }
+  const me0 = P0[S.pid] || {};
+  if (e.type === 'mugung') { // 무궁화: 모두에게 노래, 도망자는 진동
+    sfx('mugung'); if (me0.role === 'runner') vibrate([200, 100, 200, 100, 200]);
+    return;
+  }
+  if (e.type === 'mugHit') {
+    if (me0.role === 'chaser') { toast(`🌸 ${who(e.by)} 움직임 포착! ${Logic.AUGS.mugung.reveal}초 동안 위치 공개`, true); sfx('arrow'); vibrate(120); }
+    return;
+  }
+  if (e.type === 'escape') {
+    if (e.chaser === S.pid) {
+      if (S.stats) S.stats.catches = Math.max(0, (S.stats.catches || 0) - 1);
+      toast(`😱 ${who(e.by)}가 폰을 흔들어 탈출했어요! 정지 풀림`, true); sfx('escape'); vibrate([200, 80, 200]); flash('rgba(255,176,32,.9)');
+    } else if (e.by !== S.pid) toast(`📳 ${who(e.by)} 흔들어 탈출 성공!`);
+    return;
+  }
+  if (e.type === 'detected') {
+    if (e.target === S.pid) {
+      const sec = Logic.AUGS.counterIntel.v;
+      S.detects = [...(S.detects || []).filter(d => d.id !== e.by), { id: e.by, until: now() + sec * 1000 }];
+      toast(`🛰 역탐지! ${who(e.by)}가 ${e.how === 'radar' ? '순간 포착으' : '화살표'}로 나를 봤어요 · ${sec}초 위치 표시`, true);
+      sfx('detect'); vibrate([60, 40, 60, 40, 60]); drawMaps();
+    }
+    return;
+  }
+  if (e.type === 'wanted') {
+    const sec = Logic.AUGS.wanted.v;
+    if (e.target === S.pid) { toast(`🎯 현상수배됐어요! ${sec}초 동안 추격자 전원에게 내 위치가 보여요`, true); sfx('wanted'); vibrate([300, 100, 300]); flash('rgba(255,77,79,.9)'); }
+    else if (e.by !== S.pid) toast(`🎯 ${who(e.target)} 현상수배! ${sec}초 동안 위치 공개`);
+    return;
+  }
+  if (e.type === 'swap') {
+    if (e.target === S.pid) { toast(`🔄 ${who(e.by)}가 나와 자리를 바꿨어요 (${Logic.AUGS.swap.v}초)`, true); sfx('swap'); vibrate([80, 40, 80]); }
+    return;
+  }
+  if (e.type === 'ink') {
+    if (e.target === S.pid) { toast(`🦑 ${who(e.by)}의 먹물! ${Logic.AUGS.ink.v}초 동안 지도가 가려져요`, true); sfx('ink'); vibrate([200, 50, 100]); }
+    return;
+  }
+  if (e.type === 'time') {
+    const d = e.delta || 0;
+    toast(`⏳ ${who(e.by)}의 시간 도둑! 남은 시간 ${d > 0 ? '+' : '−'}${fmtDur(Math.abs(d) / 1000)}`, true); sfx('time'); vibrate(100);
     return;
   }
   if (e.type !== 'catch') return;
@@ -936,7 +1038,13 @@ function onEvent(e) {
   const min = fmtDur(RULES.CATCH_COOLDOWN_SEC);
   if (e.target === S.pid) {
     $('#ov-qr').classList.remove('on'); toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min} 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); flash('rgba(255,77,79,.9)'); sfx('caught');
-    setTimeout(() => { if (S.room && S.room.status === 'playing' && Logic.alive({ ...S.room.players[S.pid], selfDmg: S.selfDmg, augs: S.augs }, (S.room.hits || {})[S.pid])) gainRandom('잡힘 보상'); }, 2500);
+    // 흔들어 탈출: 판정 시간이 남아 있으면 흔들기 창을 띄움. 보상은 판정이 끝난 뒤, 탈출했으면 안 줌
+    const sh = S.augs && S.augs.shake, tt = now();
+    if (e.pend && tt < e.pend && Logic.augReady(sh, tt)) startShake(e);
+    setTimeout(() => {
+      const room = S.room, h = (room && room.hits && room.hits[S.pid]) || {};
+      if (room && room.status === 'playing' && h.esc !== e.catchAt && Logic.alive({ ...room.players[S.pid], selfDmg: S.selfDmg, augs: S.augs }, h)) gainRandom('잡힘 보상');
+    }, e.pend ? Math.max(0, e.pend - tt) + 1500 : 2500);
   }
   else if (e.by === S.pid) { toast(`${tg} 잡았다! ${min} 동안 제자리 대기`, true); vibrate(200); flash('rgba(60,207,122,.85)'); sfx('catch'); }
   else toast(`${by} → ${tg} 잡았어요!`);
@@ -957,7 +1065,8 @@ function leaveLocal(msg) {
   if (S.evUnsub) S.evUnsub();
   S.unsub = S.evUnsub = null; S.code = S.pid = S.room = S.gameKey = null;
   Logic.applySettings(null); RULES.AREA_R = RULE_DEFAULTS.AREA_R;
-  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight'].forEach(s => $(s).classList.remove('on'));
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake'].forEach(s => $(s).classList.remove('on'));
+  S.shake = null;
   saveLocal({ name: S.name });
   show('s-home');
   if (msg) toast(msg);
@@ -1101,7 +1210,7 @@ $('#btnStart').onclick = safe(async () => {
   const roles = Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
   const game = mergedSettings(room).out; // 모든 폰이 같은 설정으로 시작
   Logic.applySettings(game);
-  const u = { status: 'playing', startAt: Math.round(now()) + RULES.START_DELAY_SEC * 1000, result: null, hits: null, events: null, traps: null, zones: null, pings: null, spots: {}, 'settings/game': game };
+  const u = { status: 'playing', startAt: Math.round(now()) + RULES.START_DELAY_SEC * 1000, result: null, hits: null, events: null, traps: null, zones: null, pings: null, fakes: null, mugung: null, timeShift: null, spots: {}, 'settings/game': game };
   if (game.AUG_ON) for (let i = 0; i < game.SPOT_COUNT; i++) u.spots['s' + i] = { ...Logic.randomSpot(room.settings.area), at: 0 };
   for (const id of ids) {
     u[`players/${id}/role`] = roles[id];
@@ -1117,6 +1226,7 @@ $('#btnStart').onclick = safe(async () => {
     u[`players/${id}/decoy`] = null;
     u[`players/${id}/forfeit`] = null;
     u[`players/${id}/stats`] = null;
+    for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
 });
@@ -1127,7 +1237,8 @@ function enterGame() {
   if (S.gameKey !== key) {
     S.gameKey = key;
     Object.assign(S, {
-      augs: me.augs || {}, augBarHtml: null, offerSent: false, lastSnapIdx: null, spotBusy: false, trapBusy: false, trapReveals: [], alarmAt: 0,
+      augs: me.augs || {}, augBarHtml: null, offerSent: false, lastSnapIdx: null, spotBusy: false, trapBusy: false, fakeBusy: false, trapReveals: [], alarmAt: 0,
+      detects: [], shake: null, mugHit: null, pickCb: null,
       stats: { dist: 0, vmax: 0, skills: 0, catches: 0, ...(me.stats || {}) }, statPos: null, seenPings: new Set(Object.keys(room.pings || {})),
       pingAt: 0, warnWas: false, specOn: false, resultKey: null,
       selfDmg: me.selfDmg || 0, anchor: me.anchor || null,
@@ -1187,7 +1298,18 @@ const ICONS = {
   luck: '<circle cx="9" cy="9" r="3"/><circle cx="15" cy="9" r="3"/><circle cx="9" cy="15" r="3"/><circle cx="15" cy="15" r="3"/><path d="M14 14l5 8"/>',
   foresight: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><path d="M12 9v6M9 12h6"/>',
   footsteps: '<ellipse cx="8" cy="8" rx="2.5" ry="4"/><ellipse cx="16" cy="15" rx="2.5" ry="4"/><path d="M7 14h2M15 21h2"/>',
-  selfDestruct: '<circle cx="10" cy="14" r="7"/><path d="M15 9l3-3M18 2v2M22 6h-2M21 3l-1.5 1.5"/>'
+  selfDestruct: '<circle cx="10" cy="14" r="7"/><path d="M15 9l3-3M18 2v2M22 6h-2M21 3l-1.5 1.5"/>',
+  mugung: '<circle cx="12" cy="6.5" r="3"/><circle cx="17.2" cy="10.3" r="3"/><circle cx="15.2" cy="16.4" r="3"/><circle cx="8.8" cy="16.4" r="3"/><circle cx="6.8" cy="10.3" r="3"/><circle cx="12" cy="12" r="1.2"/>',
+  shake: '<rect x="8" y="3" width="8" height="18" rx="2"/><path d="M4.5 8v8M19.5 8v8M2 10v4M22 10v4M11 18h2"/>',
+  jam: '<circle cx="12" cy="12" r="9"/><path d="M9.5 14.5l1.5-5 4-1.5-1.5 5z"/><path d="M4 4l16 16"/>',
+  counterIntel: '<path d="M4 20a14 14 0 0 1 0-14M8 16a7 7 0 0 1 0-6"/><circle cx="12" cy="13" r="2"/><path d="M14 11l7-7M21 4h-5M21 4v5"/>',
+  wanted: '<rect x="4" y="2" width="16" height="20" rx="1.5"/><circle cx="12" cy="10" r="3"/><path d="M7 18.5a5 5 0 0 1 10 0M8 5h8"/>',
+  eavesdrop: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/>',
+  swap: '<path d="M4 8h15l-4-4M20 16H5l4 4"/>',
+  fakeTreasure: '<rect x="3" y="10" width="18" height="10" rx="1"/><path d="M3 10l2-5h14l2 5"/><path d="M10.5 13.5a1.6 1.6 0 1 1 2 1.5c-.4.2-.5.5-.5 1"/><path d="M12 18v.01"/>',
+  magnet: '<path d="M6 3h4v9a2 2 0 0 0 4 0V3h4v9a6 6 0 0 1-12 0z"/><path d="M6 7h4M14 7h4"/>',
+  timeThief: '<path d="M6 2h12M6 22h12M7 2v4l5 6-5 6v4M17 2v4l-5 6 5 6v4"/><path d="M10 19h4"/>',
+  ink: '<path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/><circle cx="19.5" cy="5" r="1.3"/><circle cx="4.5" cy="7" r="1"/>'
 };
 const icon = id => `<svg viewBox="0 0 24 24">${ICONS[id] || ''}</svg>`;
 const gradeOf = id => Logic.AUGS[id].grade;
@@ -1210,9 +1332,15 @@ function gainAug(id, source) {
   flash(col); vibrate(vib);
   renderGame();
 }
+// 지금 상황에서 의미 없는 증강은 뽑기에서 뺌: 살아 있는 팀원이 없으면 자리 바꾸기
+function augBan(role) {
+  const room = S.room, hits = room.hits || {};
+  const mates = Object.entries(room.players || {}).filter(([id, p]) => id !== S.pid && p.role === role && Logic.alive(p, hits[id]));
+  return role === 'runner' && !mates.length ? ['swap'] : [];
+}
 function gainRandom(source) {
   const me = S.room && S.room.players[S.pid]; if (!me || !me.role || !RULES.AUG_ON) return;
-  const id = Logic.rollAug(me.role, S.augs);
+  const id = Logic.rollAug(me.role, S.augs, Math.random, augBan(me.role));
   if (!id) return toast(`${source}: 더 얻을 수 있는 증강이 없어요`);
   gainAug(id, source);
 }
@@ -1227,8 +1355,11 @@ function useAug(id) {
   const room = S.room, me = room && room.players[S.pid], x = S.augs[id], t = now();
   if (!me || !x || !Logic.augReady(x, t) || Logic.AUGS[id].auto) return;
   if (id === 'insight') return openInsight();
-  const v = av(id), here = S.fix ? { lat: S.fix.lat, lng: S.fix.lng } : null;
-  if (['trap', 'decoy', 'domain', 'selfDestruct', 'whistle'].includes(id) && !here) return toast('GPS 신호를 기다리는 중…');
+  if (id === 'wanted') return openWanted();
+  if (id === 'swap') return openSwap();
+  const v = av(id), here = S.fix ? { lat: S.fix.lat, lng: S.fix.lng } : null, hits = room.hits || {};
+  if (['trap', 'decoy', 'domain', 'selfDestruct', 'whistle', 'fakeTreasure', 'magnet', 'ink'].includes(id) && !here) return toast('GPS 신호를 기다리는 중…');
+  if (id === 'timeThief') return useTimeThief(me, t, v);
   if (id === 'megaphone') { $('#megaInput').value = ''; $('#ov-mega').classList.add('on'); setTimeout(() => $('#megaInput').focus(), 50); return; }
   if (id === 'heal') {
     const hp = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid]), h = Math.min(v, RULES.HP_MAX - hp);
@@ -1240,6 +1371,7 @@ function useAug(id) {
     setCooldown(id);
   } else if (id === 'radar') {
     setCooldown(id, { until: t + v * 1000 }); toast(`순간 포착 ${v}초! 모든 도망자 위치 표시`, true);
+    for (const [pid, p] of Object.entries(room.players)) if (p.role === 'runner' && Logic.alive(p, hits[pid])) detectedBy(pid, 'radar');
   } else if (id === 'stealth') {
     setCooldown(id, { until: t + v * 1000 }); update(meRef(), { stealthUntil: t + v * 1000 }); toast(`투명화 ${v}초! 화살표에 안 잡혀요`, true);
   } else if (id === 'trap') {
@@ -1272,12 +1404,143 @@ function useAug(id) {
     push(roomRef('zones'), { by: S.pid, role: me.role, ...here, r: v, until: t + a.sec * 1000 });
     setCooldown(id, { until: t + a.sec * 1000 }); toast(`영역전개! 반경 ${v}m, ${a.sec}초`, true);
     flash('rainbow');
+  } else if (id === 'mugung') {
+    // 2초 예고 → 10초 판정. 판정은 각 도망자 폰이 자기 속도로 함
+    const a = Logic.AUGS.mugung, from = t + a.warn * 1000;
+    update(roomRef(), { mugung: { by: S.pid, from, to: from + v * 1000 } });
+    push(roomRef('events'), { type: 'mugung', by: S.pid, at: serverTimestamp() });
+    setCooldown(id, { until: from + v * 1000 }); toast('🌸 무궁화 꽃이 피었습니다!', true);
+  } else if (id === 'jam') {
+    update(meRef(), { jamUntil: t + v * 1000 });
+    setCooldown(id, { until: t + v * 1000 }); toast(`📡 나침반 교란 ${v}초! 추격자 화살표가 엉뚱한 곳을 가리켜요`, true);
+  } else if (id === 'fakeTreasure') {
+    push(roomRef('fakes'), { by: S.pid, role: me.role, ...here, until: t + v * 1000 });
+    setCooldown(id); toast('가짜 보물을 놓았어요 (5분 · 상대에게만 보여요)', true);
+  } else if (id === 'magnet') {
+    // 가장 가까운 증강 지점(내 눈에 보이는 것: 진짜 지점 + 상대가 놓은 가짜 보물)을 v미터 끌어옴
+    let best = null;
+    for (const [sid, sp] of Object.entries(room.spots || {})) if ((sp.at || 0) <= t) { const d = Logic.dist(here, sp); if (!best || d < best.d) best = { path: 'spots/' + sid, d }; }
+    for (const [fid, f] of Object.entries(room.fakes || {})) if (f.role !== me.role && (f.until || 0) > t) { const d = Logic.dist(here, f); if (!best || d < best.d) best = { path: 'fakes/' + fid, d }; }
+    if (!best) return toast('끌어올 증강 지점이 없어요');
+    runTransaction(roomRef(best.path), cur => {
+      if (!cur || (cur.at || 0) > t || (cur.until != null && cur.until <= t)) return;
+      return { ...cur, ...Logic.pullToward(cur, here, v) };
+    }).catch(e => console.error(e));
+    setCooldown(id); toast(`🧲 자석! 증강 지점을 ${Math.round(Math.min(v, best.d))}m 끌어왔어요`, true); sfx('magnet');
+  } else if (id === 'ink') {
+    let best = null;
+    for (const [pid, p] of Object.entries(room.players)) {
+      if (!p.role || p.role === me.role || p.lat == null || !Logic.alive(p, hits[pid])) continue;
+      const d = Logic.dist(here, p); if (!best || d < best.d) best = { pid, d };
+    }
+    if (!best) return toast('먹물을 뿌릴 상대가 없어요');
+    update(roomRef('players/' + best.pid), { inkUntil: t + v * 1000 });
+    push(roomRef('events'), { type: 'ink', by: S.pid, target: best.pid, at: serverTimestamp() });
+    setCooldown(id); toast(`🦑 먹물 발사! ${room.players[best.pid].name}의 지도를 ${v}초 가렸어요`, true); sfx('ink');
   }
   if (!['domain', 'selfDestruct'].includes(id)) flash(GRADE_FX[gradeOf(id)][0] === 'rainbow' ? 'rainbow' : 'rgba(255,207,64,.7)');
-  if (!['whistle', 'selfDestruct'].includes(id)) sfx('skill');
+  if (!['whistle', 'selfDestruct', 'mugung', 'magnet', 'ink'].includes(id)) sfx('skill');
   vibrate(80);
   renderGame();
 }
+// 시간 도둑: 방 전체의 남은 시간을 바꿈 (도망자 -2분, 추격자 +2분, 1분 밑으로는 안 줄임)
+function useTimeThief(me, t, v) {
+  const startAt = S.room.startAt; let delta = 0;
+  runTransaction(roomRef('timeShift'), cur => {
+    const nx = Logic.stealTime(me.role, cur || 0, t, startAt, v);
+    if (nx == null) return;
+    delta = nx - (cur || 0); return nx;
+  }).then(r => {
+    if (!r.committed) return toast('남은 시간이 1분 이하라 더 못 줄여요');
+    setCooldown('timeThief');
+    push(roomRef('events'), { type: 'time', by: S.pid, delta, at: serverTimestamp() });
+    flash('rgba(245,184,0,1)'); vibrate(80); renderGame();
+  }).catch(e => console.error(e));
+}
+// 목록에서 한 명 고르기 (현상수배·자리 바꾸기)
+function openPick(title, sub, list, onPick) {
+  S.pickCb = onPick;
+  $('#pickTitle').textContent = title; $('#pickSub').textContent = sub;
+  $('#pickList').innerHTML = list.map(([id, p, small]) => `<button class="augcard" data-t="${id}"><span><b>${esc(p.name)}</b><small>${esc(small)}</small></span></button>`).join('');
+  $('#ov-pick').classList.add('on');
+}
+$('#pickList').onclick = e => {
+  const b = e.target.closest('[data-t]'); if (!b || !S.pickCb) return;
+  const cb = S.pickCb; S.pickCb = null; $('#ov-pick').classList.remove('on'); cb(b.dataset.t);
+};
+$('#btnPickClose').onclick = () => { $('#ov-pick').classList.remove('on'); S.pickCb = null; };
+const livingOf = role => Object.entries(S.room.players).filter(([id, p]) => p.role === role && Logic.alive(p, (S.room.hits || {})[id]));
+function openWanted() {
+  const list = livingOf('runner');
+  if (!list.length) return toast('현상수배할 도망자가 없어요');
+  openPick('🎯 현상수배', `${Logic.AUGS.wanted.v}초 동안 추격자 전원에게 진짜 위치가 보여요`, list.map(([id, p]) => [id, p, '도망자']), tid => {
+    const t = now(), v = av('wanted'), name = (S.room.players[tid] || {}).name;
+    if (!Logic.augReady(S.augs.wanted, t)) return;
+    update(roomRef('players/' + tid), { wantedUntil: t + v * 1000 });
+    push(roomRef('events'), { type: 'wanted', by: S.pid, target: tid, at: serverTimestamp() });
+    setCooldown('wanted', { until: t + v * 1000 }); toast(`🎯 ${name} 현상수배! ${v}초 동안 위치 공개`, true); sfx('wanted'); flash('rgba(168,85,247,.9)'); vibrate(80);
+    renderGame();
+  });
+}
+function openSwap() {
+  const list = livingOf('runner').filter(([id, p]) => id !== S.pid && p.lat != null);
+  if (!list.length) return toast('자리를 바꿀 살아 있는 팀원이 없어요');
+  openPick('🔄 자리 바꾸기', `${Logic.AUGS.swap.v}초 동안 상대 화면에서 서로 위치가 바뀌어 보여요`, list.map(([id, p]) => [id, p, '팀원']), tid => {
+    const t = now(), v = av('swap'), until = t + v * 1000, name = (S.room.players[tid] || {}).name;
+    if (!Logic.augReady(S.augs.swap, t)) return;
+    update(roomRef(), { [`players/${S.pid}/swap`]: { with: tid, until }, [`players/${tid}/swap`]: { with: S.pid, until } });
+    push(roomRef('events'), { type: 'swap', by: S.pid, target: tid, at: serverTimestamp() });
+    setCooldown('swap', { until }); toast(`🔄 ${name}와 자리 바꾸기 ${v}초!`, true); sfx('swap'); flash('rgba(168,85,247,.9)'); vibrate(80);
+    renderGame();
+  });
+}
+// 역탐지: 내가 화살표·순간 포착으로 본 도망자가 역탐지를 갖고 있으면 알려줌
+function detectedBy(rid, how) {
+  const p = S.room.players[rid];
+  if (p && p.augs && p.augs.counterIntel) push(roomRef('events'), { type: 'detected', by: S.pid, target: rid, how, at: serverTimestamp() });
+}
+// 흔들어 탈출: 잡힌 뒤 3초 안에 세게 3번 흔들면 50% 확률로 잡기 취소 + 10초 무적
+function startShake(e) {
+  const a = Logic.AUGS.shake;
+  S.shake = { catchAt: e.catchAt, chaser: e.by, until: Math.min(now() + a.win * 1000, e.pend), n: 0, last: 0, done: false };
+  $('#ov-shake').classList.add('on'); renderShake();
+}
+function renderShake() {
+  const sk = S.shake, ov = $('#ov-shake');
+  if (!sk || sk.done) return ov.classList.remove('on');
+  const left = sk.until - now();
+  if (left <= 0) { sk.done = true; ov.classList.remove('on'); return toast('흔들기 시간이 지났어요'); }
+  const n = Logic.AUGS.shake.n;
+  $('#shakeDots').textContent = '●'.repeat(Math.min(sk.n, n)) + '○'.repeat(Math.max(0, n - sk.n));
+  $('#shakeLeft').textContent = (left / 1000).toFixed(1) + '초';
+}
+function onMotion(ev) {
+  const sk = S.shake; if (!sk || sk.done || now() > sk.until) return;
+  const a = ev.acceleration, g = ev.accelerationIncludingGravity;
+  let strong = false;
+  if (a && a.x != null) strong = Math.hypot(a.x, a.y || 0, a.z || 0) > 15;       // 중력 뺀 가속도 15m/s² 넘음
+  else if (g && g.x != null) strong = Math.hypot(g.x, g.y || 0, g.z || 0) > 25;   // 중력 포함값만 있는 폰
+  if (!strong || Date.now() - sk.last < 250) return;                              // 한 번 흔들 때 여러 번 세지 않게
+  sk.last = Date.now(); sk.n++; vibrate(30); renderShake();
+  if (sk.n >= Logic.AUGS.shake.n) tryEscape();
+}
+const tryEscape = safe(async () => {
+  const sk = S.shake, a = Logic.AUGS.shake; if (!sk) return;
+  sk.done = true; $('#ov-shake').classList.remove('on');
+  setCooldown('shake');
+  if (Math.random() >= a.v / 100) { toast('탈출 실패… 운이 없었어요', true); vibrate(400); renderGame(); return; }
+  const t = now();
+  const r = await runTransaction(roomRef('hits/' + S.pid), cur => {
+    if (!cur || cur.at !== sk.catchAt || cur.esc === sk.catchAt || t > (cur.pendUntil || 0) + 2000) return;
+    return { ...cur, catches: Math.max(0, (cur.catches || 0) - 1), invUntil: t + a.inv * 1000, esc: sk.catchAt, pendUntil: 0 };
+  });
+  if (!r.committed) return toast('탈출 판정 시간이 지났어요');
+  const ch = S.room.players[sk.chaser]; // 잡은 추격자 정지 해제 (잡기 전 상태로)
+  if (ch) await update(roomRef('players/' + sk.chaser), { frozenUntil: ch.prevFrozenUntil || 0 });
+  push(roomRef('events'), { type: 'escape', by: S.pid, chaser: sk.chaser, at: serverTimestamp() });
+  toast(`📳 탈출 성공! 잡기 취소 + ${a.inv}초 무적`, true); flash('rgba(60,207,122,.9)'); sfx('escape'); vibrate([100, 50, 100, 50, 300]);
+  renderGame();
+});
 // 확성기: 20자 메시지를 모든 사람 화면에 크게
 $('#btnMegaSend').onclick = () => {
   const text = $('#megaInput').value.trim().slice(0, 20);
@@ -1341,7 +1604,7 @@ function showInsight(ids) {
 function lastStandCheck(me, hits, t) {
   const x = S.augs && S.augs.lastStand; if (!x) return;
   const raw = Logic.hpRaw({ ...me, selfDmg: S.selfDmg }, hits[S.pid]);
-  if (raw > 0) return;
+  if (raw > 0 || ((hits[S.pid] && hits[S.pid].pendUntil) || 0) > t) return; // 흔들어 탈출 판정이 끝난 뒤에 발동
   if (Logic.augReady(x, t)) {
     const sec = av('lastStand');
     S.selfDmg -= 1 - raw;
@@ -1382,7 +1645,7 @@ function checkOffer(me, t, ph) {
   const due = Math.floor((t - (S.room.startAt + RULES.HIDE_SEC * 1000)) / (RULES.AUG_EVERY_SEC * 1000));
   if (!me.offer && due > (me.augPicks || 0) && !S.offerSent) {
     S.offerSent = true;
-    const offer = Logic.rollOffer(me.role, S.augs);
+    const offer = Logic.rollOffer(me.role, S.augs, Math.random, augBan(me.role));
     const u = offer.length ? { offer } : { augPicks: (me.augPicks || 0) + 1 };
     if (!offer.length) toast('정기 보상: 더 얻을 수 있는 증강이 없어요');
     update(meRef(), u).finally(() => { S.offerSent = false; });
@@ -1438,19 +1701,42 @@ function checkTraps(me, t) {
     return;
   }
 }
+// 가짜 보물: 상대가 놓은 가짜 지점을 밟으면(지점 줍는 거리 안) 스태미나 0 + 놓은 사람에게 30초 위치 표시
+function checkFakes(me, t) {
+  if (S.fakeBusy || !RULES.AUG_ON) return;
+  const pickM = av('luck') || RULES.SPOT_PICK_M;
+  for (const [fid, f] of Object.entries(S.room.fakes || {})) {
+    if (f.role === me.role || (f.until || 0) <= t || Logic.dist(S.fix, f) > pickM) continue;
+    S.fakeBusy = true;
+    const pos = { lat: S.fix.lat, lng: S.fix.lng };
+    runTransaction(roomRef('fakes/' + fid), cur => (cur && (cur.until || 0) > t ? null : undefined))
+      .then(r => {
+        if (!r.committed) return;
+        S.st = 0;
+        toast('가짜 보물이었어요! 스태미나 0, 위치가 들켰어요', true); flash('rgba(255,77,79,.9)'); vibrate([200, 80, 200]); sfx('trap');
+        push(roomRef('events'), { type: 'trap', fake: true, by: f.by, target: S.pid, ...pos, at: serverTimestamp() });
+      })
+      .catch(e => console.error(e))
+      .finally(() => { S.fakeBusy = false; });
+    return;
+  }
+}
 // 영역전개: 상대 팀 영역 안이면 true
 function inEnemyDomain(me, t) {
   return Object.values(S.room.zones || {}).some(z => z.role !== me.role && (z.until || 0) > t && Logic.dist(S.fix, z) <= z.r);
 }
 function drawSpots(mo) {
-  const t = now(), spots = (S.room && S.room.spots) || {};
+  const t = now(), room = S.room || {}, me = (room.players || {})[S.pid] || {}, spots = {};
+  for (const [id, sp] of Object.entries(room.spots || {})) if ((sp.at || 0) <= t) spots['s' + id] = sp;
+  // 상대가 놓은 가짜 보물은 진짜 지점과 똑같이 보임 (놓은 팀에게는 안 보임)
+  for (const [id, f] of Object.entries(room.fakes || {})) if (me.role && f.role !== me.role && (f.until || 0) > t) spots['f' + id] = f;
   mo.spotM = mo.spotM || {};
   for (const id of Object.keys(mo.spotM)) {
     const sp = spots[id];
-    if (!sp || (sp.at || 0) > t || mo.spotM[id].key !== sp.lat + ',' + sp.lng) { mo.spotM[id].remove(); delete mo.spotM[id]; }
+    if (!sp || mo.spotM[id].key !== sp.lat + ',' + sp.lng) { mo.spotM[id].remove(); delete mo.spotM[id]; }
   }
   for (const [id, sp] of Object.entries(spots)) {
-    if ((sp.at || 0) > t || mo.spotM[id]) continue;
+    if (mo.spotM[id]) continue;
     const m = L.circleMarker([sp.lat, sp.lng], { radius: 11, color: '#fff', weight: 2, fillColor: '#ffcf40', fillOpacity: .95 })
       .bindTooltip('✦ 증강', { permanent: true, direction: 'top', className: 'spotTip' }).addTo(mo.map);
     m.key = sp.lat + ',' + sp.lng; mo.spotM[id] = m;
@@ -1462,7 +1748,7 @@ function drawRadar(mo) {
   const t = now(), x = S.augs && S.augs.radar, room = S.room;
   const list = !x || (x.until || 0) <= t || !room ? [] : Object.entries(room.players)
     .filter(([id, p]) => p.role === 'runner' && p.lat != null && Logic.alive(p, (room.hits || {})[id]))
-    .map(([id, p]) => [id, Logic.shownPos(p, t)]);
+    .map(([id, p]) => [id, Logic.shownPos(p, t, room.players)]);
   mo.radarM = mo.radarM || {};
   const keep = new Set(list.map(([id]) => id));
   for (const id of Object.keys(mo.radarM)) if (!keep.has(id)) { mo.radarG.removeLayer(mo.radarM[id]); delete mo.radarM[id]; }
@@ -1511,10 +1797,10 @@ function notifyPings(room, me) {
   for (const [id, pg] of Object.entries(room.pings || {})) {
     if (S.seenPings.has(id)) continue;
     S.seenPings.add(id);
-    if (pg.role === me.role && pg.by !== S.pid && (pg.until || 0) > now()) {
-      const name = (room.players[pg.by] || {}).name || '?';
-      toast(`${PING[pg.kind][0]} ${name}: ${PING[pg.kind][1]}`); vibrate([60, 40, 60]); sfx('ping');
-    }
+    if (pg.by === S.pid || (pg.until || 0) <= now() || !PING[pg.kind]) continue;
+    const name = (room.players[pg.by] || {}).name || '?';
+    if (pg.role === me.role) { toast(`${PING[pg.kind][0]} ${name}: ${PING[pg.kind][1]}`); vibrate([60, 40, 60]); sfx('ping'); }
+    else if (av('eavesdrop')) { toast(`🎧 도청 · ${name}: ${PING[pg.kind][1]}`); sfx('ping'); }
   }
 }
 // 기권: 확인 후 탈락 → 관전 모드
@@ -1569,11 +1855,29 @@ function drawSkills(mo) {
       .bindTooltip(`${esc(p.name)}의 분신`, { permanent: true, direction: 'top', className: 'trapTip' }) });
   }
   const meDead = !Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid]);
+  const spy = !!av('eavesdrop'); // 도청: 상대 팀 핑도 보임
   for (const [id, pg] of Object.entries(room.pings || {})) {
-    if ((pg.until || 0) <= t || (pg.role !== me.role && !meDead) || !PING[pg.kind]) continue;
+    const enemy = pg.role !== me.role;
+    if ((pg.until || 0) <= t || (enemy && !meDead && !spy) || !PING[pg.kind]) continue;
     const name = (room.players[pg.by] || {}).name || '';
     items.push({ key: 'p' + id, make: () => L.marker([pg.lat, pg.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15], html: `<div style="font-size:26px;line-height:30px;text-align:center">${PING[pg.kind][0]}</div>` }) })
-      .bindTooltip(`${esc(name)}: ${PING[pg.kind][1]}`, { permanent: true, direction: 'top', offset: [0, -12], className: 'pingTip' }) });
+      .bindTooltip(`${enemy && !meDead ? '🎧 ' : ''}${esc(name)}: ${PING[pg.kind][1]}`, { permanent: true, direction: 'top', offset: [0, -12], className: 'pingTip' + (enemy ? ' enemyPing' : '') }) });
+  }
+  // 추격자: 현상수배·무궁화에 걸린 도망자의 진짜 위치 (실시간)
+  if (me.role === 'chaser') for (const [id, p] of Object.entries(room.players)) {
+    if (p.role !== 'runner' || p.lat == null || !Logic.alive(p, (room.hits || {})[id])) continue;
+    const w = (p.wantedUntil || 0) > t, m = (p.mugungUntil || 0) > t;
+    if (!w && !m) continue;
+    const label = `${w ? '🎯' : '🌸'} ${esc(p.name)}`;
+    items.push({ key: 'x' + id, make: () => L.circleMarker([p.lat, p.lng], { radius: 11, color: '#fff', weight: 3, fillColor: '#3ba3ff', fillOpacity: .95, interactive: false })
+      .bindTooltip(label, { permanent: true, direction: 'top', className: 'runnerTip' }), update: mk => { mk.setLatLng([p.lat, p.lng]); mk.setTooltipContent(label); } });
+  }
+  // 역탐지: 나를 본 추격자 위치 5초 (실시간)
+  S.detects = (S.detects || []).filter(d => d.until > t);
+  for (const d of S.detects) {
+    const p = room.players[d.id]; if (!p || p.lat == null) continue;
+    items.push({ key: 'q' + d.id, make: () => L.circleMarker([p.lat, p.lng], { radius: 11, color: '#fff', weight: 3, fillColor: '#ff4d4f', fillOpacity: .95, interactive: false })
+      .bindTooltip(`🛰 ${esc(p.name)}`, { permanent: true, direction: 'top', className: 'chaserTip' }), update: mk => mk.setLatLng([p.lat, p.lng]) });
   }
   S.trapReveals = (S.trapReveals || []).filter(r => r.until > t);
   for (const r of S.trapReveals) {
@@ -1587,7 +1891,7 @@ function tick() {
   const room = S.room;
   if (!room || room.status !== 'playing' || room.result || S.screen !== 's-game') return;
   const me = room.players && room.players[S.pid]; if (!me || !me.role) return;
-  const t = now(), hits = room.hits || {}, ph = Logic.phaseAt(t, room.startAt);
+  const t = now(), hits = room.hits || {}, ph = Logic.phaseAt(t, room.startAt, room.timeShift);
   const real = Date.now(), dt = S.lastTick ? Math.min(Math.max((real - S.lastTick) / 1000, 0), 2) : 0;
   S.lastTick = real;
   const stMax = stMaxOf(me.role), recMul = av('recoverBoost') || 1;
@@ -1671,9 +1975,17 @@ function tick() {
       if (real - S.alarmAt > 3000) { S.alarmAt = real; vibrate([150, 80, 150]); }
     }
   }
-  // 6) 증강 지점 줍기, 상대 덫, 정기 보상
-  if (gpsOk) { checkSpots(t); checkTraps(me, t); }
+  // 6) 증강 지점 줍기, 상대 덫·가짜 보물, 정기 보상
+  if (gpsOk) { checkSpots(t); checkTraps(me, t); checkFakes(me, t); }
   checkOffer(me, t, ph);
+  // 7) 무궁화 꽃이 피었습니다: 판정 시간에 초속 1m 넘게 움직인 도망자는 스태미나 0 + 추격자 전원에게 위치 공개
+  const mg = room.mugung, ma = Logic.AUGS.mugung;
+  if (me.role === 'runner' && mg && t >= mg.from && t < mg.to && gpsOk && S.mugHit !== mg.from && S.speed > ma.ms) {
+    S.mugHit = mg.from; S.st = 0;
+    update(meRef(), { mugungUntil: t + ma.reveal * 1000 });
+    push(roomRef('events'), { type: 'mugHit', by: S.pid, at: serverTimestamp() });
+    toast(`🌸 움직였어요! 스태미나 0, ${ma.reveal}초 동안 위치 공개`, true); flash('rgba(255,122,217,.95)'); vibrate([300, 100, 300]); sfx('trap');
+  }
 
   S.selfDmg += dmg; S.warn = warn;
   lastStandCheck(me, hits, t);
@@ -1707,13 +2019,33 @@ function countdownLoop() {
   el.classList.add('on');
 }
 setInterval(countdownLoop, 200);
+function overlayLoop() {
+  const room = S.room, inGame = !!room && room.status === 'playing' && !room.result && S.screen === 's-game';
+  const me = (inGame && room.players[S.pid]) || {}, t = now();
+  // 무궁화 배너
+  const mg = inGame && room.mugung, mEl = $('#mugung');
+  if (mg && me.role && t < mg.to) {
+    const warnP = t < mg.from, sec = Math.ceil((mg.to - t) / 1000);
+    const html = warnP ? '<b>🌸 무궁화 꽃이<br>피었습니다!</b>'
+      : me.role === 'runner' ? `<b>멈춰! ${sec}</b><small>지금 움직이면 걸려요</small>` : `<b>🌸 판정 중 ${sec}</b><small>움직이는 도망자를 찾는 중</small>`;
+    if (mEl.innerHTML !== html) mEl.innerHTML = html;
+    mEl.classList.add('on'); mEl.classList.toggle('judge', !warnP);
+  } else mEl.classList.remove('on');
+  // 흔들어 탈출
+  if (S.shake && !S.shake.done) renderShake();
+  // 먹물
+  const ink = inGame && (me.inkUntil || 0) > t;
+  $('#ink').classList.toggle('on', !!ink);
+  if (ink) $('#inkTxt').textContent = `🦑 먹물! ${Math.ceil((me.inkUntil - t) / 1000)}초`;
+}
+setInterval(overlayLoop, 200);
 
 function checkWin() {
   const room = S.room;
   if (!room || room.result || room.status !== 'playing' || S.winSent) return;
   const players = { ...room.players };
   if (players[S.pid]) players[S.pid] = { ...players[S.pid], selfDmg: S.selfDmg, augs: S.augs };
-  const w = Logic.winner(players, room.hits, now(), room.startAt);
+  const w = Logic.winner(players, room.hits, now(), room.startAt, room.timeShift);
   if (!w) return;
   S.winSent = true;
   runTransaction(roomRef('result'), cur => (cur ? undefined : { ...w, at: now() }))
@@ -1724,7 +2056,7 @@ function checkWin() {
 function renderGame() {
   const room = S.room; if (!room || S.screen !== 's-game') return;
   const me = room.players && room.players[S.pid]; if (!me || !me.role) return;
-  const t = now(), hits = room.hits || {}, ph = Logic.phaseAt(t, room.startAt), isC = me.role === 'chaser';
+  const t = now(), hits = room.hits || {}, ph = Logic.phaseAt(t, room.startAt, room.timeShift), isC = me.role === 'chaser';
   const hp = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]), alive = hp > 0, stMax = stMaxOf(me.role);
   const frozen = (me.frozenUntil || 0) > t, inv = ((hits[S.pid] && hits[S.pid].invUntil) || 0) - t;
   $('#g-role').textContent = isC ? '추격자' : '도망자';
@@ -1793,7 +2125,7 @@ function drawArrow() {
   if (!room || room.status !== 'playing') return off();
   const me = room.players && room.players[S.pid], t = now(), hits = room.hits || {};
   if (!me || me.role !== 'chaser' || !Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid])) return off();
-  const ph = Logic.phaseAt(t, room.startAt);
+  const ph = Logic.phaseAt(t, room.startAt, room.timeShift);
   if (ph.phase === 'hide') return off(`추격 시작까지 ${fmt(ph.remainMs)}`);
   if (ph.phase !== 'chase') return off();
   if ((me.frozenUntil || 0) > t) return off('정지가 풀리면 다시 쫓을 수 있어요');
@@ -1801,14 +2133,23 @@ function drawArrow() {
   if (!a.unlocked) return off(`화살표 열리기까지 ${fmt(a.nextInMs)}`);
   if (!a.visible) return off(`다음 화살표까지 ${fmt(a.nextInMs)}`);
   box.classList.add('on');
+  const tg = S.fix ? Logic.nearestRunner(S.fix, room.players, hits, t) : null;
+  // 나침반 교란: 살아 있는 도망자 중 누가 쓰고 있으면 모든 추격자 화살표가 엉뚱한 방향 + 거리 ???
+  const jammed = Object.entries(room.players).some(([id, p]) => p.role === 'runner' && (p.jamUntil || 0) > t && Logic.alive(p, hits[id]));
   if (S.arrowPopKey !== base + ':' + a.idx) { // 화살표가 새로 뜰 때 펄스 + 짧은 진동
     S.arrowPopKey = base + ':' + a.idx;
     box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop'); sfx('arrow');
     vibrate(80);
+    if (tg && !jammed) detectedBy(tg.id, 'arrow'); // 역탐지
   }
   const arrow = $('#arrow'), txt = $('#arrowTxt');
-  const tg = S.fix ? Logic.nearestRunner(S.fix, room.players, hits, t) : null;
   if (!S.fix) { arrow.style.display = 'none'; txt.textContent = 'GPS 신호를 기다리는 중…'; }
+  else if (jammed) {
+    arrow.style.display = 'block';
+    const b = tg ? Logic.bearing(S.fix, tg.p) : 0, wrong = 90 + ((a.idx * 137 + 61) % 180) + Math.sin(t / 400) * 25;
+    rotateArrow((S.compass && S.heading != null ? b - S.heading : b) + wrong);
+    txt.textContent = '???';
+  }
   else if (!tg) { arrow.style.display = 'none'; txt.textContent = '잡을 수 있는 도망자가 없어요'; }
   else if (tg.d <= RULES.ARROW_NEAR_M) { arrow.style.display = 'none'; txt.textContent = '근처에 있어요!'; }
   else {
@@ -1864,22 +2205,30 @@ const handleScan = safe(async text => {
   const qr = Logic.parseQR(text), t = now();
   const err = Logic.checkCatch(S.room, S.code, S.pid, qr, t, S.fix, S.selfDmg);
   if (err) return toast(err, true);
+  // 흔들어 탈출이 준비된 도망자면 판정 시간(3초 + 전달 여유 1초) 동안 탈락 보류, 보상도 판정 뒤에
+  const sh = ((S.room.players[qr.pid] || {}).augs || {}).shake;
+  const pend = Logic.augReady(sh, t) ? t + (Logic.AUGS.shake.win + 1) * 1000 : 0;
+  const prevFrozen = (S.room.players[S.pid] || {}).frozenUntil || 0;
   const res = await runTransaction(ref(db, `rooms/${S.code}/hits/${qr.pid}`), cur => {
     cur = cur || { catches: 0, invUntil: 0 };
     if ((cur.invUntil || 0) > t) return; // 다른 추격자가 먼저 잡음
-    return { catches: (cur.catches || 0) + 1, invUntil: t + RULES.CATCH_COOLDOWN_SEC * 1000, by: S.pid };
+    return { ...cur, catches: (cur.catches || 0) + 1, invUntil: t + RULES.CATCH_COOLDOWN_SEC * 1000, by: S.pid, at: t, pendUntil: pend };
   });
   if (!res.committed) return toast('방금 다른 추격자가 잡았어요');
   S.anchor = { lat: S.fix.lat, lng: S.fix.lng }; S.waitOut = 0;
-  await update(meRef(), { frozenUntil: t + RULES.CATCH_COOLDOWN_SEC * 1000, anchor: S.anchor });
-  await push(roomRef('events'), { type: 'catch', by: S.pid, target: qr.pid, at: serverTimestamp() });
+  await update(meRef(), { frozenUntil: t + RULES.CATCH_COOLDOWN_SEC * 1000, prevFrozenUntil: prevFrozen, anchor: S.anchor });
+  await push(roomRef('events'), { type: 'catch', by: S.pid, target: qr.pid, catchAt: t, pend, at: serverTimestamp() });
   S.stats.catches = (S.stats.catches || 0) + 1;
-  setTimeout(() => gainRandom('잡기 보상'), 2500);
+  setTimeout(() => {
+    const h = ((S.room && S.room.hits) || {})[qr.pid] || {};
+    if (h.esc !== t) gainRandom('잡기 보상'); // 흔들어 탈출당했으면 보상 없음
+  }, pend ? pend - t + 1500 : 2500);
 });
 
 /* ---------- 결과 ---------- */
 function renderResult() {
-  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight'].forEach(s => $(s).classList.remove('on'));
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake'].forEach(s => $(s).classList.remove('on'));
+  S.shake = null;
   $('#arrowBox').className = 'arrowbox';
   show('s-result');
   const room = S.room, r = room.result || {}, me = room.players[S.pid], hits = room.hits || {};
@@ -1906,9 +2255,10 @@ function renderResult() {
 // 한 판 더 (방장): 같은 방 로비로, 지난 게임 기록 정리
 $('#btnAgain').onclick = safe(async () => {
   const room = S.room; if (!room || room.hostId !== S.pid) return;
-  const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null };
+  const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null };
   for (const id of Object.keys(room.players)) {
-    for (const k of ['role', 'selfDmg', 'st', 'frozenUntil', 'anchor', 'qr', 'augs', 'augPicks', 'offer', 'stealthUntil', 'decoy', 'forfeit', 'stats']) u[`players/${id}/${k}`] = null;
+    for (const k of ['role', 'selfDmg', 'st', 'frozenUntil', 'anchor', 'qr', 'augs', 'augPicks', 'offer', 'stealthUntil', 'decoy', 'forfeit', 'stats',
+      'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
 });
