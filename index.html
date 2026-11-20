@@ -848,6 +848,22 @@ function sfx(name) {
     o.connect(g); g.connect(a.destination); o.start(st); o.stop(st + d + .02);
   }
 }
+// 호루라기: 심판 호루라기처럼 '삐— 삐이이—' 두 번, 떨리는 소리로 크게
+function whistleSound() {
+  if (muted) return;
+  const a = audio(); if (!a) return;
+  const t0 = a.currentTime + .01;
+  for (const [s0, d] of [[0, .3], [.4, 1]]) {
+    const st = t0 + s0, g = a.createGain(), trem = a.createGain(), lfo = a.createOscillator(), lfoG = a.createGain();
+    g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(.5, st + .015);
+    g.gain.setValueAtTime(.5, st + d - .06); g.gain.linearRampToValueAtTime(0, st + d);
+    trem.gain.value = .75; lfo.frequency.value = 28; lfoG.gain.value = .25; lfo.connect(lfoG); lfoG.connect(trem.gain); // 굴러가는(떨리는) 소리
+    for (const [f, type] of [[2900, 'sine'], [3150, 'triangle']]) {
+      const o = a.createOscillator(); o.type = type; o.frequency.value = f; o.connect(trem); o.start(st); o.stop(st + d + .02);
+    }
+    trem.connect(g); g.connect(a.destination); lfo.start(st); lfo.stop(st + d + .02);
+  }
+}
 // 사이렌 증강: 상대가 울리는 소리라 음소거여도 울림 (아이폰 무음 스위치는 막을 수 없음)
 function sirenSound(sec) {
   const a = audio(); if (!a) return;
@@ -1112,7 +1128,7 @@ function onEvent(e) {
   const P0 = (S.room && S.room.players) || {}, who = id => (P0[id] || {}).name || '?';
   if (e.type === 'mega') return showMega(who(e.by), (P0[e.by] || {}).role, e.text || '');
   if (e.type === 'whistle') {
-    if (e.target === S.pid) { toast('삐익—!! 어디선가 호루라기 소리가 들려요', true); vibrate([400, 100, 400, 100, 600, 100, 400]); sfx('whistle'); flash('rgba(255,255,255,.6)'); }
+    if (e.target === S.pid) { toast('삐익—!! 어디선가 호루라기 소리가 들려요', true); vibrate([400, 100, 400, 100, 600, 100, 400]); whistleSound(); flash('rgba(255,255,255,.6)'); }
     return;
   }
   if (e.type === 'blast') {
