@@ -62,6 +62,10 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 #arrowTxt{font-weight:700;font-size:18px;text-align:center;padding:0 16px}
 /* 오버레이 */
 .ov{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.9);display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+.setlist{width:min(90vw,360px)}.setlist .row{margin:4px 0}
+button.sw{width:84px;margin:4px 0;padding:8px 0;font-size:15px;background:#2d3540;color:var(--dim)}button.sw.on{background:#3ccf7a;color:#0b1a10}
+textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#1b2027;color:var(--txt);font-size:16px;font-family:inherit;margin:8px 0 0;resize:vertical}
+.memo{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;text-align:left}#ov-memo .memo{width:min(90vw,360px);max-height:60vh;overflow:auto}
 .ov.on{display:flex}.ov button{max-width:360px}
 .qrbox{width:min(80vw,360px);aspect-ratio:1;background:#fff;border-radius:12px;padding:8px}.qrbox svg{width:100%;height:100%;display:block}
 #scanVideo{width:min(90vw,420px);aspect-ratio:1;object-fit:cover;border-radius:12px;background:#000}
@@ -218,14 +222,14 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
   <h2>방 참가</h2>
   <input id="in-code" maxlength="5" placeholder="방 코드 5자리" autocapitalize="characters" autocomplete="off">
   <button id="btnJoin">참가</button>
-  <button id="btnTut">📖 게임 방법</button>
+  <div class="row"><button id="btnTut">📖 게임 방법</button><button class="btnSet" style="width:auto;padding:15px 16px" title="설정">⚙</button></div>
   <div class="card dim small">게임 중에는 화면을 켜 둔 채로 이 페이지를 열어 두세요. 카카오톡 같은 앱 안에서 열었다면 <b>다른 브라우저로 열기</b>(사파리·크롬)를 눌러주세요.</div>
 </section>
 
 <section id="s-lobby" class="screen">
   <div class="row between"><h1>방 <span id="l-code" class="code"></span></h1><span id="l-count" class="dim"></span></div>
   <p class="dim">친구에게 방 코드를 알려주세요. 역할은 시작할 때 랜덤으로 정해져요.</p>
-  <div class="row"><button id="btnInvite">📨 친구 초대 (QR)</button><button id="btnTut2" style="width:auto;padding:15px 16px">📖</button></div>
+  <div class="row"><button id="btnInvite">📨 친구 초대 (QR)</button><button id="btnTut2" style="width:auto;padding:15px 16px">📖</button><button class="btnSet" style="width:auto;padding:15px 16px" title="설정">⚙</button></div>
   <ul id="l-list" class="plist"></ul>
   <button id="btnReady" class="primary">센서 켜기 (GPS·나침반)</button>
   <div class="card">
@@ -243,6 +247,12 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
     <p id="l-modeHint" class="dim small" style="margin-top:6px"></p>
     <button id="btnJail" style="display:none;margin-top:8px">🔒 감옥 위치 찍기</button>
   </div>
+  <div id="l-memoCard" class="card">
+    <b>📝 방장 규칙 메모</b>
+    <textarea id="l-memo" maxlength="300" rows="3" placeholder="예: 건물 안 금지, 큰길 건너기 금지 (모두에게 글자로 보여요)"></textarea>
+    <p id="l-memoTxt" class="memo"></p>
+    <p id="l-memoHint" class="dim small"></p>
+  </div>
   <details id="l-set" class="card setcard">
     <summary><span><b>게임 설정</b><br><span id="l-setSum" class="dim small"></span></span></summary>
     <p id="l-setHint" class="dim small" style="margin-top:8px"></p>
@@ -257,7 +267,7 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 <section id="s-game" class="screen">
   <div id="gmap"></div>
   <div class="hud">
-    <div class="row"><span id="g-role" class="badge"></span><span id="g-phase"></span><span id="g-time" class="time"></span><button id="btnMute" class="hudbtn">🔊</button><button id="btnForfeit" class="hudbtn" title="기권">🏳</button></div>
+    <div class="row"><span id="g-role" class="badge"></span><span id="g-phase"></span><span id="g-time" class="time"></span><button id="btnMemo" class="hudbtn" title="방장 규칙 메모" style="display:none">📝</button><button class="btnSet hudbtn" title="설정">⚙</button><button id="btnForfeit" class="hudbtn" title="기권">🏳</button></div>
     <div class="bar"><i id="g-hp"></i><span>체력 <b id="g-hpv"></b></span></div>
     <div class="bar st"><i id="g-st"></i><span>스태미나 <b id="g-stv"></b></span></div>
     <div id="g-status" class="status dim"></div>
@@ -292,6 +302,8 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 <div id="cd"></div>
 <div id="mega"><small id="megaFrom"></small><b id="megaText"></b></div>
 <div id="ov-mega" class="ov"><h2>📢 확성기</h2><p class="dim">모든 사람 화면에 크게 보여요 (최대 20자)</p><input id="megaInput" maxlength="20" placeholder="메시지" style="max-width:360px"><button id="btnMegaSend" class="primary">보내기</button><button id="btnMegaClose">취소</button></div>
+<div id="ov-set" class="ov"><h2>⚙ 설정</h2><div class="card setlist"><div class="row between"><span>🎵 배경음악</span><button id="setBgm" class="sw"></button></div><div class="row between"><span>🔊 효과음</span><button id="setSfx" class="sw"></button></div></div><button id="btnSetClose">닫기</button></div>
+<div id="ov-memo" class="ov"><h2>📝 방장 규칙 메모</h2><p id="memoTxt" class="memo card"></p><button id="btnMemoClose">닫기</button></div>
 <div id="ov-ping" class="ov"><h2>팀 핑</h2><p class="dim">같은 팀 지도에 20초 동안 보여요</p><div class="pingbtns" style="width:min(90vw,360px)"><button data-ping="seen">👀 여기 있었음</button><button data-ping="gather">📍 여기로 모여</button><button data-ping="danger">⚠️ 위험</button></div><button id="btnPingClose" class="linkbtn">취소</button></div>
 <div id="ov-forfeit" class="ov"><h2>기권할까요?</h2><p class="dim">바로 탈락하고 관전 모드로 바뀌어요</p><button id="btnForfeitYes" class="danger" style="max-width:360px">기권하기</button><button id="btnForfeitNo">계속하기</button></div>
 <div id="ov-tut" class="ov"><div class="tutbox"><div id="tutArt" class="tutart"></div><h2 id="tutTitle" style="margin:4px 0 8px"></h2><div id="tutText" class="tuttext"></div><div id="tutDots" class="dots"></div><div class="row"><button id="tutPrev">이전</button><button id="tutNext" class="primary">다음</button></div><button id="tutSkip" class="linkbtn">건너뛰기</button></div></div>
@@ -601,7 +613,7 @@ const Logic = (() => {
     reroll:       { name: '리롤', grade: 'C', role: 'all', cd: 3, v: 0, d: () => '내 증강 하나를 골라 같은 등급의 다른 증강으로 바꿈' },
     alchemy:      { name: '연금술', grade: 'A', role: 'all', cd: 5, v: 0, d: () => '내 증강 2개를 버리고, 둘 중 높은 등급보다 한 등급 위 증강 1개 얻기 (SS는 SS)' },
     mirror:       { name: '거울', grade: 'A', role: 'runner', cd: 5, auto: true, v: 0, d: () => '나를 노린 상대 스킬 1번을 자동으로 되돌림 (먹물·침묵·저격·소매치기·현상수배·발자국 추적·위치 추적기)' },
-    smoke:        { name: '연막탄', grade: 'B', role: 'runner', cd: 3, v: 25, sec: 60, d: v => `쓴 자리 반경 ${v}m 연막 1분. 안에 있는 도망자는 화살표·순간 포착에 안 잡힘` },
+    smoke:        { name: '연막탄', grade: 'B', role: 'runner', cd: 3, v: 25, sec: 45, d: v => `쓴 자리 반경 ${v}m 연막 ${AUGS.smoke.sec}초. 안에 있는 도망자는 화살표·순간 포착에 안 잡힘` },
     exit:         { name: '비상구', grade: 'C', role: 'runner', cd: 3, v: 30, d: v => `${v}초 동안 구역 밖에 나가도 체력이 안 깎임` },
     disguise:     { name: '위장', grade: 'A', role: 'runner', cd: 4, v: 30, d: v => `${v}초 동안 상대 지도에서 내가 추격자처럼 보임 (화살표는 그대로)` },
     doppel:       { name: '도플갱어', grade: 'S', role: 'runner', cd: 5, v: 30, ms: 1.5, d: v => `분신이 고른 방향으로 ${v}초 동안 걸어감. 화살표·미니맵·순간 포착이 분신을 따라감` },
@@ -905,12 +917,73 @@ function sirenSound(sec) {
   g.gain.setValueAtTime(.35, t0); g.gain.setValueAtTime(.35, t0 + sec - .1); g.gain.linearRampToValueAtTime(.0001, t0 + sec);
   o.connect(g); g.connect(a.destination); o.start(t0); o2.start(t0); o.stop(t0 + sec + .05); o2.stop(t0 + sec + .05);
 }
+// ---------- 배경음악: 직접 만든 신스 비트 (WebAudio로 실시간 생성, 음원 파일 없음) ----------
+// 홈·로비·결과 화면은 보통 크기, 게임 중엔 효과음·경고음이 묻히지 않게 작게
+let bgmOn = true;
+try { bgmOn = localStorage.getItem('gtag_bgm') !== '0'; } catch (e) {}
+const BGM = { bpm: 104, step: 0, next: 0, gain: null, noise: null, level: -1 };
+// A단조 4마디 반복: Am - F - Dm - E (마지막 E로 긴장감) / [베이스, 아르페지오 3음] MIDI 번호
+const BGM_BARS = [[45, [69, 72, 76]], [41, [65, 69, 72]], [38, [62, 65, 69]], [40, [64, 68, 71]]];
+const midiHz = n => 440 * Math.pow(2, (n - 69) / 12);
+function bgmNote(a, out, t, f, d, type, vol, cut) {
+  const o = a.createOscillator(), g = a.createGain(), fl = a.createBiquadFilter();
+  o.type = type; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = cut;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  o.connect(fl); fl.connect(g); g.connect(out); o.start(t); o.stop(t + d + .02);
+}
+// 16분음표 한 칸: 킥(1·3·5·7번째 8분음표 자리), 하이햇(엇박), 베이스(8분음표), 아르페지오(16분음표)
+function bgmStep(a, out, noise, i, t) {
+  const [root, arp] = BGM_BARS[(i >> 4) % 4], s = i & 15, spb = 60 / BGM.bpm / 4;
+  if (s % 4 === 0) {
+    const o = a.createOscillator(), g = a.createGain();
+    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(45, t + .12);
+    g.gain.setValueAtTime(.35, t); g.gain.exponentialRampToValueAtTime(.0001, t + .18);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t + .2);
+  }
+  if (s % 4 === 2) {
+    const src = a.createBufferSource(), fl = a.createBiquadFilter(), g = a.createGain();
+    src.buffer = noise; fl.type = 'highpass'; fl.frequency.value = 7000;
+    g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.0001, t + .05);
+    src.connect(fl); fl.connect(g); g.connect(out); src.start(t); src.stop(t + .06);
+  }
+  if (s % 2 === 0) bgmNote(a, out, t, midiHz(root + (s % 8 === 6 ? 12 : 0)), spb * 1.8, 'sawtooth', .12, 500);
+  bgmNote(a, out, t, midiHz(arp[s % 3] + (s >= 8 ? 12 : 0)), spb * .9, 'square', .03, 2400);
+}
+function bgmNoise(a) {
+  const len = Math.floor(a.sampleRate * .1), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+  let x = 12345; for (let i = 0; i < len; i++) { x = (x * 1103515245 + 12345) & 0x7fffffff; d[i] = x / 0x3fffffff - 1; } // 게임 난수와 무관하게
+  return buf;
+}
+function bgmLoop() {
+  const a = actx;
+  if (!a || a.state !== 'running' || document.hidden) return;
+  if (!BGM.gain) { BGM.gain = a.createGain(); BGM.gain.gain.value = 0; BGM.gain.connect(a.destination); BGM.noise = bgmNoise(a); }
+  const level = !bgmOn ? 0 : S.screen === 's-game' ? .3 : .6;
+  if (level !== BGM.level) { BGM.level = level; BGM.gain.gain.setTargetAtTime(level, a.currentTime, .25); }
+  if (!bgmOn) return;
+  const spb = 60 / BGM.bpm / 4;
+  if (BGM.next < a.currentTime) BGM.next = a.currentTime + .05;
+  while (BGM.next < a.currentTime + .3) { bgmStep(a, BGM.gain, BGM.noise, BGM.step, BGM.next); BGM.step = (BGM.step + 1) % 64; BGM.next += spb; }
+}
+setInterval(bgmLoop, 100);
+// ---------- 설정 창 (홈·로비·게임 중 ⚙): 배경음악·효과음 켜고 끄기, 이 폰에 저장 ----------
+function renderSet() {
+  const sw = (sel, on) => { const b = $(sel); b.textContent = on ? '켜짐' : '꺼짐'; b.classList.toggle('on', on); };
+  sw('#setBgm', bgmOn); sw('#setSfx', !muted);
+}
 function setMute(m) {
   muted = m; try { localStorage.setItem('gtag_mute', m ? '1' : '0'); } catch (e) {}
-  $('#btnMute').textContent = m ? '🔇' : '🔊';
+  renderSet();
 }
-$('#btnMute').onclick = () => { setMute(!muted); if (!muted) sfx('ping'); };
-setMute(muted);
+function setBgm(on) {
+  bgmOn = on; try { localStorage.setItem('gtag_bgm', on ? '1' : '0'); } catch (e) {}
+  renderSet(); bgmLoop();
+}
+document.querySelectorAll('.btnSet').forEach(b => { b.onclick = () => { renderSet(); $('#ov-set').classList.add('on'); }; });
+$('#setBgm').onclick = () => setBgm(!bgmOn);
+$('#setSfx').onclick = () => { setMute(!muted); if (!muted) sfx('ping'); };
+$('#btnSetClose').onclick = () => $('#ov-set').classList.remove('on');
+renderSet();
 const ROLE_NAME = { chaser: '추격자', runner: '도망자' };
 const ROLE_RGBA = { chaser: 'rgba(255,77,79,.85)', runner: 'rgba(59,163,255,.85)' };
 // 슬롯머신처럼 역할이 돌다가 내 역할에서 멈춤 (배정은 방장이 시작할 때 랜덤으로 이미 정해짐)
@@ -1029,8 +1102,8 @@ const maps = {};
 function getMap(id) {
   if (maps[id]) return maps[id];
   // 게임 지도만 회전 가능 (손가락 회전·컨트롤은 끄고, 나침반 방향으로만 돌림)
-  const rot = id === 'gmap' ? { rotate: true, touchRotate: false, shiftKeyRotate: false, rotateControl: false } : {};
-  const map = L.map(id, { zoomControl: false, ...rot }).setView([37.5665, 126.978], 16);
+  const rot = id === 'gmap' ? { rotate: true, touchRotate: false, shiftKeyRotate: false } : {};
+  const map = L.map(id, { zoomControl: false, rotateControl: false, ...rot }).setView([37.5665, 126.978], 16);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   return (maps[id] = { map, self: null, acc: null, area: null, others: [], centered: false });
 }
@@ -1442,6 +1515,14 @@ function renderLobby() {
   document.querySelectorAll('#l-mode [data-mode]').forEach(b => { b.classList.toggle('on', b.dataset.mode === mode); b.disabled = !isHost; });
   $('#l-modeHint').textContent = (mode === 'classic' ? `잡히면 체력 -${mergedSettings(room).out.CATCH_DMG}, 체력 0이면 탈락` : MODE_HINT[mode]) + (mode === 'police' ? (room.settings.jail ? ' · 감옥 위치 정해짐' : ' · 감옥: 안 정하면 구역 중심') : '');
   $('#btnJail').style.display = isHost && mode === 'police' ? 'block' : 'none';
+  // 방장 규칙 메모: 방장만 쓰고, 모두에게 글자로만 보임
+  const memo = memoOf(room);
+  $('#l-memo').style.display = isHost ? 'block' : 'none';
+  if (isHost && document.activeElement !== $('#l-memo') && !S.memoTimer) $('#l-memo').value = memo;
+  $('#l-memoTxt').textContent = isHost ? '' : memo;
+  $('#l-memoTxt').style.display = isHost || !memo ? 'none' : 'block';
+  $('#l-memoCard').style.display = isHost || memo ? 'block' : 'none';
+  $('#l-memoHint').textContent = isHost ? `${$('#l-memo').value.length}/300 · 모두에게 글자로 보이고, 게임 중엔 📝로 다시 볼 수 있어요` : '';
   $('#btnJail').textContent = S.jailPick ? '지도를 탭하면 감옥이 돼요 (취소하려면 다시 누르기)' : '🔒 감옥 위치 찍기';
   renderSettings(room, isHost);
   syncRecommend(room);
@@ -1473,6 +1554,18 @@ const MODE_HINT = {
   zombie: '잡히면 바로 좀비(추격자)가 돼서 같이 쫓아요. 시간 끝까지 버틴 사람 모두 승리',
   police: `잡히면 감옥(반경 ${Logic.MODE_RULES.JAIL_R}m)행, 팀원이 QR을 찍어 주면 탈옥. 도둑 전원이 동시에 갇히면 경찰 승리`
 };
+const memoOf = room => ((room && room.settings && room.settings.memo) || '').slice(0, 300);
+// 방장이 메모를 쓰면 0.6초 뒤 저장 (글자 칠 때마다 저장하지 않게)
+$('#l-memo').addEventListener('input', () => {
+  $('#l-memoHint').textContent = `${$('#l-memo').value.length}/300 · 저장 중…`;
+  clearTimeout(S.memoTimer);
+  S.memoTimer = setTimeout(() => {
+    S.memoTimer = 0;
+    update(roomRef('settings'), { memo: $('#l-memo').value.slice(0, 300) }).catch(e => console.error(e));
+  }, 600);
+});
+$('#btnMemo').onclick = () => { $('#memoTxt').textContent = memoOf(S.room); $('#ov-memo').classList.add('on'); };
+$('#btnMemoClose').onclick = () => $('#ov-memo').classList.remove('on');
 const modeOf = room => (room && room.settings && room.settings.mode) || 'classic';
 const jailOf = room => (room.settings && (room.settings.jail || room.settings.area)) || null;
 $('#l-mode').onclick = safe(async e => {
@@ -2500,19 +2593,21 @@ function inEnemyDomain(me, t) {
 }
 function drawSpots(mo) {
   const t = now(), room = S.room || {}, me = (room.players || {})[S.pid] || {}, spots = {}, bo = blackedOut();
-  for (const [id, sp] of Object.entries(bo ? {} : room.spots || {})) if ((sp.at || 0) <= t) spots['s' + id] = sp;
+  // 남은 시간: 진짜 지점은 다른 곳으로 옮겨질 때까지(10분 리셋), 가짜 보물은 사라질 때까지
+  for (const [id, sp] of Object.entries(bo ? {} : room.spots || {})) if ((sp.at || 0) <= t) spots['s' + id] = { ...sp, left: Math.min(Logic.spotStaleMs(), Logic.spotStaleMs() - (t - Math.max(sp.at || 0, room.startAt || 0))) };
   // 상대가 놓은 가짜 보물은 진짜 지점과 똑같이 보임 (놓은 팀에게는 안 보임)
-  for (const [id, f] of Object.entries(bo ? {} : room.fakes || {})) if (me.role && f.role !== me.role && (f.until || 0) > t) spots['f' + id] = f;
+  for (const [id, f] of Object.entries(bo ? {} : room.fakes || {})) if (me.role && f.role !== me.role && (f.until || 0) > t) spots['f' + id] = { ...f, left: f.until - t };
   mo.spotM = mo.spotM || {};
   for (const id of Object.keys(mo.spotM)) {
     const sp = spots[id];
     if (!sp || mo.spotM[id].key !== sp.lat + ',' + sp.lng) { mo.spotM[id].remove(); delete mo.spotM[id]; }
   }
   for (const [id, sp] of Object.entries(spots)) {
-    if (mo.spotM[id]) continue;
+    const lbl = `✦ 증강 ${fmt(sp.left)}`;
+    if (mo.spotM[id]) { if (mo.spotM[id].lbl !== lbl) { mo.spotM[id].setTooltipContent(lbl); mo.spotM[id].lbl = lbl; } continue; }
     const m = L.circleMarker([sp.lat, sp.lng], { radius: 11, color: '#fff', weight: 2, fillColor: '#ffcf40', fillOpacity: .95 })
-      .bindTooltip('✦ 증강', { permanent: true, direction: 'top', className: 'spotTip' }).addTo(mo.map);
-    m.key = sp.lat + ',' + sp.lng; mo.spotM[id] = m;
+      .bindTooltip(lbl, { permanent: true, direction: 'top', className: 'spotTip' }).addTo(mo.map);
+    m.key = sp.lat + ',' + sp.lng; m.lbl = lbl; mo.spotM[id] = m;
   }
 }
 // 위장 중인 도망자는 상대 지도에서 추격자처럼 (빨간 점 + '추격자')
@@ -2989,6 +3084,7 @@ function renderGame() {
   const t = now(), hits = room.hits || {}, ph = Logic.phaseAt(t, room.startAt, room.timeShift), isC = me.role === 'chaser';
   const hp = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]), alive = hp > 0, stMax = stMaxOf(me.role);
   const frozen = (me.frozenUntil || 0) > t, inv = ((hits[S.pid] && hits[S.pid].invUntil) || 0) - t;
+  $('#btnMemo').style.display = memoOf(room) ? '' : 'none';
   $('#g-role').textContent = isC ? '추격자' : '도망자';
   $('#g-role').className = 'badge ' + me.role;
   $('#g-phase').textContent = ph.phase === 'pre' ? '곧 시작' : ph.phase === 'hide' ? (isC ? '도망자 숨는 중' : '숨는 시간') : ph.phase === 'chase' ? '추격 중' : '종료';
