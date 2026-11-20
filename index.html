@@ -167,6 +167,17 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 .shakedots{font-size:44px;letter-spacing:10px;color:var(--warn);margin:10px 0}
 #ov-shake h2{font-size:28px;animation:blink .5s infinite}
 .pingTip.enemyPing{border-color:var(--chaser)}
+/* 저격 조준경 */
+#ov-snipe{padding:0;background:#000}
+#snipeVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85}
+.scope{position:absolute;left:50%;top:44%;width:min(78vw,340px);aspect-ratio:1;transform:translate(-50%,-50%);border:3px solid rgba(255,77,79,.9);border-radius:50%;box-shadow:0 0 0 2000px rgba(0,0,0,.55);pointer-events:none}
+.scope::before,.scope::after{content:'';position:absolute;background:rgba(255,77,79,.9)}
+.scope::before{left:50%;top:8%;bottom:8%;width:2px;margin-left:-1px}.scope::after{top:50%;left:8%;right:8%;height:2px;margin-top:-1px}
+.scope i{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px;border-radius:50%;background:#ff4d4f}
+.snipeHud{position:absolute;left:0;right:0;bottom:calc(20px + env(safe-area-inset-bottom));padding:0 20px;display:flex;flex-direction:column;align-items:center}
+#snipeHead{font:700 22px ui-monospace,Menlo,monospace;color:#fff;text-shadow:0 1px 4px #000;margin-bottom:6px}
+.aug.silenced{opacity:.5;filter:grayscale(1)}
+.trailTip{background:#7c2d12;color:#fff;border:0;font-weight:800}
 </style>
 </head>
 <body>
@@ -276,6 +287,8 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 <div id="ink"><b id="inkTxt"></b></div>
 <div id="mugung"></div>
 <div id="ov-shake" class="ov"><h2>📳 폰을 세게 흔드세요!</h2><p class="dim">3번 흔들면 50% 확률로 탈출</p><div id="shakeDots" class="shakedots"></div><p id="shakeLeft" class="big"></p></div>
+<div id="ov-snipe" class="ov"><video id="snipeVideo" playsinline muted></video><div class="scope"><i></i></div>
+  <div class="snipeHud"><div id="snipeHead"></div><p class="dim" style="color:#cfd6df;text-shadow:0 1px 4px #000">도망자가 있는 쪽으로 폰을 정확히 겨누고 쏘세요 (±10°, 40m)</p><button id="btnSnipeFire" class="danger" style="max-width:360px">🎯 발사</button><button id="btnSnipeClose" style="max-width:360px">취소</button></div></div>
 <div id="ov-pick" class="ov"><h2 id="pickTitle"></h2><p id="pickSub" class="dim"></p><div id="pickList" class="cards"></div><button id="btnPickClose">취소</button></div>
 <div id="ov-resume" class="ov"><h2>센서를 다시 켜야 해요</h2><p class="dim">GPS와 나침반을 켜려면 눌러주세요</p><button id="btnResume" class="primary">센서 켜기</button></div>
 <div id="toast" class="toast"></div>
@@ -395,6 +408,8 @@ const Logic = (() => {
     if (p.forfeit) return 0; // 기권
     const raw = hpRaw(p, hit), ls = p.augs && p.augs.lastStand;
     if (raw <= 0 && ls && (ls.readyAt || 0) <= clock()) return 1;
+    const cb = p.augs && p.augs.comeback;
+    if (raw <= 0 && cb && (cb.readyAt || 0) <= clock()) return 1;
     if (raw <= 0 && hit && (hit.pendUntil || 0) > clock()) return 1; // 흔들어 탈출 판정 중엔 탈락 보류
     return Math.min(RULES.HP_MAX, Math.max(0, raw));
   }
@@ -507,7 +522,25 @@ const Logic = (() => {
     fakeTreasure: { name: '가짜 보물', grade: 'B', role: 'all', cd: 3, v: 300, d: () => '쓴 자리에 상대에게만 보이는 가짜 증강 지점 (5분). 밟은 상대는 스태미나 0 + 30초 동안 나에게 위치가 들킴' },
     magnet:       { name: '자석', grade: 'C', role: 'all', cd: 2, v: 50, d: v => `가장 가까운 증강 지점을 내 쪽으로 ${v}m 끌어옴` },
     timeThief:    { name: '시간 도둑', grade: 'S', role: 'all', cd: 8, v: 2, d: v => `도망자가 쓰면 남은 시간 -${v}분, 추격자가 쓰면 +${v}분 (1분 밑으로는 안 줄어듦)` },
-    ink:          { name: '먹물', grade: 'B', role: 'all', cd: 2, v: 10, d: v => `가장 가까운 상대의 지도를 ${v}초 동안 먹물로 가림` }
+    ink:          { name: '먹물', grade: 'B', role: 'all', cd: 2, v: 10, d: v => `가장 가까운 상대의 지도를 ${v}초 동안 먹물로 가림` },
+    companion:    { name: '동행', grade: 'A', role: 'runner', v: 15, d: v => `팀원과 ${v}m 안에 붙어 있으면 나와 그 팀원 모두 스태미나 소모 절반` },
+    shield:       { name: '쉴드', grade: 'S', role: 'runner', cd: 8, auto: true, v: 0, d: () => '잡힐 때 자동 발동: 체력이 안 깎임 (정지·무적은 그대로)' },
+    counter:      { name: '카운터', grade: 'S', role: 'runner', cd: 6, v: 30, dmg: 40, d: v => `${v}초 안에 잡히면 잡은 추격자 체력 -40` },
+    taunt:        { name: '도발', grade: 'C', role: 'runner', cd: 3, v: 5, d: v => `추격자 전원에게 내 위치 ${v}초 공개, 대신 스태미나 가득 + 체력 +20` },
+    storm:        { name: '자기장', grade: 'SS', role: 'chaser', cd: 8, v: 120, d: v => `${v / 60}분 동안 구역이 점점 줄어 절반이 됨. 밖에 있는 도망자는 경고 뒤 체력 감소` },
+    siren:        { name: '사이렌', grade: 'B', role: 'chaser', cd: 3, v: 3, d: v => `모든 도망자 폰에서 ${v}초 동안 큰 사이렌 + 진동 (숨어 있으면 소리로 들킴)` },
+    cctv:         { name: 'CCTV', grade: 'B', role: 'chaser', cd: 3, v: 30, life: 300, d: v => `쓴 자리에 안 보이는 CCTV (5분). 도망자가 ${v}m 안에 들어올 때마다 추격자 전원에게 알림 + 위치 10초` },
+    trail:        { name: '발자국 추적', grade: 'A', role: 'chaser', cd: 4, v: 30, delay: 15, d: v => `${v}초 동안 가장 가까운 도망자의 진짜 이동 경로가 15초 늦게 보임 (투명화 중엔 끊김)` },
+    steal:        { name: '소매치기', grade: 'S', role: 'all', cd: 8, v: 20, d: v => `${v}m 안 상대의 증강 하나를 무작위로 빼앗음` },
+    copy:         { name: '복제', grade: 'A', role: 'all', cd: 6, v: 0, d: () => '상대 한 명을 골라 그 사람의 증강 하나를 골라 복사' },
+    silence:      { name: '침묵', grade: 'A', role: 'all', cd: 4, v: 60, d: v => `가장 가까운 상대의 '사용' 스킬을 ${v / 60}분 동안 봉인` },
+    runnersHigh:  { name: '러너스 하이', grade: 'C', role: 'all', v: 500, heal: 10, d: v => `${v}m 움직일 때마다 체력 +10` },
+    booster:      { name: '부스터', grade: 'B', role: 'all', cd: 3, v: 15, d: v => `${v}초 동안 스태미나가 안 닳음` },
+    fakePing:     { name: '위조 핑', grade: 'C', role: 'all', cd: 2, v: 0, d: () => '상대 팀 지도에 그 팀원이 찍은 것처럼 보이는 가짜 핑을 띄움' },
+    detector:     { name: '탐지기', grade: 'D', role: 'all', cd: 1, v: 50, sec: 15, d: v => `15초 동안 주변 ${v}m 안 상대 덫·가짜 보물·CCTV 표시` },
+    comeback:     { name: '기사회생', grade: 'SS', role: 'all', cd: 12, auto: true, v: 50, d: v => `체력이 0이 되면 자동 발동: 체력 ${v}으로 살아남 (최후의 발악보다 먼저)` },
+    bloodOath:    { name: '피의 서약', grade: 'S', role: 'runner', cd: 8, v: 20, d: v => `탈락한 팀원의 부활용 QR을 찍으면(${v}m 안) 내 체력 절반을 나눠 주고 부활시킴` },
+    snipe:        { name: '저격', grade: 'S', role: 'chaser', cd: 5, v: 40, dmg: 20, aim: 10, d: v => `폰을 도망자 쪽으로 정확히(±10°) 겨눠 쏘면 ${v}m 안 도망자 체력 -20 (빗나가도 쿨타임)` }
   };
   // 정밀 추적·고속 스캔은 방장이 정한 기본 주기에 비례 (기본값 45초·20초 기준 수치)
   const augArrowSec = v => Math.max(15, Math.round(v * RULES.ARROW_EVERY_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
@@ -547,6 +580,25 @@ const Logic = (() => {
     const newEnd = Math.max(end - mins * 60000, now + 60000);
     return newEnd < end ? (shift || 0) - (end - newEnd) : null;
   }
+  // 자기장: 쓰고 나서 v초 동안 구역 반경이 원래 → 절반으로 점점 줄어듦, 끝나면 원래대로
+  function stormR(r, storm, now) {
+    if (!storm || now < storm.at || now >= storm.until) return r;
+    return r * (1 - 0.5 * (now - storm.at) / (storm.until - storm.at));
+  }
+  // 저격: heading(폰이 가리키는 방향)에서 ±aim° 안, range m 안에 있는 살아 있고 무적이 아닌 도망자 중 가장 가까운 사람 (진짜 위치)
+  function snipeTarget(pos, heading, players, hits, now, range = AUGS.snipe.v, aim = AUGS.snipe.aim) {
+    let best = null;
+    for (const [id, p] of Object.entries(players || {})) {
+      if (p.role !== 'runner' || p.lat == null) continue;
+      const h = (hits || {})[id];
+      if (!alive(p, h) || ((h && h.invUntil) || 0) > now) continue;
+      const d = dist(pos, p), off = Math.abs(((bearing(pos, p) - heading) % 360 + 540) % 360 - 180);
+      if (d <= range && off <= aim && (!best || d < best.d)) best = { id, d, off };
+    }
+    return best;
+  }
+  // 소매치기·복제로 가져올 수 있는 증강: 상대가 가진 것 중 내 역할이 쓸 수 있고 내가 아직 없는 것
+  const takeable = (theirs, myRole, mine) => Object.keys(theirs || {}).filter(id => AUGS[id] && (AUGS[id].role === myRole || AUGS[id].role === 'all') && !(mine || {})[id]);
   // 자석: from을 to 쪽으로 m미터 (넘으면 to에 딱 붙음)
   function pullToward(from, to, m) {
     const d = dist(from, to), k = d > 0 ? Math.min(1, m / d) : 1;
@@ -628,7 +680,7 @@ const Logic = (() => {
   }
   return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec,
-    setClock, shownPos, survivalMs, mvp, stealTime, pullToward,
+    setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
 })();
 // LOGIC END
@@ -719,7 +771,11 @@ const SFX = {
   ink: [[160, .25, 'sawtooth', .14], [90, .45, 'sine', .18, .05]],
   swap: [[523, .07, 'triangle', .13], [784, .07, 'triangle', .13, .08], [523, .07, 'triangle', .13, .16], [784, .12, 'triangle', .13, .24]],
   time: [[1200, .04, 'square', .12], [900, .04, 'square', .12, .25], [1200, .04, 'square', .12, .5], [600, .35, 'triangle', .14, .75]],
-  magnet: [[200, .3, 'sine', .14], [400, .3, 'sine', .12, .1], [800, .2, 'sine', .1, .2]]
+  magnet: [[200, .3, 'sine', .14], [400, .3, 'sine', .12, .1], [800, .2, 'sine', .1, .2]],
+  shot: [[150, .05, 'square', .2], [90, .25, 'sawtooth', .2, .02], [2400, .08, 'triangle', .08, .01]],
+  shield: [[880, .1, 'triangle', .14], [1320, .1, 'triangle', .14, .06], [1760, .3, 'sine', .14, .12]],
+  steal: [[1200, .05, 'square', .1], [800, .05, 'square', .1, .06], [500, .15, 'triangle', .12, .12]],
+  cam: [[1000, .06, 'square', .1], [1000, .06, 'square', .1, .12], [1500, .12, 'square', .1, .24]]
 };
 function sfx(name) {
   if (muted) return;
@@ -731,6 +787,16 @@ function sfx(name) {
     g.gain.setValueAtTime(vol, st); g.gain.exponentialRampToValueAtTime(.0001, st + d);
     o.connect(g); g.connect(a.destination); o.start(st); o.stop(st + d + .02);
   }
+}
+// 사이렌 증강: 상대가 울리는 소리라 음소거여도 울림 (아이폰 무음 스위치는 막을 수 없음)
+function sirenSound(sec) {
+  const a = audio(); if (!a) return;
+  const t0 = a.currentTime + .01, o = a.createOscillator(), o2 = a.createOscillator(), g = a.createGain();
+  o.type = 'sawtooth'; o2.type = 'square';
+  for (let k = 0; k < sec * 2; k++) { o.frequency.setValueAtTime(700, t0 + k / 2); o.frequency.linearRampToValueAtTime(1400, t0 + k / 2 + .45); }
+  o2.frequency.value = 3; const g2 = a.createGain(); g2.gain.value = 80; o2.connect(g2); g2.connect(o.frequency);
+  g.gain.setValueAtTime(.35, t0); g.gain.setValueAtTime(.35, t0 + sec - .1); g.gain.linearRampToValueAtTime(.0001, t0 + sec);
+  o.connect(g); g.connect(a.destination); o.start(t0); o2.start(t0); o.stop(t0 + sec + .05); o2.stop(t0 + sec + .05);
 }
 function setMute(m) {
   muted = m; try { localStorage.setItem('gtag_mute', m ? '1' : '0'); } catch (e) {}
@@ -954,7 +1020,8 @@ function onRoom() {
   if (room.status === 'lobby') {
     if (S.gameKey) { // 한 판 더: 지난 게임 상태 정리
       S.gameKey = null; S.resultKey = null;
-      ['#ov-qr', '#ov-role', '#ov-aug', '#ov-insight', '#ov-mega', '#ov-ping', '#ov-forfeit', '#ov-pick', '#ov-shake'].forEach(x => $(x).classList.remove('on'));
+      ['#ov-qr', '#ov-role', '#ov-aug', '#ov-insight', '#ov-mega', '#ov-ping', '#ov-forfeit', '#ov-pick', '#ov-shake', '#ov-snipe'].forEach(x => $(x).classList.remove('on'));
+      closeSnipe();
       S.shake = null;
       closeScanner();
     }
@@ -1028,6 +1095,48 @@ function onEvent(e) {
     if (e.target === S.pid) { toast(`🦑 ${who(e.by)}의 먹물! ${Logic.AUGS.ink.v}초 동안 지도가 가려져요`, true); sfx('ink'); vibrate([200, 50, 100]); }
     return;
   }
+  if (e.type === 'taunt') {
+    if (me0.role === 'chaser') { toast(`🤪 ${who(e.by)}의 도발! ${Logic.AUGS.taunt.v}초 동안 위치 공개`, true); vibrate(100); }
+    return;
+  }
+  if (e.type === 'storm') {
+    toast(`🌀 ${who(e.by)}의 자기장! ${Logic.AUGS.storm.v / 60}분 동안 구역이 줄어들어요`, true); vibrate([100, 60, 100]); flash('rgba(168,85,247,.7)');
+    return;
+  }
+  if (e.type === 'siren') {
+    if (me0.role === 'runner' && Logic.alive({ ...me0, selfDmg: S.selfDmg, augs: S.augs }, ((S.room && S.room.hits) || {})[S.pid])) {
+      sirenSound(Logic.AUGS.siren.v); vibrate([500, 100, 500, 100, 800]); flash('rgba(255,77,79,.95)'); toast(`🚨 ${who(e.by)}의 사이렌! 폰에서 소리가 나요`, true);
+    }
+    return;
+  }
+  if (e.type === 'steal') {
+    if (e.target === S.pid) {
+      const nx = { ...(S.augs || {}) }; delete nx[e.aug]; S.augs = nx;
+      toast(`🫳 ${who(e.by)}에게 [${(Logic.AUGS[e.aug] || {}).name || '?'}] 증강을 소매치기 당했어요!`, true); sfx('steal'); vibrate([200, 80, 200]); flash('rgba(255,176,32,.9)'); renderGame();
+    }
+    return;
+  }
+  if (e.type === 'silence') {
+    if (e.target === S.pid) { toast(`🔇 ${who(e.by)}의 침묵! ${Logic.AUGS.silence.v / 60}분 동안 스킬을 못 써요`, true); vibrate([150, 60, 150]); flash('rgba(123,132,148,.9)'); }
+    return;
+  }
+  if (e.type === 'snipe') {
+    if (e.target === S.pid) { toast(`🎯 ${who(e.by)}에게 저격당했어요! 체력 -${Logic.AUGS.snipe.dmg}`, true); sfx('shot'); vibrate([300, 60, 300]); flash('rgba(255,77,79,1)'); }
+    else if (e.by !== S.pid && me0.role === 'runner') sfx('shot');
+    return;
+  }
+  if (e.type === 'revive') {
+    delete S.dead[e.target];
+    if (e.target !== S.pid && e.by !== S.pid) toast(`🩸 ${who(e.by)}가 피의 서약으로 ${who(e.target)}를 살렸어요!`, true);
+    return;
+  }
+  if (e.type === 'cam') {
+    if (me0.role === 'chaser') {
+      S.trapReveals = [...(S.trapReveals || []), { name: who(e.target), lat: e.lat, lng: e.lng, until: now() + 10000, icon: '📹' }];
+      toast(`📹 CCTV에 ${who(e.target)} 포착!`, true); sfx('cam'); vibrate([80, 40, 80]); drawMaps();
+    }
+    return;
+  }
   if (e.type === 'time') {
     const d = e.delta || 0;
     toast(`⏳ ${who(e.by)}의 시간 도둑! 남은 시간 ${d > 0 ? '+' : '−'}${fmtDur(Math.abs(d) / 1000)}`, true); sfx('time'); vibrate(100);
@@ -1037,7 +1146,10 @@ function onEvent(e) {
   const P = (S.room && S.room.players) || {}, by = (P[e.by] || {}).name || '?', tg = (P[e.target] || {}).name || '?';
   const min = fmtDur(RULES.CATCH_COOLDOWN_SEC);
   if (e.target === S.pid) {
-    $('#ov-qr').classList.remove('on'); toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min} 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); flash('rgba(255,77,79,.9)'); sfx('caught');
+    $('#ov-qr').classList.remove('on');
+    if (e.shield) { toast(`🛡 쉴드가 막았어요! 체력 그대로 · ${min} 무적`, true); flash('rgba(59,163,255,.9)'); sfx('shield'); vibrate([100, 50, 100]); }
+    else { toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min} 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); flash('rgba(255,77,79,.9)'); sfx('caught'); }
+    if (e.counter) setTimeout(() => toast(`🛡 카운터 성공! 잡은 추격자 체력 -${Logic.AUGS.counter.dmg}`, true), 1800);
     // 흔들어 탈출: 판정 시간이 남아 있으면 흔들기 창을 띄움. 보상은 판정이 끝난 뒤, 탈출했으면 안 줌
     const sh = S.augs && S.augs.shake, tt = now();
     if (e.pend && tt < e.pend && Logic.augReady(sh, tt)) startShake(e);
@@ -1046,7 +1158,10 @@ function onEvent(e) {
       if (room && room.status === 'playing' && h.esc !== e.catchAt && Logic.alive({ ...room.players[S.pid], selfDmg: S.selfDmg, augs: S.augs }, h)) gainRandom('잡힘 보상');
     }, e.pend ? Math.max(0, e.pend - tt) + 1500 : 2500);
   }
-  else if (e.by === S.pid) { toast(`${tg} 잡았다! ${min} 동안 제자리 대기`, true); vibrate(200); flash('rgba(60,207,122,.85)'); sfx('catch'); }
+  else if (e.by === S.pid) {
+    toast(`${tg} 잡았다! ${min} 동안 제자리 대기${e.shield ? ' (쉴드에 막혀 체력은 그대로)' : ''}`, true); vibrate(200); flash('rgba(60,207,122,.85)'); sfx('catch');
+    if (e.counter) setTimeout(() => { toast(`💥 카운터에 맞았어요! 체력 -${Logic.AUGS.counter.dmg}`, true); flash('rgba(255,77,79,1)'); vibrate([300, 80, 300]); sfx('boom'); }, 1800);
+  }
   else toast(`${by} → ${tg} 잡았어요!`);
 }
 async function leaveRoom() {
@@ -1065,7 +1180,8 @@ function leaveLocal(msg) {
   if (S.evUnsub) S.evUnsub();
   S.unsub = S.evUnsub = null; S.code = S.pid = S.room = S.gameKey = null;
   Logic.applySettings(null); RULES.AREA_R = RULE_DEFAULTS.AREA_R;
-  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake'].forEach(s => $(s).classList.remove('on'));
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake', '#ov-snipe'].forEach(s => $(s).classList.remove('on'));
+  closeSnipe();
   S.shake = null;
   saveLocal({ name: S.name });
   show('s-home');
@@ -1210,7 +1326,7 @@ $('#btnStart').onclick = safe(async () => {
   const roles = Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
   const game = mergedSettings(room).out; // 모든 폰이 같은 설정으로 시작
   Logic.applySettings(game);
-  const u = { status: 'playing', startAt: Math.round(now()) + RULES.START_DELAY_SEC * 1000, result: null, hits: null, events: null, traps: null, zones: null, pings: null, fakes: null, mugung: null, timeShift: null, spots: {}, 'settings/game': game };
+  const u = { status: 'playing', startAt: Math.round(now()) + RULES.START_DELAY_SEC * 1000, result: null, hits: null, events: null, traps: null, zones: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, spots: {}, 'settings/game': game };
   if (game.AUG_ON) for (let i = 0; i < game.SPOT_COUNT; i++) u.spots['s' + i] = { ...Logic.randomSpot(room.settings.area), at: 0 };
   for (const id of ids) {
     u[`players/${id}/role`] = roles[id];
@@ -1226,7 +1342,7 @@ $('#btnStart').onclick = safe(async () => {
     u[`players/${id}/decoy`] = null;
     u[`players/${id}/forfeit`] = null;
     u[`players/${id}/stats`] = null;
-    for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil']) u[`players/${id}/${k}`] = null;
+    for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
 });
@@ -1238,7 +1354,7 @@ function enterGame() {
     S.gameKey = key;
     Object.assign(S, {
       augs: me.augs || {}, augBarHtml: null, offerSent: false, lastSnapIdx: null, spotBusy: false, trapBusy: false, fakeBusy: false, trapReveals: [], alarmAt: 0,
-      detects: [], shake: null, mugHit: null, pickCb: null,
+      detects: [], shake: null, mugHit: null, pickCb: null, hist: {}, rhDist: 0, camIn: {}, pingFake: false, reviveAt: (me.revive && me.revive.at) || null,
       stats: { dist: 0, vmax: 0, skills: 0, catches: 0, ...(me.stats || {}) }, statPos: null, seenPings: new Set(Object.keys(room.pings || {})),
       pingAt: 0, warnWas: false, specOn: false, resultKey: null,
       selfDmg: me.selfDmg || 0, anchor: me.anchor || null,
@@ -1253,7 +1369,8 @@ function enterGame() {
     }
     // 방금 시작한 게임이면 역할 공개 연출 (새로고침해서 다시 들어온 경우엔 생략)
     if (now() - room.startAt < 15000 && Date.now() - (S.revealAt || 0) > 20000) { S.revealAt = Date.now(); showRoleReveal(me.role); }
-  }
+    S.aliveWas = !S.dead[S.pid];
+  } else syncFromDb(room, me);
   if (S.screen !== 's-game') {
     show('s-game'); $('#ov-invite').classList.remove('on');
     const mo = getMap('gmap');
@@ -1262,6 +1379,20 @@ function enterGame() {
     if (me.role === 'runner') takeSnapshot();
   }
   $('#ov-resume').classList.toggle('on', !S.sensorsOn);
+}
+// 다른 사람이 바꾼 내 상태 반영: 쿨타임(쉴드는 추격자 폰이 기록), 빼앗긴 증강(소매치기), 피의 서약 부활
+function syncFromDb(room, me) {
+  const db = me.augs || {};
+  for (const id of Object.keys(S.augs || {})) {
+    if (!db[id]) { const nx = { ...S.augs }; delete nx[id]; S.augs = nx; continue; }
+    if ((db[id].readyAt || 0) > (S.augs[id].readyAt || 0)) S.augs = { ...S.augs, [id]: { ...S.augs[id], readyAt: db[id].readyAt } };
+  }
+  if (me.revive && me.revive.at !== S.reviveAt) {
+    S.reviveAt = me.revive.at; S.selfDmg = me.selfDmg || 0; S.aliveWas = true; S.specOn = false;
+    delete S.dead[S.pid]; if (S.stats) delete S.stats.diedAt;
+    const by = (room.players[me.revive.by] || {}).name || '?';
+    toast(`🩸 피의 서약! ${by} 덕분에 부활했어요 (체력 ${Math.ceil(me.revive.hp)})`, true); flash('rgba(220,38,38,.95)'); vibrate([300, 100, 300]); sfx('augS');
+  }
 }
 $('#btnResume').onclick = safe(async () => { await startSensors(); $('#ov-resume').classList.remove('on'); });
 $('#btnFollow').onclick = () => { S.follow = true; drawMaps(); };
@@ -1309,7 +1440,23 @@ const ICONS = {
   fakeTreasure: '<rect x="3" y="10" width="18" height="10" rx="1"/><path d="M3 10l2-5h14l2 5"/><path d="M10.5 13.5a1.6 1.6 0 1 1 2 1.5c-.4.2-.5.5-.5 1"/><path d="M12 18v.01"/>',
   magnet: '<path d="M6 3h4v9a2 2 0 0 0 4 0V3h4v9a6 6 0 0 1-12 0z"/><path d="M6 7h4M14 7h4"/>',
   timeThief: '<path d="M6 2h12M6 22h12M7 2v4l5 6-5 6v4M17 2v4l-5 6 5 6v4"/><path d="M10 19h4"/>',
-  ink: '<path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/><circle cx="19.5" cy="5" r="1.3"/><circle cx="4.5" cy="7" r="1"/>'
+  ink: '<path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/><circle cx="19.5" cy="5" r="1.3"/><circle cx="4.5" cy="7" r="1"/>',
+  companion: '<circle cx="8" cy="7" r="3"/><circle cx="16" cy="7" r="3"/><path d="M2 21v-2a5 5 0 0 1 5-5h2M22 21v-2a5 5 0 0 0-5-5h-2M10 17l2 2 2-2"/>',
+  shield: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/>',
+  counter: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M8 12h8M13 9l3 3-3 3"/>',
+  taunt: '<circle cx="12" cy="12" r="9"/><path d="M8 10h.01M15 9.5l2 1M8.5 15c2 1.5 5 1.5 7 0"/><path d="M14 15.5v2.5a1.5 1.5 0 0 0 3 0v-3"/>',
+  storm: '<circle cx="12" cy="12" r="10" stroke-dasharray="3 2"/><circle cx="12" cy="12" r="5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><path d="M17 7l-2.5 2.5M7 17l2.5-2.5"/>',
+  siren: '<path d="M6 18v-6a6 6 0 0 1 12 0v6"/><path d="M4 18h16v3H4zM12 2v2M4.2 5.2l1.4 1.4M19.8 5.2l-1.4 1.4"/>',
+  cctv: '<path d="M3 7l13-3 2 6-13 3z"/><path d="M16 9l4 1-1 3-3-1M6 13l1 4H3"/>',
+  trail: '<ellipse cx="7" cy="16" rx="2" ry="3"/><ellipse cx="13" cy="10" rx="2" ry="3"/><ellipse cx="18" cy="4.5" rx="1.6" ry="2.4" stroke-dasharray="2 1.5"/><path d="M2 21h5"/>',
+  steal: '<path d="M7 11V5a2 2 0 0 1 4 0v5M11 9V4a2 2 0 0 1 4 0v6M15 10V6a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-5.3-2.4L3 15a2 2 0 0 1 3-2.6l1 1.1"/>',
+  copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+  silence: '<path d="M3 10v4h4l6 5V5L7 10z"/><path d="M16 9l5 6M21 9l-5 6"/>',
+  runnersHigh: '<circle cx="14" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 11l3-3 4 1 3 3 3 1M10 8l-1 5"/>',
+  booster: '<path d="M12 2c3 3 5 7 5 11l-2 3H9l-2-3c0-4 2-8 5-11z"/><circle cx="12" cy="10" r="2"/><path d="M9 16l-3 4M15 16l3 4M12 17v5"/>',
+  fakePing: '<path d="M12 22s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z"/><path d="M10 9a2 2 0 1 1 2.5 1.9c-.4.2-.5.5-.5 1.1M12 14.5v.01"/>',
+  detector: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5M11 7v4l3 2"/>',
+  snipe: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.5"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/>'
 };
 const icon = id => `<svg viewBox="0 0 24 24">${ICONS[id] || ''}</svg>`;
 const gradeOf = id => Logic.AUGS[id].grade;
@@ -1335,8 +1482,14 @@ function gainAug(id, source) {
 // 지금 상황에서 의미 없는 증강은 뽑기에서 뺌: 살아 있는 팀원이 없으면 자리 바꾸기
 function augBan(role) {
   const room = S.room, hits = room.hits || {};
-  const mates = Object.entries(room.players || {}).filter(([id, p]) => id !== S.pid && p.role === role && Logic.alive(p, hits[id]));
-  return role === 'runner' && !mates.length ? ['swap'] : [];
+  const all = Object.entries(room.players || {}).filter(([, p]) => p.role);
+  const mates = all.filter(([id, p]) => id !== S.pid && p.role === role);
+  const foes = all.filter(([id, p]) => p.role !== role && Logic.alive(p, hits[id]));
+  const ban = [];
+  if (role === 'runner' && !mates.some(([id, p]) => Logic.alive(p, hits[id]))) ban.push('swap');
+  if (role === 'runner' && !mates.length) ban.push('bloodOath');
+  if (foes.length < 2) ban.push('fakePing');
+  return ban;
 }
 function gainRandom(source) {
   const me = S.room && S.room.players[S.pid]; if (!me || !me.role || !RULES.AUG_ON) return;
@@ -1354,11 +1507,29 @@ function setCooldown(id, extra) {
 function useAug(id) {
   const room = S.room, me = room && room.players[S.pid], x = S.augs[id], t = now();
   if (!me || !x || !Logic.augReady(x, t) || Logic.AUGS[id].auto) return;
+  if ((me.silenceUntil || 0) > t) return toast(`🔇 침묵 중이라 스킬을 못 써요 (${fmt(me.silenceUntil - t)})`);
+  const v = av(id), here = S.fix ? { lat: S.fix.lat, lng: S.fix.lng } : null, hits = room.hits || {};
   if (id === 'insight') return openInsight();
   if (id === 'wanted') return openWanted();
   if (id === 'swap') return openSwap();
-  const v = av(id), here = S.fix ? { lat: S.fix.lat, lng: S.fix.lng } : null, hits = room.hits || {};
-  if (['trap', 'decoy', 'domain', 'selfDestruct', 'whistle', 'fakeTreasure', 'magnet', 'ink'].includes(id) && !here) return toast('GPS 신호를 기다리는 중…');
+  if (id === 'copy') return openCopy();
+  if (id === 'snipe') return openSnipe();
+  if (id === 'bloodOath') {
+    const dead = Object.entries(room.players).filter(([pid, p]) => pid !== S.pid && p.role === me.role && !Logic.alive(p, hits[pid]));
+    if (!dead.length) return toast('살릴 팀원이 없어요');
+    return openScanner('revive');
+  }
+  if (id === 'fakePing') { S.pingFake = true; toast('🎭 지도를 꾹 눌러서 가짜 핑을 찍을 위치를 고르세요', true); return; }
+  if (['trap', 'decoy', 'domain', 'selfDestruct', 'whistle', 'fakeTreasure', 'magnet', 'ink', 'cctv', 'trail', 'steal', 'silence'].includes(id) && !here) return toast('GPS 신호를 기다리는 중…');
+  // 진짜 위치 기준 가장 가까운 살아 있는 상대 (max 이내)
+  const nearestFoe = (max = Infinity) => {
+    let best = null;
+    for (const [pid, p] of Object.entries(room.players)) {
+      if (!p.role || p.role === me.role || p.lat == null || !Logic.alive(p, hits[pid])) continue;
+      const d = Logic.dist(here, p); if (d <= max && (!best || d < best.d)) best = { pid, d, p };
+    }
+    return best;
+  };
   if (id === 'timeThief') return useTimeThief(me, t, v);
   if (id === 'megaphone') { $('#megaInput').value = ''; $('#ov-mega').classList.add('on'); setTimeout(() => $('#megaInput').focus(), 50); return; }
   if (id === 'heal') {
@@ -1437,6 +1608,51 @@ function useAug(id) {
     update(roomRef('players/' + best.pid), { inkUntil: t + v * 1000 });
     push(roomRef('events'), { type: 'ink', by: S.pid, target: best.pid, at: serverTimestamp() });
     setCooldown(id); toast(`🦑 먹물 발사! ${room.players[best.pid].name}의 지도를 ${v}초 가렸어요`, true); sfx('ink');
+  } else if (id === 'counter') {
+    setCooldown(id, { until: t + v * 1000 }); toast(`🛡 카운터 ${v}초! 지금 잡히면 추격자 체력 -${Logic.AUGS.counter.dmg}`, true);
+  } else if (id === 'taunt') {
+    const hp = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]);
+    S.selfDmg -= Math.min(20, RULES.HP_MAX - hp); S.st = stMaxOf(me.role); S.lastWrite = 0;
+    update(meRef(), { tauntUntil: t + v * 1000 });
+    push(roomRef('events'), { type: 'taunt', by: S.pid, at: serverTimestamp() });
+    setCooldown(id, { until: t + v * 1000 }); toast(`🤪 도발! ${v}초 동안 위치 공개 · 스태미나 가득 · 체력 +20`, true);
+  } else if (id === 'storm') {
+    update(roomRef(), { storm: { by: S.pid, at: t, until: t + v * 1000 } });
+    push(roomRef('events'), { type: 'storm', by: S.pid, at: serverTimestamp() });
+    setCooldown(id, { until: t + v * 1000 }); toast('🌀 자기장! 구역이 줄어들기 시작해요', true); flash('rainbow');
+  } else if (id === 'siren') {
+    push(roomRef('events'), { type: 'siren', by: S.pid, at: serverTimestamp() });
+    setCooldown(id); toast('🚨 사이렌! 모든 도망자 폰이 울려요. 귀를 기울이세요', true);
+  } else if (id === 'cctv') {
+    push(roomRef('cams'), { by: S.pid, role: me.role, ...here, until: t + Logic.AUGS.cctv.life * 1000 });
+    setCooldown(id); toast(`📹 CCTV 설치 (5분 · 반경 ${v}m)`, true); sfx('cam');
+  } else if (id === 'trail') {
+    let best = null;
+    for (const [pid, p] of Object.entries(room.players)) {
+      if (p.role !== 'runner' || p.lat == null || !Logic.alive(p, hits[pid])) continue;
+      const d = Logic.dist(here, p); if (!best || d < best.d) best = { pid, d };
+    }
+    if (!best) return toast('추적할 도망자가 없어요');
+    setCooldown(id, { until: t + v * 1000, target: best.pid }); toast(`👣 발자국 추적: ${room.players[best.pid].name} (${Logic.AUGS.trail.delay}초 늦게 보여요)`, true);
+  } else if (id === 'steal') {
+    const f = nearestFoe(v);
+    if (!f) return toast(`${v}m 안에 상대가 없어요`);
+    const ids = Logic.takeable(f.p.augs, me.role, S.augs);
+    if (!ids.length) return toast(`${f.p.name}에게 빼앗을 수 있는 증강이 없어요`);
+    const pick = ids[Math.floor(Math.random() * ids.length)];
+    update(roomRef('players/' + f.pid + '/augs'), { [pick]: null });
+    push(roomRef('events'), { type: 'steal', by: S.pid, target: f.pid, aug: pick, at: serverTimestamp() });
+    setCooldown(id); sfx('steal'); gainAug(pick, `🫳 ${f.p.name}에게서 소매치기`);
+  } else if (id === 'silence') {
+    const f = nearestFoe();
+    if (!f) return toast('침묵시킬 상대가 없어요');
+    update(roomRef('players/' + f.pid), { silenceUntil: t + v * 1000 });
+    push(roomRef('events'), { type: 'silence', by: S.pid, target: f.pid, at: serverTimestamp() });
+    setCooldown(id); toast(`🔇 ${f.p.name} 침묵! ${v / 60}분 동안 스킬 봉인`, true);
+  } else if (id === 'booster') {
+    setCooldown(id, { until: t + v * 1000 }); toast(`🚀 부스터 ${v}초! 스태미나가 안 닳아요`, true);
+  } else if (id === 'detector') {
+    setCooldown(id, { until: t + Logic.AUGS.detector.sec * 1000 }); toast(`🔍 탐지기 ${Logic.AUGS.detector.sec}초: 주변 ${v}m 상대 설치물 표시`, true);
   }
   if (!['domain', 'selfDestruct'].includes(id)) flash(GRADE_FX[gradeOf(id)][0] === 'rainbow' ? 'rainbow' : 'rgba(255,207,64,.7)');
   if (!['whistle', 'selfDestruct', 'mugung', 'magnet', 'ink'].includes(id)) sfx('skill');
@@ -1494,6 +1710,71 @@ function openSwap() {
     renderGame();
   });
 }
+// 복제: 상대를 고르고 → 그 사람 증강 중 내가 쓸 수 있는 것 하나를 골라 복사
+function openCopy() {
+  const room = S.room, me = room.players[S.pid], hits = room.hits || {};
+  const list = Object.entries(room.players).filter(([id, p]) => p.role && p.role !== me.role && Logic.alive(p, hits[id]) && Logic.takeable(p.augs, me.role, S.augs).length);
+  if (!list.length) return toast('복사할 수 있는 증강을 가진 상대가 없어요');
+  openPick('📋 복제', '증강을 복사할 상대를 고르세요', list.map(([id, p]) => [id, p, `${Logic.takeable(p.augs, me.role, S.augs).length}개 복사 가능`]), tid => {
+    const tp = S.room.players[tid] || {}, ids = Logic.takeable(tp.augs, me.role, S.augs);
+    if (!ids.length) return toast('복사할 수 있는 증강이 없어요');
+    openPick(`📋 ${tp.name}의 증강`, '하나를 골라 복사해요', ids.map(id => [id, { name: augLabel(id) }, Logic.augDesc(id)]), aid => {
+      if (!Logic.augReady(S.augs.copy, now())) return;
+      setCooldown('copy'); gainAug(aid, '📋 복제');
+    });
+  });
+}
+// 저격: 카메라 조준경을 띄우고, 폰이 가리키는 방향(나침반) ±10° 안 40m 안의 도망자를 맞힘
+function openSnipe() {
+  if (!S.compass || S.heading == null) return toast('나침반이 켜져 있어야 저격할 수 있어요');
+  if (!S.fix) return toast('GPS 신호를 기다리는 중…');
+  S.sniping = true; $('#ov-snipe').classList.add('on');
+  try {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(st => {
+      if (!S.sniping) return st.getTracks().forEach(x => x.stop());
+      S.snipeStream = st; $('#snipeVideo').srcObject = st; $('#snipeVideo').play().catch(() => {});
+    }).catch(() => {});
+  } catch (e) {}
+}
+function closeSnipe() {
+  S.sniping = false;
+  if (S.snipeStream) { S.snipeStream.getTracks().forEach(x => x.stop()); S.snipeStream = null; }
+  $('#ov-snipe').classList.remove('on');
+}
+$('#btnSnipeClose').onclick = closeSnipe;
+$('#btnSnipeFire').onclick = safe(async () => {
+  const room = S.room, t = now(), a = Logic.AUGS.snipe, heading = S.heading;
+  closeSnipe();
+  if (!room || !S.augs.snipe || !Logic.augReady(S.augs.snipe, t)) return;
+  setCooldown('snipe'); sfx('shot'); vibrate([60, 30, 200]); flash('rgba(255,255,255,.85)');
+  const tg = Logic.snipeTarget(S.fix, heading, room.players, room.hits, t);
+  push(roomRef('events'), { type: 'snipe', by: S.pid, target: tg ? tg.id : null, at: serverTimestamp() });
+  if (!tg) { toast('빗나갔어요…', true); return renderGame(); }
+  await runTransaction(roomRef('hits/' + tg.id), cur => ({ ...(cur || {}), ext: ((cur && cur.ext) || 0) + a.dmg }));
+  toast(`🎯 명중! ${room.players[tg.id].name} 체력 -${a.dmg} (${Math.round(tg.d)}m)`, true); renderGame();
+});
+// 피의 서약: 탈락한 팀원의 부활용 QR을 찍으면 내 체력 절반을 나눠 주고 부활
+const handleRevive = safe(async text => {
+  const qr = Logic.parseQR(text), room = S.room, t = now(), hits = room.hits || {};
+  const me = room.players[S.pid], tp = qr && qr.code === S.code ? room.players[qr.pid] : null;
+  if (!tp) return toast('부활용 QR이 아니에요', true);
+  if (qr.pid === S.pid || tp.role !== me.role) return toast('같은 팀 팀원의 QR이 아니에요', true);
+  if (tp.qr !== qr.token) return toast('지난 게임의 QR이에요', true);
+  if (Logic.alive(tp, hits[qr.pid])) return toast('아직 살아 있는 팀원이에요', true);
+  if (!S.augs.bloodOath || !Logic.augReady(S.augs.bloodOath, t)) return;
+  if (tp.lat == null || !S.fix) return toast('GPS 위치를 아직 못 받았어요', true);
+  const d = Logic.dist(S.fix, tp);
+  if (d > Logic.AUGS.bloodOath.v) return toast(`GPS상 ${Math.round(d)}m 떨어져 있어서 못 살려요`, true);
+  const give = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]) / 2;
+  S.selfDmg += give; S.lastWrite = 0;
+  const h = hits[qr.pid] || {}, theirSelf = RULES.HP_MAX - give - (h.catches || 0) * RULES.CATCH_DMG - (h.ext || 0);
+  await update(roomRef(), { [`players/${qr.pid}/selfDmg`]: Math.round(theirSelf * 10) / 10, [`players/${qr.pid}/forfeit`]: null,
+    [`players/${qr.pid}/stats/diedAt`]: null, [`players/${qr.pid}/revive`]: { at: t, by: S.pid, hp: give } });
+  setCooldown('bloodOath');
+  push(roomRef('events'), { type: 'revive', by: S.pid, target: qr.pid, at: serverTimestamp() });
+  toast(`🩸 피의 서약! ${tp.name} 부활 (내 체력 절반 ${Math.ceil(give)}를 나눠 줌)`, true); flash('rgba(220,38,38,.95)'); vibrate([200, 80, 200]); sfx('augS');
+  renderGame();
+});
 // 역탐지: 내가 화살표·순간 포착으로 본 도망자가 역탐지를 갖고 있으면 알려줌
 function detectedBy(rid, how) {
   const p = S.room.players[rid];
@@ -1617,15 +1898,69 @@ function lastStandCheck(me, hits, t) {
     S.selfDmg -= 1 - raw;
   }
 }
+// 기사회생: 준비돼 있을 때 체력이 0 이하가 되면 체력 50으로 (최후의 발악보다 먼저)
+function comebackCheck(me, hits, t) {
+  const x = S.augs && S.augs.comeback; if (!x || !Logic.augReady(x, t) || me.forfeit) return;
+  const raw = Logic.hpRaw({ ...me, selfDmg: S.selfDmg }, hits[S.pid]);
+  if (raw > 0 || ((hits[S.pid] && hits[S.pid].pendUntil) || 0) > t) return; // 흔들어 탈출 판정이 끝난 뒤에
+  const v = av('comeback'); S.selfDmg -= v - raw;
+  const nx = { ...x, readyAt: t + Logic.augCdMs('comeback') };
+  S.augs = { ...S.augs, comeback: nx };
+  update(meRef(), { 'augs/comeback': nx, selfDmg: Math.round(S.selfDmg * 10) / 10 });
+  S.stats.skills = (S.stats.skills || 0) + 1;
+  toast(`✨ 기사회생! 체력 ${v}으로 살아났어요`, true); flash('rainbow'); vibrate([200, 80, 200, 80, 500]); sfx('augSS');
+}
+// 탈락 처리 (어떤 이유든 한 번): 탈락 시각 기록 + 알림. inTick이면 바로 뒤에서 위치와 함께 저장됨
+function markDead(me, t, inTick) {
+  if (!S.stats.diedAt) S.stats.diedAt = t;
+  if (!me.forfeit) { toast('체력 0 — 탈락했어요. 관전 모드로 바뀌어요', true); vibrate([300, 100, 300]); flash('rgba(255,77,79,1)'); sfx('lose'); }
+  if (!inTick) update(meRef(), { stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
+}
+// 러너스 하이: 움직인 거리 500m마다 체력 +10
+function runnersHigh(me, hits, d) {
+  const a = Logic.AUGS.runnersHigh; S.rhDist = (S.rhDist || 0) + d;
+  while (S.rhDist >= a.v) {
+    S.rhDist -= a.v;
+    const hp = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]), h = Math.min(a.heal, RULES.HP_MAX - hp);
+    if (h > 0) { S.selfDmg -= h; toast(`🏃 러너스 하이! ${a.v}m 달성 · 체력 +${Math.round(h)}`); vibrate(80); }
+  }
+}
+// 동행: 나나 15m 안 팀원 중 누가 동행을 갖고 있으면 스태미나 소모 절반
+function companionNear(me, hits, t) {
+  if (me.role !== 'runner') return false;
+  const m = Logic.AUGS.companion.v, mine = !!av('companion');
+  return Object.entries(S.room.players).some(([id, p]) => id !== S.pid && p.role === 'runner' && p.lat != null && Logic.alive(p, hits[id])
+    && (mine || (p.augs && p.augs.companion)) && Logic.dist(S.fix, p) <= m);
+}
+// CCTV: 상대 CCTV 반경 안에 새로 들어갈 때마다 추격자들에게 알림 (도망자 본인은 모름)
+function checkCams(me, t) {
+  if (me.role !== 'runner') return;
+  for (const [cid, c] of Object.entries(S.room.cams || {})) {
+    if (c.role === me.role || (c.until || 0) <= t) continue;
+    const inside = Logic.dist(S.fix, c) <= Logic.AUGS.cctv.v;
+    if (inside && !S.camIn[cid]) push(roomRef('events'), { type: 'cam', target: S.pid, cam: cid, lat: S.fix.lat, lng: S.fix.lng, at: serverTimestamp() });
+    S.camIn[cid] = inside;
+  }
+}
+// 발자국 추적용: 도망자들의 진짜 위치를 1분 동안 기록
+function recordHist(room, t) {
+  for (const [id, p] of Object.entries(room.players)) {
+    if (p.role !== 'runner' || p.lat == null) continue;
+    const h = S.hist[id] || (S.hist[id] = []);
+    h.push({ t, lat: p.lat, lng: p.lng, st: (p.stealthUntil || 0) > t });
+    while (h.length && t - h[0].t > 60000) h.shift();
+  }
+}
 // 증강 바: 지속형은 칩, 쿨타임 스킬은 준비되면 '사용' 버튼 / 쿨타임 중이면 남은 시간 / 발동 중이면 남은 효과 시간
 function renderAugBar(alive) {
-  const t = now(), parts = [];
+  const t = now(), parts = [], me = (S.room && S.room.players[S.pid]) || {}, silenced = (me.silenceUntil || 0) > t;
   if (alive) for (const [id, x] of Object.entries(S.augs || {})) {
     const a = Logic.AUGS[id]; if (!a) continue;
     const g = a.grade, base = `class="aug g${g}`, inner = `${icon(id)}<b class="g">${g}</b>${a.name}`;
     if ((x.until || 0) > t) parts.push(`<span ${base} on" data-info="${id}">${inner} ${fmt(x.until - t)}</span>`);
     else if (a.cd && !Logic.augReady(x, t)) parts.push(`<span ${base} cd" data-info="${id}">${inner} ${fmt(x.readyAt - t)}</span>`);
     else if (a.auto) parts.push(`<span ${base}" data-info="${id}">${inner} 대기</span>`);
+    else if (a.cd && silenced) parts.push(`<span ${base} silenced" data-info="${id}">${inner} 침묵 ${fmt(me.silenceUntil - t)}</span>`);
     else if (a.cd) parts.push(`<button ${base} use" data-use="${id}">${inner}<span class="u">사용</span></button>`);
     else parts.push(`<span ${base}" data-info="${id}">${inner}</span>`);
   }
@@ -1780,14 +2115,26 @@ function openPing(ll) {
   const room = S.room, me = room && room.players[S.pid];
   if (!me || !me.role || room.status !== 'playing' || !Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid])) return;
   const left = 10000 - (Date.now() - S.pingAt);
-  if (left > 0) return toast(`핑은 ${Math.ceil(left / 1000)}초 뒤에 다시 찍을 수 있어요`);
+  if (left > 0 && !S.pingFake) return toast(`핑은 ${Math.ceil(left / 1000)}초 뒤에 다시 찍을 수 있어요`);
+  $('#ov-ping h2').textContent = S.pingFake ? '🎭 위조 핑' : '팀 핑';
+  $('#ov-ping p').textContent = S.pingFake ? '상대 팀 지도에 그 팀원이 찍은 것처럼 20초 동안 보여요' : '같은 팀 지도에 20초 동안 보여요';
   S.pingLL = ll; vibrate(40); $('#ov-ping').classList.add('on');
 }
 $('#ov-ping').onclick = e => {
   const b = e.target.closest('[data-ping]');
-  if (!b) { if (e.target.id === 'btnPingClose' || e.target.id === 'ov-ping') $('#ov-ping').classList.remove('on'); return; }
+  if (!b) { if (e.target.id === 'btnPingClose' || e.target.id === 'ov-ping') { $('#ov-ping').classList.remove('on'); S.pingFake = false; } return; }
   const me = S.room.players[S.pid];
-  $('#ov-ping').classList.remove('on'); S.pingAt = Date.now();
+  $('#ov-ping').classList.remove('on');
+  if (S.pingFake) { // 살아 있는 상대 중 한 명이 찍은 것처럼
+    S.pingFake = false;
+    const hits = S.room.hits || {}, foes = Object.entries(S.room.players).filter(([id, p]) => p.role && p.role !== me.role && Logic.alive(p, hits[id]));
+    if (!foes.length || !S.augs.fakePing || !Logic.augReady(S.augs.fakePing, now())) return;
+    const [fid, fp] = foes[Math.floor(Math.random() * foes.length)];
+    push(roomRef('pings'), { by: fid, role: fp.role, kind: b.dataset.ping, lat: S.pingLL.lat, lng: S.pingLL.lng, until: now() + 20000, fake: true });
+    setCooldown('fakePing'); sfx('ping'); toast(`🎭 ${fp.name} 이름으로 '${PING[b.dataset.ping][1]}' 위조 핑을 보냈어요`, true); renderGame();
+    return;
+  }
+  S.pingAt = Date.now();
   push(roomRef('pings'), { by: S.pid, role: me.role, kind: b.dataset.ping, lat: S.pingLL.lat, lng: S.pingLL.lng, until: now() + 20000 });
   sfx('ping'); toast(`${PING[b.dataset.ping].join(' ')} 핑을 보냈어요`);
 };
@@ -1858,7 +2205,7 @@ function drawSkills(mo) {
   const spy = !!av('eavesdrop'); // 도청: 상대 팀 핑도 보임
   for (const [id, pg] of Object.entries(room.pings || {})) {
     const enemy = pg.role !== me.role;
-    if ((pg.until || 0) <= t || (enemy && !meDead && !spy) || !PING[pg.kind]) continue;
+    if ((pg.until || 0) <= t || (enemy && !meDead && !spy) || !PING[pg.kind] || (pg.fake && pg.by === S.pid)) continue; // 내 이름으로 된 위조 핑은 나한테 안 보임
     const name = (room.players[pg.by] || {}).name || '';
     items.push({ key: 'p' + id, make: () => L.marker([pg.lat, pg.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15], html: `<div style="font-size:26px;line-height:30px;text-align:center">${PING[pg.kind][0]}</div>` }) })
       .bindTooltip(`${enemy && !meDead ? '🎧 ' : ''}${esc(name)}: ${PING[pg.kind][1]}`, { permanent: true, direction: 'top', offset: [0, -12], className: 'pingTip' + (enemy ? ' enemyPing' : '') }) });
@@ -1866,9 +2213,9 @@ function drawSkills(mo) {
   // 추격자: 현상수배·무궁화에 걸린 도망자의 진짜 위치 (실시간)
   if (me.role === 'chaser') for (const [id, p] of Object.entries(room.players)) {
     if (p.role !== 'runner' || p.lat == null || !Logic.alive(p, (room.hits || {})[id])) continue;
-    const w = (p.wantedUntil || 0) > t, m = (p.mugungUntil || 0) > t;
-    if (!w && !m) continue;
-    const label = `${w ? '🎯' : '🌸'} ${esc(p.name)}`;
+    const w = (p.wantedUntil || 0) > t, m = (p.mugungUntil || 0) > t, tn = (p.tauntUntil || 0) > t;
+    if (!w && !m && !tn) continue;
+    const label = `${w ? '🎯' : m ? '🌸' : '🤪'} ${esc(p.name)}`;
     items.push({ key: 'x' + id, make: () => L.circleMarker([p.lat, p.lng], { radius: 11, color: '#fff', weight: 3, fillColor: '#3ba3ff', fillOpacity: .95, interactive: false })
       .bindTooltip(label, { permanent: true, direction: 'top', className: 'runnerTip' }), update: mk => { mk.setLatLng([p.lat, p.lng]); mk.setTooltipContent(label); } });
   }
@@ -1882,7 +2229,42 @@ function drawSkills(mo) {
   S.trapReveals = (S.trapReveals || []).filter(r => r.until > t);
   for (const r of S.trapReveals) {
     items.push({ key: 'r' + r.until + r.name, make: () => L.circleMarker([r.lat, r.lng], { radius: 10, color: '#fff', weight: 2, fillColor: '#ff7a45', fillOpacity: .95, interactive: false })
-      .bindTooltip(`🪤 ${esc(r.name)}`, { permanent: true, direction: 'top', className: 'chaserTip' }) });
+      .bindTooltip(`${r.icon || '🪤'} ${esc(r.name)}`, { permanent: true, direction: 'top', className: 'chaserTip' }) });
+  }
+  // 자기장: 줄어드는 구역 (모두에게 보임)
+  const area = room.settings && room.settings.area, sm = room.storm;
+  if (area && sm && t >= sm.at && t < sm.until) {
+    const r = Logic.stormR(area.r, sm, t), label = `🌀 자기장 ${Math.ceil((sm.until - t) / 1000)}초`;
+    items.push({ key: 'storm' + sm.at, make: () => L.circle([area.lat, area.lng], { radius: r, color: '#ff4d4f', weight: 4, dashArray: '10 8', fillColor: '#ff4d4f', fillOpacity: .05, interactive: false })
+      .bindTooltip(label, { permanent: true, direction: 'top', className: 'chaserTip' }), update: mk => { mk.setRadius(r); mk.setTooltipContent(label); } });
+  }
+  // 우리 팀 CCTV
+  for (const [id, c] of Object.entries(room.cams || {})) {
+    if (c.role !== me.role || (c.until || 0) <= t) continue;
+    items.push({ key: 'cam' + id, make: () => L.circle([c.lat, c.lng], { radius: Logic.AUGS.cctv.v, color: '#64748b', weight: 2, dashArray: '4 6', fillColor: '#64748b', fillOpacity: .08, interactive: false })
+      .bindTooltip('📹 CCTV', { permanent: true, direction: 'center', className: 'trapTip' }) });
+  }
+  // 탐지기: 주변 상대 덫·가짜 보물·CCTV
+  const dt = S.augs && S.augs.detector;
+  if (dt && (dt.until || 0) > t && S.fix) {
+    const R = Logic.AUGS.detector.v;
+    for (const [kind, col, label] of [['traps', '#ff7a45', '🪤 상대 덫'], ['fakes', '#ffcf40', '🎁 가짜 보물'], ['cams', '#ff4d4f', '📹 상대 CCTV']]) {
+      for (const [id, x] of Object.entries(room[kind] || {})) {
+        if (x.role === me.role || (x.until || 0) <= t || Logic.dist(S.fix, x) > R) continue;
+        items.push({ key: 'det' + kind + id, make: () => L.circleMarker([x.lat, x.lng], { radius: 9, color: col, weight: 3, dashArray: '3 3', fillColor: '#111418', fillOpacity: .8, interactive: false })
+          .bindTooltip(label, { permanent: true, direction: 'top', className: 'trapTip' }) });
+      }
+    }
+  }
+  // 발자국 추적: 대상의 진짜 경로를 15초 늦게 (투명화 중엔 끊김)
+  const tr = S.augs && S.augs.trail;
+  if (me.role === 'chaser' && tr && (tr.until || 0) > t && tr.target && room.players[tr.target]) {
+    const delay = Logic.AUGS.trail.delay * 1000, h = (S.hist[tr.target] || []).filter(x => x.t <= t - delay && x.t >= t - delay - 15000);
+    const segs = [[]]; for (const x of h) { if (x.st) { if (segs[segs.length - 1].length) segs.push([]); } else segs[segs.length - 1].push([x.lat, x.lng]); }
+    const lines = segs.filter(sg => sg.length), last = h[h.length - 1], name = esc(room.players[tr.target].name);
+    if (lines.length) items.push({ key: 'trailL', make: () => L.polyline(lines, { color: '#fb923c', weight: 5, dashArray: '2 10', lineCap: 'round', interactive: false }), update: mk => mk.setLatLngs(lines) });
+    if (last && !last.st) items.push({ key: 'trailM', make: () => L.circleMarker([last.lat, last.lng], { radius: 10, color: '#fff', weight: 3, fillColor: '#fb923c', fillOpacity: .95, interactive: false })
+      .bindTooltip(`👣 ${name} (15초 전)`, { permanent: true, direction: 'top', className: 'trailTip' }), update: mk => mk.setLatLng([last.lat, last.lng]) });
   }
   syncLayer(mo, 'skillL', items);
 }
@@ -1895,8 +2277,13 @@ function tick() {
   const real = Date.now(), dt = S.lastTick ? Math.min(Math.max((real - S.lastTick) / 1000, 0), 2) : 0;
   S.lastTick = real;
   const stMax = stMaxOf(me.role), recMul = av('recoverBoost') || 1;
-  lastStandCheck(me, hits, t);
+  S.st = Math.min(S.st, stMax); // 빼앗긴 스태미나 증강 등으로 최대치가 줄었을 때
+  comebackCheck(me, hits, t); lastStandCheck(me, hits, t);
   const meAlive = Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]);
+  // 잡히거나 남의 공격으로 탈락한 경우도 탈락 시각·알림 기록
+  if (!meAlive && S.aliveWas) markDead(me, t);
+  S.aliveWas = meAlive;
+  if (me.role === 'chaser') recordHist(room, t); // 발자국 추적용 도망자 위치 기록
 
   // 도망자: 미니맵 추격자 위치 갱신(고속 스캔 증강이면 더 자주) + 20초마다 스태미나 회복
   if (me.role === 'runner') {
@@ -1908,9 +2295,14 @@ function tick() {
     else if (idx > S.lastMapIdx) { S.lastMapIdx = idx; if (meAlive) S.st = Math.min(stMax, S.st + RULES.MAP_RECOVER * recMul); }
   }
   checkWin();
+  // 탈락해도 위치는 계속 보냄 (피의 서약 부활 거리 판정용)
+  if (!meAlive && S.fix && real - S.lastWrite >= 2000) { S.lastWrite = real; update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc) }); }
   if (!meAlive || ph.phase === 'over' || ph.phase === 'pre' || !S.fix) return renderGame();
-  // 통계: 뛴 거리(1초에 60m 넘게 튄 건 제외), 최고 속도
-  if (S.statPos) { const d = Logic.dist(S.statPos, S.fix); if (d < 60 * Math.max(dt, 1)) S.stats.dist = (S.stats.dist || 0) + d; }
+  // 통계: 뛴 거리(1초에 60m 넘게 튄 건 제외), 최고 속도 / 러너스 하이
+  if (S.statPos) {
+    const d = Logic.dist(S.statPos, S.fix);
+    if (d < 60 * Math.max(dt, 1)) { S.stats.dist = (S.stats.dist || 0) + d; if (av('runnersHigh')) runnersHigh(me, hits, d); }
+  }
   S.statPos = { lat: S.fix.lat, lng: S.fix.lng };
   if (S.fix.rawAcc <= RULES.GPS_BAD_ACC) S.stats.vmax = Math.max(S.stats.vmax || 0, Math.min(S.speed * 3.6, 45));
   if (real - S.fixAt > 5000) S.speed *= 0.5;
@@ -1937,11 +2329,13 @@ function tick() {
   }
   // 2) 구역 밖 / 탈것
   const area = room.settings && room.settings.area;
-  const outside = gpsOk && !!area && Logic.dist(S.fix, area) > area.r;
+  // 자기장: 도망자에게는 줄어든 반경이 구역
+  const areaR = area ? (me.role === 'runner' ? Logic.stormR(area.r, room.storm, t) : area.r) : 0, areaD = area ? Logic.dist(S.fix, area) : 0;
+  const outside = gpsOk && !!area && areaD > areaR;
   const vehicle = S.speed * 3.6 > RULES.VEHICLE_KMH;
   if (outside || vehicle) {
     S.ruleSec += dt;
-    const what = outside ? '구역 밖' : '탈것 감지', left = RULES.RULE_WARN_SEC - S.ruleSec;
+    const what = outside ? (areaD > area.r ? '구역 밖' : '🌀 자기장 밖') : '탈것 감지', left = RULES.RULE_WARN_SEC - S.ruleSec;
     if (left > 0) warn.push(`${what}! ${Math.ceil(left)}초 안에 돌아오세요`);
     else { dmg += RULES.RULE_DMG * dt; warn.push(`${what}! 체력 감소 중`); }
   } else if (gpsOk) S.ruleSec = 0;
@@ -1954,6 +2348,8 @@ function tick() {
     if (S.speed > 0.5) cost = Math.max(a.walk, cost * a.mult);
     warn.push('🌀 상대 영역전개 안! 움직이면 스태미나 폭주');
   }
+  if (companionNear(me, hits, t)) cost *= 0.5;                                  // 동행
+  if (S.augs.booster && (S.augs.booster.until || 0) > t) cost = 0;              // 부스터
   const sp = Logic.spendStamina(S.st, cost * dt);
   S.st = sp.st; dmg += sp.hpLoss * (av('ironman') || 1); // 아드레날린: 체력 감소 줄임
   if (sp.hpLoss > 0) warn.push('스태미나 0! 뛰면 체력이 닳아요');
@@ -1976,7 +2372,7 @@ function tick() {
     }
   }
   // 6) 증강 지점 줍기, 상대 덫·가짜 보물, 정기 보상
-  if (gpsOk) { checkSpots(t); checkTraps(me, t); checkFakes(me, t); }
+  if (gpsOk) { checkSpots(t); checkTraps(me, t); checkFakes(me, t); checkCams(me, t); }
   checkOffer(me, t, ph);
   // 7) 무궁화 꽃이 피었습니다: 판정 시간에 초속 1m 넘게 움직인 도망자는 스태미나 0 + 추격자 전원에게 위치 공개
   const mg = room.mugung, ma = Logic.AUGS.mugung;
@@ -1988,9 +2384,9 @@ function tick() {
   }
 
   S.selfDmg += dmg; S.warn = warn;
-  lastStandCheck(me, hits, t);
+  comebackCheck(me, hits, t); lastStandCheck(me, hits, t);
   const dead = !Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]);
-  if (dead) { toast('체력 0 — 탈락했어요. 관전 모드로 바뀌어요', true); vibrate([300, 100, 300]); flash('rgba(255,77,79,1)'); sfx('lose'); S.stats.diedAt = t; }
+  if (dead) { markDead(me, t, true); S.aliveWas = false; }
   if (warn.length && !S.warnWas) sfx('warn'); // 경고가 새로 뜰 때만 소리
   S.warnWas = warn.length > 0;
   if (dead || real - S.lastWrite >= 2000) {
@@ -2033,6 +2429,8 @@ function overlayLoop() {
   } else mEl.classList.remove('on');
   // 흔들어 탈출
   if (S.shake && !S.shake.done) renderShake();
+  // 저격 조준경: 지금 폰이 가리키는 방향
+  if (S.sniping && S.heading != null) { const h = Math.round(S.heading) % 360; $('#snipeHead').textContent = `${['북', '북동', '동', '남동', '남', '남서', '서', '북서'][Math.round(h / 45) % 8]} ${h}°`; }
   // 먹물
   const ink = inGame && (me.inkUntil || 0) > t;
   $('#ink').classList.toggle('on', !!ink);
@@ -2084,7 +2482,10 @@ function renderGame() {
 
   $('#btnScan').style.display = isC && alive ? 'block' : 'none';
   $('#btnScan').disabled = !(ph.phase === 'chase' && !frozen);
-  $('#btnShowQR').style.display = !isC && alive ? 'block' : 'none';
+  // 탈락한 도망자: 피의 서약을 가진 팀원이 있으면 부활용 QR
+  const reviver = !isC && !alive && Object.entries(room.players).some(([id, p]) => id !== S.pid && p.role === 'runner' && p.augs && p.augs.bloodOath && Logic.alive(p, hits[id]));
+  $('#btnShowQR').style.display = !isC && (alive || reviver) ? 'block' : 'none';
+  $('#btnShowQR').textContent = alive ? '내 QR 보여주기' : '🩸 부활용 QR 보여주기';
 
   let info = '';
   if (isC) info = drawArrow();
@@ -2169,12 +2570,15 @@ $('#btnShowQR').onclick = () => {
   const qr = qrcode(0, 'M'); qr.addData(`GTAG1|${S.code}|${S.pid}|${me.qr}`); qr.make();
   $('#qrBox').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
   $('#qrName').textContent = me.name;
+  $('#ov-qr .dim').textContent = $('#btnShowQR').textContent.includes('부활') ? '피의 서약을 가진 팀원이 찍으면 부활해요' : '추격자가 이 QR을 찍으면 잡혀요';
   $('#ov-qr').classList.add('on');
 };
 $('#btnQrClose').onclick = () => $('#ov-qr').classList.remove('on');
 
-$('#btnScan').onclick = safe(async () => {
+const openScanner = safe(async mode => {
   const ov = $('#ov-scan'), v = $('#scanVideo');
+  S.scanMode = mode;
+  $('#ov-scan p').textContent = mode === 'revive' ? '팀원의 부활용 QR을 비춰주세요' : '도망자 폰의 QR을 비춰주세요';
   ov.classList.add('on');
   try { S.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); }
   catch (e) { closeScanner(); return toast('카메라를 열 수 없어요. 카메라 권한을 확인하세요', true); }
@@ -2188,12 +2592,13 @@ $('#btnScan').onclick = safe(async () => {
       const w = 640, h = Math.round(v.videoHeight * w / v.videoWidth);
       c.width = w; c.height = h; ctx.drawImage(v, 0, 0, w, h);
       const found = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
-      if (found && found.data) { closeScanner(); handleScan(found.data); return; }
+      if (found && found.data) { closeScanner(); (S.scanMode === 'revive' ? handleRevive : handleScan)(found.data); return; }
     }
     requestAnimationFrame(loop);
   };
   loop();
 });
+$('#btnScan').onclick = () => openScanner('catch');
 function closeScanner() {
   S.scanning = false;
   if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
@@ -2206,18 +2611,25 @@ const handleScan = safe(async text => {
   const err = Logic.checkCatch(S.room, S.code, S.pid, qr, t, S.fix, S.selfDmg);
   if (err) return toast(err, true);
   // 흔들어 탈출이 준비된 도망자면 판정 시간(3초 + 전달 여유 1초) 동안 탈락 보류, 보상도 판정 뒤에
-  const sh = ((S.room.players[qr.pid] || {}).augs || {}).shake;
-  const pend = Logic.augReady(sh, t) ? t + (Logic.AUGS.shake.win + 1) * 1000 : 0;
+  const taugs = (S.room.players[qr.pid] || {}).augs || {};
+  // 쉴드: 준비돼 있으면 체력만 안 깎임 (정지·무적은 그대로), 쿨타임은 여기서 기록
+  const shield = Logic.augReady(taugs.shield, t);
+  // 카운터: 발동 중이면 잡은 추격자 체력 -40
+  const counter = taugs.counter && (taugs.counter.until || 0) > t;
+  const sh = taugs.shake;
+  const pend = !shield && Logic.augReady(sh, t) ? t + (Logic.AUGS.shake.win + 1) * 1000 : 0;
   const prevFrozen = (S.room.players[S.pid] || {}).frozenUntil || 0;
   const res = await runTransaction(ref(db, `rooms/${S.code}/hits/${qr.pid}`), cur => {
     cur = cur || { catches: 0, invUntil: 0 };
     if ((cur.invUntil || 0) > t) return; // 다른 추격자가 먼저 잡음
-    return { ...cur, catches: (cur.catches || 0) + 1, invUntil: t + RULES.CATCH_COOLDOWN_SEC * 1000, by: S.pid, at: t, pendUntil: pend };
+    return { ...cur, catches: (cur.catches || 0) + (shield ? 0 : 1), invUntil: t + RULES.CATCH_COOLDOWN_SEC * 1000, by: S.pid, at: t, pendUntil: pend };
   });
   if (!res.committed) return toast('방금 다른 추격자가 잡았어요');
+  if (shield) update(roomRef(`players/${qr.pid}/augs/shield`), { readyAt: t + Logic.augCdMs('shield') });
+  if (counter) { S.selfDmg += Logic.AUGS.counter.dmg; S.lastWrite = 0; }
   S.anchor = { lat: S.fix.lat, lng: S.fix.lng }; S.waitOut = 0;
   await update(meRef(), { frozenUntil: t + RULES.CATCH_COOLDOWN_SEC * 1000, prevFrozenUntil: prevFrozen, anchor: S.anchor });
-  await push(roomRef('events'), { type: 'catch', by: S.pid, target: qr.pid, catchAt: t, pend, at: serverTimestamp() });
+  await push(roomRef('events'), { type: 'catch', by: S.pid, target: qr.pid, catchAt: t, pend, shield, counter: !!counter, at: serverTimestamp() });
   S.stats.catches = (S.stats.catches || 0) + 1;
   setTimeout(() => {
     const h = ((S.room && S.room.hits) || {})[qr.pid] || {};
@@ -2227,7 +2639,8 @@ const handleScan = safe(async text => {
 
 /* ---------- 결과 ---------- */
 function renderResult() {
-  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake'].forEach(s => $(s).classList.remove('on'));
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake', '#ov-snipe'].forEach(s => $(s).classList.remove('on'));
+  closeSnipe();
   S.shake = null;
   $('#arrowBox').className = 'arrowbox';
   show('s-result');
@@ -2255,10 +2668,10 @@ function renderResult() {
 // 한 판 더 (방장): 같은 방 로비로, 지난 게임 기록 정리
 $('#btnAgain').onclick = safe(async () => {
   const room = S.room; if (!room || room.hostId !== S.pid) return;
-  const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null };
+  const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null };
   for (const id of Object.keys(room.players)) {
     for (const k of ['role', 'selfDmg', 'st', 'frozenUntil', 'anchor', 'qr', 'augs', 'augPicks', 'offer', 'stealthUntil', 'decoy', 'forfeit', 'stats',
-      'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil']) u[`players/${id}/${k}`] = null;
+      'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
 });
