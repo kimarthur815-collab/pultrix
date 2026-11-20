@@ -696,13 +696,16 @@ const Logic = (() => {
     mfRifle:      { name: '저격총', grade: 'S', role: 'job', cd: 5, v: 40, aim: 10, d: v => `폰을 겨눠(±10°) ${v}m 안 사람을 쏨. 마피아면 그 마피아만 탈락, 아니면 맞은 사람과 나 둘 다 탈락 (빗나가도 쿨타임). 내가 죽으면 그 자리에 떨어져 시민이 주우면 새 경찰` },
     mfGuard:      { name: '보호', grade: 'A', role: 'job', cd: 5, v: 300, d: v => `QR을 찍은 사람(또는 나)을 ${v / 60}분 동안 보호: 그동안 마피아에게 잡혀도 1번 막음` }
   };
+  // 마피아 모드에서 나오는 증강: 누가 써도 팀(정체)이 드러나지 않는 공통 증강만
+  // (빠짐: 통찰·덫·자폭·영역전개·도청·위조 핑·가짜 보물·시간 도둑·먹물·소매치기·복제·침묵·안개·탐지기·분신·현상금)
+  const MF_AUGS = ['heal', 'stRefill', 'recoverBoost', 'ironman', 'lastStand', 'lightShoes', 'megaphone', 'breather', 'luck', 'magnet', 'runnersHigh', 'booster', 'comeback', 'supply', 'gamble', 'reroll', 'alchemy'];
   // 정밀 추적·고속 스캔은 방장이 정한 기본 주기에 비례 (기본값 45초·20초 기준 수치)
   const augArrowSec = v => Math.max(15, Math.round(v * RULES.ARROW_EVERY_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
   // 육감 거리는 구역 반경에 비례 (300m 기준 수치), 15~200m
   const augAlarmM = v => Math.min(200, Math.max(15, Math.round(v * RULES.AREA_R / RULE_DEFAULTS.AREA_R)));
   const augIntelSec = v => Math.max(3, Math.round(v * RULES.MAP_EVERY_SEC / RULE_DEFAULTS.MAP_EVERY_SEC));
   const fmtSec = sec => { sec = Math.round(sec); const m = Math.floor(sec / 60), r = sec % 60; return m ? `${m}분${r ? ` ${r}초` : ''}` : `${r}초`; };
-  const augCdMs = id => (!AUGS[id].cd ? 0 : AUGS[id].role === 'job' ? AUGS[id].cd * 60000 : AUGS[id].cd * 60000 * RULES.GAME_SEC / RULE_DEFAULTS.GAME_SEC); // 마피아 직업 능력은 정한 시간 그대로
+  const augCdMs = id => (AUGS[id].cd ? AUGS[id].cd * 60000 * RULES.GAME_SEC / RULE_DEFAULTS.GAME_SEC : 0);
   const augDesc = id => AUGS[id].d(AUGS[id].v) + (AUGS[id].cd ? ` · 쿨타임 ${fmtSec(augCdMs(id) / 1000)}` : '');
   const augPool = role => Object.keys(AUGS).filter(id => AUGS[id].role === role || AUGS[id].role === 'all');
   // 이미 가진 증강은 다시 안 나옴. 등급 확률로 등급을 고르고(남은 증강이 있는 등급만), 그 등급 안에서 무작위
@@ -888,7 +891,7 @@ const Logic = (() => {
     a.forEach((id, i) => { roles[id] = i < n ? 'chaser' : 'runner'; });
     return roles;
   }
-  return { aimTarget, assignJobs, voteRound, voteResult, movingPos, segCross, clampLen, shownAlt, altLabel, edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
+  return { MF_AUGS, aimTarget, assignJobs, voteRound, voteResult, movingPos, segCross, clampLen, shownAlt, altLabel, edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec, spotStale, spotStaleMs, moveSpot,
     MODES, MODE_RULES, setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
@@ -1115,7 +1118,7 @@ function showRoleReveal(role) {
     $('#roleMsg').className = 'big ' + role + '-t';
     const mates = Object.entries(room.players).filter(([id, p]) => id !== S.pid && p.role === 'chaser').map(([, p]) => p.name);
     $('#roleSub').textContent = modeOf(room) === 'mafia'
-      ? (role === 'chaser' ? `동료 마피아: ${mates.length ? mates.join(', ') : '없음 (혼자)'} · QR로 몰래 잡으세요` : me.job === 'police' ? '3분마다 조사, 저격총으로 마피아를 쏘세요 (시민을 쏘면 같이 탈락)' : me.job === 'doctor' ? 'QR을 찍어 5분 동안 지켜 주세요 (나도 가능)' : '마피아를 찾아 투표로 추방하세요 (5분마다)')
+      ? (role === 'chaser' ? `동료 마피아: ${mates.length ? mates.join(', ') : '없음 (혼자)'} · QR로 몰래 잡으세요` : me.job === 'police' ? `${Logic.fmtSec(Logic.augCdMs('mfCheck') / 1000)}마다 조사, 저격총으로 마피아를 쏘세요 (시민을 쏘면 같이 탈락)` : me.job === 'doctor' ? 'QR을 찍어 5분 동안 지켜 주세요 (나도 가능)' : '마피아를 찾아 투표로 추방하세요 (5분마다)')
       : role === 'chaser' ? `${fmtDur(RULES.HIDE_SEC)} 동안 제자리에서 기다리세요` : `${fmtDur(RULES.HIDE_SEC)} 안에 숨으세요!`;
     $('#btnRoleOk').style.visibility = 'visible';
     flash(ROLE_RGBA[role]); vibrate(role === 'chaser' ? [200, 80, 200] : 200);
@@ -1692,8 +1695,8 @@ const SET_FIELDS = [
   { g: '마피아', k: 'MF_POLICE', name: '경찰 수', step: 1, min: 0, max: 2, f: v => `${v}명`, mf: true },
   { g: '마피아', k: 'MF_DOCTOR', name: '의사 수', step: 1, min: 0, max: 2, f: v => `${v}명`, mf: true }
 ];
-// 마피아 모드에선 안 쓰는 설정 (숨는 시간·화살표·잡기 데미지·증강 없음)
-const MF_SKIP = new Set(['HIDE_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'AUG_ON', 'SPOT_COUNT', 'AUG_EVERY_SEC']);
+// 마피아 모드에선 안 쓰는 설정 (숨는 시간·화살표·잡기 데미지 없음)
+const MF_SKIP = new Set(['HIDE_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG']);
 const lobbyCounts = room => {
   const n = Object.keys(room.players || {}).length;
   return { n, ch: Math.min(Math.max(1, (room.settings && room.settings.chasers) || 1), Math.max(1, n - 1)) };
@@ -1807,8 +1810,8 @@ const MODE_HINT = {
   mafia: '마피아가 누군지 몰라요. 마피아는 QR로 몰래 잡고(바로 탈락), 5분마다 투표로 1명 추방. 경찰은 조사·저격총, 의사는 보호. 탈락하면 말하면 안 돼요',
   police: `잡히면 감옥(반경 ${Logic.MODE_RULES.JAIL_R}m)행, 팀원이 QR을 찍어 주면 탈옥. 도둑 전원이 동시에 갇히면 경찰 승리`
 };
-// 이번 게임에 쓰는 규칙: 마피아 모드는 숨는 시간 없이 바로, 증강 없음 (방장 설정 값은 그대로 둠)
-const gameRules = room => { const g = (room && room.settings && room.settings.game) || null; return g && modeOf(room) === 'mafia' ? { ...g, HIDE_SEC: 0, AUG_ON: 0 } : g; };
+// 이번 게임에 쓰는 규칙: 마피아 모드는 숨는 시간 없이 바로 (방장 설정 값은 그대로 둠)
+const gameRules = room => { const g = (room && room.settings && room.settings.game) || null; return g && modeOf(room) === 'mafia' ? { ...g, HIDE_SEC: 0 } : g; };
 const memoOf = room => ((room && room.settings && room.settings.memo) || '').slice(0, 300);
 // 방장이 메모를 쓰면 0.6초 뒤 저장 (글자 칠 때마다 저장하지 않게)
 $('#l-memo').addEventListener('input', () => {
@@ -2076,6 +2079,7 @@ function augBan(role) {
   if (foeTeam < 2) ban.push('eavesdrop');                                // 도청: 상대가 혼자라 팀 핑을 안 찍음
   if (role === 'runner' && foeTeam < 2) ban.push('disguise');            // 위장: 추격자가 혼자면 '다른 추격자' = 나라는 게 들통
   if (modeOf(room) !== 'classic') ban.push('shield', 'shake', 'chain');  // 좀비·경찰과 도둑: 잡기가 체력·정지 방식이 아니라 의미 없음
+  if (modeOf(room) === 'mafia') ban.push(...Object.keys(Logic.AUGS).filter(id => !Logic.MF_AUGS.includes(id))); // 마피아: 정체가 드러나지 않는 공통 증강만
   return ban;
 }
 function gainRandom(source) {
@@ -2379,7 +2383,7 @@ function useAug(id) {
     setCooldown(id);
     if (Math.random() < v / 100) { toast('🎲 도박 성공!', true); gainRandom('🎲 도박'); }
     else {
-      const mine = Object.keys(S.augs).filter(k => k !== 'gamble');
+      const mine = Object.keys(S.augs).filter(k => k !== 'gamble' && Logic.AUGS[k] && Logic.AUGS[k].role !== 'job'); // 마피아 직업 능력은 안 잃음
       if (!mine.length) toast('🎲 도박 실패… 잃을 증강이 없어서 무사해요', true);
       else { const k = mine[Math.floor(Math.random() * mine.length)]; loseAug(k); toast(`🎲 도박 실패… [${Logic.AUGS[k].name}]을(를) 잃었어요`, true); vibrate(300); }
     }
@@ -2527,7 +2531,7 @@ function loseAug(k) {
 const augLabelOf = id => ({ name: `[${Logic.AUGS[id].grade}] ${Logic.AUGS[id].name}` });
 function openReroll() {
   const me = S.room.players[S.pid];
-  const ban = augBan(me.role), ids = Object.keys(S.augs).filter(k => k !== 'reroll' && Logic.AUGS[k] && Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade, Math.random, ban));
+  const ban = augBan(me.role), ids = Object.keys(S.augs).filter(k => k !== 'reroll' && Logic.AUGS[k] && Logic.AUGS[k].role !== 'job' && Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade, Math.random, ban));
   if (!ids.length) return toast('바꿀 수 있는 증강이 없어요');
   openPick('🔄 리롤', '바꿀 증강을 고르세요 (같은 등급의 다른 증강으로)', ids.map(k => [k, augLabelOf(k), Logic.augDesc(k)]), k => {
     const nx = Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade, Math.random, ban);
@@ -2536,7 +2540,7 @@ function openReroll() {
   });
 }
 function openAlchemy() {
-  const me = S.room.players[S.pid], ids = Object.keys(S.augs).filter(k => k !== 'alchemy' && Logic.AUGS[k]);
+  const me = S.room.players[S.pid], ids = Object.keys(S.augs).filter(k => k !== 'alchemy' && Logic.AUGS[k] && Logic.AUGS[k].role !== 'job');
   if (ids.length < 2) return toast('연금술에 쓸 증강이 2개 있어야 해요');
   openPick('⚗️ 연금술 (1/2)', '버릴 증강 첫 번째', ids.map(k => [k, augLabelOf(k), Logic.augDesc(k)]), a => {
     openPick('⚗️ 연금술 (2/2)', '버릴 증강 두 번째', ids.filter(k => k !== a).map(k => [k, augLabelOf(k), Logic.augDesc(k)]), b => {
@@ -2613,7 +2617,7 @@ async function modeCatch(mode, tid, t) {
     }
     if (!(await mfOut(tid, 'mafia', S.pid))) return toast('이미 탈락한 사람이에요');
     toast(`🔪 ${tp.name} 탈락!`, true); flash('rgba(255,77,79,.9)'); vibrate(200); sfx('catch');
-    S.stats.catches = (S.stats.catches || 0) + 1; return renderGame();
+    S.stats.catches = (S.stats.catches || 0) + 1; setTimeout(() => gainRandom('잡기 보상'), 2500); return renderGame();
   }
   const counter = tp.augs && tp.augs.counter && (tp.augs.counter.until || 0) > t;
   if (mode === 'zombie') {
@@ -3197,7 +3201,7 @@ function drawSkills(mo) {
   const meDead = !Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid]);
   const spy = !!av('eavesdrop'); // 도청: 상대 팀 핑도 보임
   for (const [id, pg] of Object.entries(blackedOut() ? {} : room.pings || {})) {
-    const enemy = pg.role !== me.role;
+    const enemy = pg.role !== me.role && modeOf(room) !== 'mafia'; // 마피아 모드: 팀을 숨기려고 핑은 모두에게
     if ((pg.until || 0) <= t || (enemy && !meDead && !spy) || !PING[pg.kind] || (pg.fake && pg.by === S.pid)) continue; // 내 이름으로 된 위조 핑은 나한테 안 보임
     const name = (room.players[pg.by] || {}).name || '';
     items.push({ key: 'p' + id, make: () => L.marker([pg.lat, pg.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15], html: `<div style="font-size:26px;line-height:30px;text-align:center">${PING[pg.kind][0]}</div>` }) })
