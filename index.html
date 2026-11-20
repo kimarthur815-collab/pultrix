@@ -167,6 +167,9 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 .shakedots{font-size:44px;letter-spacing:10px;color:var(--warn);margin:10px 0}
 #ov-shake h2{font-size:28px;animation:blink .5s infinite}
 .pingTip.enemyPing{border-color:var(--chaser)}
+.modes{display:flex;gap:6px;margin-top:8px}.modes button{flex:1;padding:10px 4px;font-size:14px;margin:0}
+.modes button.on{background:var(--warn);color:#111;border-color:var(--warn)}
+.jailTip{background:#334155;color:#fff;border:0;font-weight:800}
 /* 저격 조준경 */
 #ov-snipe{padding:0;background:#000}
 #snipeVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85}
@@ -229,6 +232,12 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
     <input id="l-r" type="range" min="100" max="1000" step="50">
     <div id="lmap" class="lmap"></div>
     <p id="l-areaHint" class="dim small" style="margin-top:6px"></p>
+  </div>
+  <div class="card">
+    <b>게임 모드</b>
+    <div id="l-mode" class="modes"><button data-mode="classic">기본</button><button data-mode="zombie">🧟 좀비</button><button data-mode="police">🚓 경찰과 도둑</button></div>
+    <p id="l-modeHint" class="dim small" style="margin-top:6px"></p>
+    <button id="btnJail" style="display:none;margin-top:8px">🔒 감옥 위치 찍기</button>
   </div>
   <details id="l-set" class="card setcard">
     <summary><span><b>게임 설정</b><br><span id="l-setSum" class="dim small"></span></span></summary>
@@ -447,14 +456,22 @@ const Logic = (() => {
     }
     return best;
   }
-  function winner(players, hits, now, startAt, shift = 0) {
+  // 게임 모드: classic(기본) · zombie(잡히면 좀비가 됨) · police(경찰과 도둑: 잡히면 감옥)
+  const MODES = { classic: '기본', zombie: '🧟 좀비', police: '🚓 경찰과 도둑' };
+  const MODE_RULES = { JAIL_R: 15, JAIL_GO_SEC: 120, POLICE_FREEZE_SEC: 30, RESCUE_INV_SEC: 60 };
+  function winner(players, hits, now, startAt, shift = 0, mode = 'classic') {
     const list = Object.entries(players || {}).filter(([, p]) => p.role);
     const runners = list.filter(([, p]) => p.role === 'runner'), chasers = list.filter(([, p]) => p.role === 'chaser');
+    if (mode === 'zombie' && !runners.length && chasers.length) return { winner: 'chaser', reason: '전원 감염' };
     if (!runners.length || !chasers.length) return null;
-    const h = hits || {};
-    if (!runners.some(([id, p]) => alive(p, h[id]))) return { winner: 'chaser', reason: '도망자 전원 탈락' };
+    const h = hits || {}, alive_ = runners.filter(([id, p]) => alive(p, h[id]));
+    if (!alive_.length) return { winner: 'chaser', reason: '도망자 전원 탈락' };
     if (!chasers.some(([id, p]) => alive(p, h[id]))) return { winner: 'runner', reason: '추격자 전원 탈락' };
-    if (phaseAt(now, startAt, shift).phase === 'over') return { winner: 'runner', reason: `${Math.round((RULES.GAME_SEC * 1000 + (shift || 0)) / 60000)}분 생존` };
+    if (mode === 'police' && alive_.every(([, p]) => p.jailed)) return { winner: 'chaser', reason: '도둑 전원 체포' };
+    if (phaseAt(now, startAt, shift).phase === 'over') {
+      const mins = `${Math.round((RULES.GAME_SEC * 1000 + (shift || 0)) / 60000)}분`;
+      return { winner: 'runner', reason: mode === 'zombie' ? `${alive_.length}명이 ${mins} 버팀` : `${mins} 생존` };
+    }
     return null;
   }
   function parseQR(text) {
@@ -477,7 +494,8 @@ const Logic = (() => {
     if (!t || t.role !== 'runner') return '도망자 QR이 아니에요';
     if (t.qr !== qr.token) return '지난 게임의 QR이에요';
     if (!alive(t, hits[qr.pid])) return '이미 탈락한 도망자예요';
-    if (((hits[qr.pid] && hits[qr.pid].invUntil) || 0) > now) return '방금 잡힌 도망자라 아직 무적이에요';
+    if (t.jailed) return '이미 감옥에 있는 도둑이에요';
+    if (((hits[qr.pid] && hits[qr.pid].invUntil) || 0) > now) return '방금 잡혔거나 탈옥한 도망자라 아직 무적이에요';
     const pos = myPos || me;
     if (pos.lat == null || t.lat == null) return 'GPS 위치를 아직 못 받았어요';
     const d = dist(pos, t), lim = nearLimit(pos, t);
@@ -721,7 +739,7 @@ const Logic = (() => {
   }
   return { dist, bearing, staminaCostPerSec, spendStamina, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec,
-    setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
+    MODES, MODE_RULES, setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
 })();
 // LOGIC END
@@ -975,16 +993,25 @@ function drawArea(mo, area, fit) {
   if (fit && mo.areaKey !== key) { mo.areaKey = key; mo.map.fitBounds(mo.area.getBounds(), { padding: [10, 10] }); mo.centered = true; }
   if (!mo.centered) { mo.map.setView(ll, 16); mo.centered = true; }
 }
+// 경찰과 도둑: 감옥 (모두에게 보임)
+function drawJail(mo) {
+  const room = S.room, j = room && modeOf(room) === 'police' ? jailOf(room) : null, key = j ? j.lat + ',' + j.lng : '';
+  if (mo.jailKey === key) return;
+  if (mo.jailM) { mo.jailM.remove(); mo.jailM = null; }
+  mo.jailKey = key;
+  if (j) mo.jailM = L.circle([j.lat, j.lng], { radius: Logic.MODE_RULES.JAIL_R, color: '#94a3b8', weight: 4, fillColor: '#334155', fillOpacity: .45, interactive: false })
+    .bindTooltip('🔒 감옥', { permanent: true, direction: 'center', className: 'jailTip' }).addTo(mo.map);
+}
 // 블랙아웃: 도망자의 미니맵(추격자 위치)·증강 지점·핑이 꺼짐
 const blackedOut = () => { const r = S.room, me = r && r.players[S.pid]; return !!(me && me.role === 'runner' && r.blackout && (r.blackout.until || 0) > now()); };
 function drawMaps() {
   const room = S.room; if (!room) return;
   const area = room.settings && room.settings.area;
-  if (S.screen === 's-lobby' && maps.lmap) { drawSelf(maps.lmap, '#3ba3ff'); drawArea(maps.lmap, area, true); }
+  if (S.screen === 's-lobby' && maps.lmap) { drawSelf(maps.lmap, '#3ba3ff'); drawArea(maps.lmap, area, true); drawJail(maps.lmap); }
   if (S.screen === 's-game' && maps.gmap) {
     const me = room.players && room.players[S.pid], mo = maps.gmap;
     drawSelf(mo, me && me.role === 'chaser' ? '#ff4d4f' : '#3ba3ff'); drawArea(mo, area);
-    drawSpots(mo); drawRadar(mo); drawSkills(mo);
+    drawSpots(mo); drawRadar(mo); drawSkills(mo); drawJail(mo);
     drawSpectator(mo, me && me.role && !Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid]));
     if (S.follow && S.fix) mo.map.panTo([S.fix.lat, S.fix.lng], { animate: false });
   }
@@ -1139,6 +1166,25 @@ function onEvent(e) {
   }
   if (e.type === 'ink') {
     if (e.target === S.pid) { toast(`🦑 ${who(e.by)}의 먹물! ${Logic.AUGS.ink.v}초 동안 지도가 가려져요`, true); sfx('ink'); vibrate([200, 50, 100]); }
+    return;
+  }
+  if (e.type === 'infect') {
+    if (e.target === S.pid) {
+      $('#ov-qr').classList.remove('on'); S.snap = []; drawSnap();
+      toast(`🧟 ${who(e.by)}에게 감염됐어요! 이제 좀비예요. 도망자를 잡으세요`, true); flash('rgba(132,204,22,.95)'); vibrate([300, 100, 300]); sfx('caught');
+    } else if (e.by !== S.pid) toast(`🧟 ${who(e.target)} 감염!`, true);
+    return;
+  }
+  if (e.type === 'jail') {
+    if (e.target === S.pid) {
+      $('#ov-qr').classList.remove('on');
+      toast(`🚓 체포됐어요! ${Logic.MODE_RULES.JAIL_GO_SEC / 60}분 안에 감옥으로 가세요`, true); flash('rgba(59,163,255,.95)'); vibrate([300, 100, 300]); sfx('caught');
+    } else if (e.by !== S.pid) toast(`🚓 ${who(e.target)} 체포!${me0.role === 'runner' ? ' 감옥에서 구해 주세요' : ''}`, true);
+    return;
+  }
+  if (e.type === 'rescue') {
+    if (e.target === S.pid) { $('#ov-qr').classList.remove('on'); toast(`🔓 ${who(e.by)} 덕분에 탈옥! 1분 동안 무적`, true); flash('rgba(60,207,122,.95)'); vibrate([100, 50, 300]); sfx('escape'); }
+    else if (e.by !== S.pid) toast(`🔓 ${who(e.target)} 탈옥!`, true);
     return;
   }
   if (e.type === 'mirror') {
@@ -1328,6 +1374,12 @@ function renderLobby() {
   $('#l-rv').textContent = $('#l-r').value + 'm';
   ['#btnChMinus', '#btnChPlus', '#l-r'].forEach(s => { $(s).disabled = !isHost; });
   $('#l-areaHint').textContent = isHost ? '지도를 탭하면 구역 중심이 옮겨져요 (처음엔 내 위치)' : '추격자 수와 구역은 방장이 정해요';
+  // 게임 모드
+  const mode = modeOf(room);
+  document.querySelectorAll('#l-mode [data-mode]').forEach(b => { b.classList.toggle('on', b.dataset.mode === mode); b.disabled = !isHost; });
+  $('#l-modeHint').textContent = MODE_HINT[mode] + (mode === 'police' ? (room.settings.jail ? ' · 감옥 위치 정해짐' : ' · 감옥: 안 정하면 구역 중심') : '');
+  $('#btnJail').style.display = isHost && mode === 'police' ? 'block' : 'none';
+  $('#btnJail').textContent = S.jailPick ? '지도를 탭하면 감옥이 돼요 (취소하려면 다시 누르기)' : '🔒 감옥 위치 찍기';
   renderSettings(room, isHost);
   syncRecommend(room);
   const allReady = players.every(([, p]) => p.ready);
@@ -1342,12 +1394,32 @@ function renderLobby() {
     mo.map.on('click', safe(async e => {
       if (!S.room || S.room.hostId !== S.pid) return;
       const a = S.room.settings && S.room.settings.area;
+      if (S.jailPick) { // 경찰과 도둑: 감옥 위치 (구역 안)
+        if (a && Logic.dist(a, e.latlng) > a.r) return toast('감옥은 구역 안에 있어야 해요');
+        S.jailPick = false;
+        await update(roomRef('settings'), { jail: { lat: e.latlng.lat, lng: e.latlng.lng } });
+        return toast('🔒 감옥 위치를 정했어요');
+      }
       await update(roomRef('settings'), { area: { lat: e.latlng.lat, lng: e.latlng.lng, r: a ? a.r : RULES.AREA_DEFAULT_M } });
     }));
     setTimeout(() => mo.map.invalidateSize(), 50);
   }
   drawMaps();
 }
+const MODE_HINT = {
+  classic: '잡히면 체력 -40, 체력 0이면 탈락',
+  zombie: '잡히면 바로 좀비(추격자)가 돼서 같이 쫓아요. 시간 끝까지 버틴 사람 모두 승리',
+  police: `잡히면 감옥(반경 ${Logic.MODE_RULES.JAIL_R}m)행, 팀원이 QR을 찍어 주면 탈옥. 도둑 전원이 동시에 갇히면 경찰 승리`
+};
+const modeOf = room => (room && room.settings && room.settings.mode) || 'classic';
+const jailOf = room => (room.settings && (room.settings.jail || room.settings.area)) || null;
+$('#l-mode').onclick = safe(async e => {
+  const b = e.target.closest('[data-mode]'), room = S.room;
+  if (!b || !room || room.hostId !== S.pid) return;
+  S.jailPick = false;
+  await update(roomRef('settings'), { mode: b.dataset.mode });
+});
+$('#btnJail').onclick = () => { S.jailPick = !S.jailPick; if (S.room) renderLobby(); };
 // 친구 초대: 방 코드가 들어간 사이트 링크를 QR로 보여줌
 const inviteUrl = () => location.origin + location.pathname + '?room=' + S.code;
 $('#btnInvite').onclick = () => {
@@ -1400,7 +1472,7 @@ $('#btnStart').onclick = safe(async () => {
     u[`players/${id}/decoy`] = null;
     u[`players/${id}/forfeit`] = null;
     u[`players/${id}/stats`] = null;
-    for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail']) u[`players/${id}/${k}`] = null;
+    for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
 });
@@ -1429,6 +1501,8 @@ function enterGame() {
     // 방금 시작한 게임이면 역할 공개 연출 (새로고침해서 다시 들어온 경우엔 생략)
     if (now() - room.startAt < 15000 && Date.now() - (S.revealAt || 0) > 20000) { S.revealAt = Date.now(); showRoleReveal(me.role); }
     S.aliveWas = !S.dead[S.pid];
+    const md = modeOf(room);
+    if (md !== 'classic' && now() - room.startAt < 15000) setTimeout(() => toast(`${Logic.MODES[md]} 모드 · ${MODE_HINT[md]}`, true), 4000);
   } else syncFromDb(room, me);
   if (S.screen !== 's-game') {
     show('s-game'); $('#ov-invite').classList.remove('on');
@@ -1571,6 +1645,7 @@ function augBan(role) {
   if (role === 'runner' && !mates.length) ban.push('companion');        // 동행: 붙어 있을 팀원이 없음
   if (foeTeam < 2) ban.push('eavesdrop');                                // 도청: 상대가 혼자라 팀 핑을 안 찍음
   if (role === 'runner' && foeTeam < 2) ban.push('disguise');            // 위장: 추격자가 혼자면 '다른 추격자' = 나라는 게 들통
+  if (modeOf(room) !== 'classic') ban.push('shield', 'shake', 'chain');  // 좀비·경찰과 도둑: 잡기가 체력·정지 방식이 아니라 의미 없음
   return ban;
 }
 function gainRandom(source) {
@@ -1935,6 +2010,54 @@ $('#btnSnipeFire').onclick = safe(async () => {
   if (mirrored(tg.id, 'snipe')) { S.selfDmg += a.dmg; S.lastWrite = 0; return renderGame(); }
   await runTransaction(roomRef('hits/' + tg.id), cur => ({ ...(cur || {}), ext: ((cur && cur.ext) || 0) + a.dmg }));
   toast(`🎯 명중! ${room.players[tg.id].name} 체력 -${a.dmg} (${Math.round(tg.d)}m)`, true); renderGame();
+});
+// 좀비: 잡히면 바로 좀비(추격자)로, 잡은 좀비는 정지 없음 / 경찰과 도둑: 잡히면 감옥행, 경찰은 30초 정지
+async function modeCatch(mode, tid, t) {
+  const room = S.room, tp = room.players[tid], me = room.players[S.pid], MR = Logic.MODE_RULES;
+  const counter = tp.augs && tp.augs.counter && (tp.augs.counter.until || 0) > t;
+  if (mode === 'zombie') {
+    const r = await runTransaction(roomRef(`players/${tid}/role`), cur => (cur === 'runner' ? 'chaser' : undefined));
+    if (!r.committed) return toast('방금 다른 좀비가 감염시켰어요');
+    const u = { [`players/${tid}/zombieAt`]: t, [`players/${tid}/frozenUntil`]: 0, [`players/${tid}/anchor`]: null };
+    for (const k of Object.keys(tp.augs || {})) if (Logic.AUGS[k] && Logic.AUGS[k].role === 'runner') u[`players/${tid}/augs/${k}`] = null; // 도망자 전용 증강은 사라짐
+    await update(roomRef(), u);
+    push(roomRef('events'), { type: 'infect', by: S.pid, target: tid, at: serverTimestamp() });
+    toast(`🧟 ${tp.name} 감염! 같이 쫓아요`, true); flash('rgba(132,204,22,.9)'); vibrate(200); sfx('catch');
+  } else {
+    const r = await runTransaction(roomRef(`players/${tid}/jailed`), cur => (cur ? undefined : { at: t, by: S.pid }));
+    if (!r.committed) return toast('이미 감옥에 있는 도둑이에요');
+    S.anchor = { lat: S.fix.lat, lng: S.fix.lng }; S.waitOut = 0;
+    await update(meRef(), { frozenUntil: t + MR.POLICE_FREEZE_SEC * 1000, prevFrozenUntil: me.frozenUntil || 0, anchor: S.anchor });
+    push(roomRef('events'), { type: 'jail', by: S.pid, target: tid, at: serverTimestamp() });
+    toast(`🚓 ${tp.name} 체포! ${MR.POLICE_FREEZE_SEC}초 동안 제자리 대기`, true); flash('rgba(59,163,255,.9)'); vibrate(200); sfx('catch');
+  }
+  if (counter) { S.selfDmg += Logic.AUGS.counter.dmg; S.lastWrite = 0; setTimeout(() => toast(`💥 카운터에 맞았어요! 체력 -${Logic.AUGS.counter.dmg}`, true), 1500); }
+  if (av('vampire')) {
+    const hp = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid]);
+    S.selfDmg -= Math.min(av('vampire'), RULES.HP_MAX - hp); S.lastWrite = 0;
+  }
+  S.stats.catches = (S.stats.catches || 0) + 1;
+  setTimeout(() => gainRandom('잡기 보상'), 2500);
+  renderGame();
+}
+// 경찰과 도둑: 갇힌 팀원의 탈옥용 QR을 찍으면 1명 탈옥 + 1분 무적
+const handleRescue = safe(async text => {
+  const qr = Logic.parseQR(text), room = S.room, t = now();
+  const me = room.players[S.pid], tp = qr && qr.code === S.code ? room.players[qr.pid] : null;
+  if (!tp) return toast('탈옥용 QR이 아니에요', true);
+  if (qr.pid === S.pid || tp.role !== 'runner') return toast('같은 팀 팀원의 QR이 아니에요', true);
+  if (tp.qr !== qr.token) return toast('지난 게임의 QR이에요', true);
+  if (!tp.jailed) return toast('감옥에 갇힌 팀원이 아니에요', true);
+  if (me.jailed) return toast('나도 갇혀 있어서 못 구해요', true);
+  if (tp.lat == null || !S.fix) return toast('GPS 위치를 아직 못 받았어요', true);
+  const d = Logic.dist(S.fix, tp), lim = Logic.nearLimit(S.fix, tp);
+  if (d > lim) return toast(`GPS상 ${Math.round(d)}m 떨어져 있어서 못 구해요 (지금 GPS로는 ${Math.round(lim)}m까지 인정)`, true);
+  const r = await runTransaction(roomRef(`players/${qr.pid}/jailed`), cur => (cur ? null : undefined));
+  if (!r.committed) return toast('이미 풀려났어요');
+  await update(roomRef('hits/' + qr.pid), { invUntil: t + Logic.MODE_RULES.RESCUE_INV_SEC * 1000 });
+  push(roomRef('events'), { type: 'rescue', by: S.pid, target: qr.pid, at: serverTimestamp() });
+  toast(`🔓 ${tp.name} 탈옥 성공! 1분 무적`, true); flash('rgba(60,207,122,.9)'); vibrate([100, 50, 100]); sfx('escape');
+  renderGame();
 });
 // 피의 서약: 탈락한 팀원의 부활용 QR을 찍으면 내 체력 절반을 나눠 주고 부활
 const handleRevive = safe(async text => {
@@ -2607,6 +2730,19 @@ function tick() {
     if (left > 0) warn.push(`${what}! ${Math.ceil(left)}초 안에 돌아오세요`);
     else { dmg += RULES.RULE_DMG * dt; warn.push(`${what}! 체력 감소 중`); }
   } else if (gpsOk) S.ruleSec = 0;
+  // 경찰과 도둑: 갇힌 도둑은 감옥(반경 15m) 안에 — 처음 2분은 가는 시간, 들어간 뒤 나가면 10초 경고 후 체력 감소
+  const jl = me.role === 'runner' && modeOf(room) === 'police' ? me.jailed : null;
+  if (jl && gpsOk) {
+    const MR = Logic.MODE_RULES, jail = jailOf(room), jd = jail ? Logic.dist(S.fix, jail) : 0;
+    if (S.jailAt !== jl.at) { S.jailAt = jl.at; S.jailIn = false; S.jailOut = 0; }
+    if (jd <= MR.JAIL_R) { S.jailIn = true; S.jailOut = 0; warn.push('🔒 감옥에 갇혀 있어요 · 팀원이 QR을 찍어 주면 탈옥'); }
+    else if (!S.jailIn && t - jl.at < MR.JAIL_GO_SEC * 1000) warn.push(`🔒 감옥으로 가세요! ${fmt(MR.JAIL_GO_SEC * 1000 - (t - jl.at))} 남음 (${Math.round(jd)}m)`);
+    else {
+      S.jailOut += dt; const left = RULES.RULE_WARN_SEC - S.jailOut;
+      if (S.jailIn && left > 0) warn.push(`🔒 감옥 밖! ${Math.ceil(left)}초 안에 돌아가세요`);
+      else { dmg += RULES.RULE_DMG * dt; warn.push('🔒 감옥 밖! 체력 감소 중'); }
+    }
+  }
   // 3) 스태미나 (뛸 때만 소모, 0이면 체력으로)
   // 상대 영역전개 안: 움직이기만 해도(초속 0.5m 넘음) 초당 3, 뛰면 평소의 5배
   let cost = Logic.staminaCostPerSec(S.speed, av('lightShoes') || RULES.WALK_KMH); // 가벼운 신발
@@ -2723,7 +2859,7 @@ function checkWin() {
   if (!room || room.result || room.status !== 'playing' || S.winSent) return;
   const players = { ...room.players };
   if (players[S.pid]) players[S.pid] = { ...players[S.pid], selfDmg: S.selfDmg, augs: S.augs };
-  const w = Logic.winner(players, room.hits, now(), room.startAt, room.timeShift);
+  const w = Logic.winner(players, room.hits, now(), room.startAt, room.timeShift, modeOf(room));
   if (!w) return;
   S.winSent = true;
   runTransaction(roomRef('result'), cur => (cur ? undefined : { ...w, at: now() }))
@@ -2760,12 +2896,15 @@ function renderGame() {
   $('#g-status').textContent = st.join(' · ');
   $('#g-warn').textContent = alive ? S.warn.join('\n') : '';
 
-  $('#btnScan').style.display = isC && alive ? 'block' : 'none';
-  $('#btnScan').disabled = !(ph.phase === 'chase' && !frozen);
+  const mode = modeOf(room);
+  const canRescue = mode === 'police' && !isC && alive && !me.jailed && Object.entries(room.players).some(([id, p]) => id !== S.pid && p.role === 'runner' && p.jailed);
+  $('#btnScan').style.display = (isC && alive) || canRescue ? 'block' : 'none';
+  $('#btnScan').disabled = isC ? !(ph.phase === 'chase' && !frozen) : false;
+  $('#btnScan').textContent = !isC ? '🔓 QR 찍어서 탈옥시키기' : mode === 'zombie' ? '📷 QR 찍어서 감염' : mode === 'police' ? '📷 QR 찍어서 체포' : '📷 QR 찍어서 잡기';
   // 탈락한 도망자: 피의 서약을 가진 팀원이 있으면 부활용 QR
   const reviver = !isC && !alive && Object.entries(room.players).some(([id, p]) => id !== S.pid && p.role === 'runner' && p.augs && p.augs.bloodOath && Logic.alive(p, hits[id]));
   $('#btnShowQR').style.display = !isC && (alive || reviver) ? 'block' : 'none';
-  $('#btnShowQR').textContent = alive ? '내 QR 보여주기' : '🩸 부활용 QR 보여주기';
+  $('#btnShowQR').textContent = !alive ? '🩸 부활용 QR 보여주기' : me.jailed ? '🔓 탈옥용 QR 보여주기' : '내 QR 보여주기';
 
   let info = '';
   if (isC) info = drawArrow();
@@ -2783,7 +2922,7 @@ function renderGame() {
     if (!S.specOn) { S.specOn = true; S.snap = []; drawSnap(); $('#arrowBox').className = 'arrowbox'; }
     $('#specList').innerHTML = Object.entries(room.players).filter(([, p]) => p.role).map(([id, p]) => {
       const php = id === S.pid ? hp : Logic.hpOf(p, hits[id]);
-      return `<li><span><span class="badge ${p.role}">${ROLE_NAME[p.role]}</span> ${esc(p.name)}${id === S.pid ? ' (나)' : ''}</span><span class="${php > 0 ? 'ok' : 'dim'}">${php > 0 ? '체력 ' + Math.ceil(php) : (p.forfeit ? '기권' : '탈락')}</span></li>`;
+      return `<li><span><span class="badge ${p.role}">${ROLE_NAME[p.role]}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? '🔒 ' : ''}${esc(p.name)}${id === S.pid ? ' (나)' : ''}</span><span class="${php > 0 ? 'ok' : 'dim'}">${php > 0 ? '체력 ' + Math.ceil(php) : (p.forfeit ? '기권' : '탈락')}</span></li>`;
     }).join('');
   }
 
@@ -2850,7 +2989,8 @@ $('#btnShowQR').onclick = () => {
   const qr = qrcode(0, 'M'); qr.addData(`GTAG1|${S.code}|${S.pid}|${me.qr}`); qr.make();
   $('#qrBox').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
   $('#qrName').textContent = me.name;
-  $('#ov-qr .dim').textContent = $('#btnShowQR').textContent.includes('부활') ? '피의 서약을 가진 팀원이 찍으면 부활해요' : '추격자가 이 QR을 찍으면 잡혀요';
+  const qt = $('#btnShowQR').textContent;
+  $('#ov-qr .dim').textContent = qt.includes('부활') ? '피의 서약을 가진 팀원이 찍으면 부활해요' : qt.includes('탈옥') ? '팀원이 이 QR을 찍으면 탈옥해요' : '추격자가 이 QR을 찍으면 잡혀요';
   $('#ov-qr').classList.add('on');
 };
 $('#btnQrClose').onclick = () => $('#ov-qr').classList.remove('on');
@@ -2858,7 +2998,7 @@ $('#btnQrClose').onclick = () => $('#ov-qr').classList.remove('on');
 const openScanner = safe(async mode => {
   const ov = $('#ov-scan'), v = $('#scanVideo');
   S.scanMode = mode;
-  $('#ov-scan p').textContent = mode === 'revive' ? '팀원의 부활용 QR을 비춰주세요' : '도망자 폰의 QR을 비춰주세요';
+  $('#ov-scan p').textContent = mode === 'revive' ? '팀원의 부활용 QR을 비춰주세요' : mode === 'rescue' ? '갇힌 팀원의 탈옥용 QR을 비춰주세요' : '도망자 폰의 QR을 비춰주세요';
   ov.classList.add('on');
   try { S.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); }
   catch (e) { closeScanner(); return toast('카메라를 열 수 없어요. 카메라 권한을 확인하세요', true); }
@@ -2872,13 +3012,13 @@ const openScanner = safe(async mode => {
       const w = 640, h = Math.round(v.videoHeight * w / v.videoWidth);
       c.width = w; c.height = h; ctx.drawImage(v, 0, 0, w, h);
       const found = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
-      if (found && found.data) { closeScanner(); (S.scanMode === 'revive' ? handleRevive : handleScan)(found.data); return; }
+      if (found && found.data) { closeScanner(); ({ revive: handleRevive, rescue: handleRescue }[S.scanMode] || handleScan)(found.data); return; }
     }
     requestAnimationFrame(loop);
   };
   loop();
 });
-$('#btnScan').onclick = () => openScanner('catch');
+$('#btnScan').onclick = () => { const me = S.room && S.room.players[S.pid]; openScanner(me && me.role === 'runner' ? 'rescue' : 'catch'); };
 function closeScanner() {
   S.scanning = false;
   if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
@@ -2890,6 +3030,7 @@ const handleScan = safe(async text => {
   const qr = Logic.parseQR(text), t = now();
   const err = Logic.checkCatch(S.room, S.code, S.pid, qr, t, S.fix, S.selfDmg);
   if (err) return toast(err, true);
+  if (modeOf(S.room) !== 'classic') return modeCatch(modeOf(S.room), qr.pid, t);
   // 흔들어 탈출이 준비된 도망자면 판정 시간(3초 + 전달 여유 1초) 동안 탈락 보류, 보상도 판정 뒤에
   const taugs = (S.room.players[qr.pid] || {}).augs || {};
   // 쉴드: 준비돼 있으면 체력만 안 깎임 (정지·무적은 그대로), 쿨타임은 여기서 기록
@@ -2941,7 +3082,7 @@ function renderResult() {
     const s = p.stats || {}, km = ((s.dist || 0) / 1000).toFixed(2);
     const caught = p.role === 'chaser' ? `잡음 ${s.catches || 0}` : `잡힘 ${(hits[id] && hits[id].catches) || 0} · 생존 ${fmt(Logic.survivalMs(p, room.startAt, endAt))}`;
     const augs = Object.keys(p.augs || {}).filter(k => Logic.AUGS[k]);
-    return `<li class="col"><div class="top"><span><span class="badge ${p.role}">${ROLE_NAME[p.role]}</span> ${esc(p.name)}${M[p.role] === id ? ' 🏆' : ''}</span><span class="${hp > 0 ? 'ok' : 'dim'}">${hp > 0 ? '체력 ' + Math.ceil(hp) : (p.forfeit ? '기권' : '탈락')}</span></div>`
+    return `<li class="col"><div class="top"><span><span class="badge ${p.role}">${ROLE_NAME[p.role]}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? '🔒 ' : ''}${esc(p.name)}${M[p.role] === id ? ' 🏆' : ''}</span><span class="${hp > 0 ? 'ok' : 'dim'}">${hp > 0 ? '체력 ' + Math.ceil(hp) : (p.forfeit ? '기권' : '탈락')}</span></div>`
       + `<span class="stat">🏃 ${km}km · 최고 ${Math.round(s.vmax || 0)}km/h · ${caught} · 스킬 ${s.skills || 0}회</span>`
       + (augs.length ? `<div class="insaugs">${augs.map(augChip).join('')}</div>` : '') + '</li>';
   }).join('');
@@ -2957,7 +3098,7 @@ $('#btnAgain').onclick = safe(async () => {
   const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null };
   for (const id of Object.keys(room.players)) {
     for (const k of ['role', 'selfDmg', 'st', 'frozenUntil', 'anchor', 'qr', 'augs', 'augPicks', 'offer', 'stealthUntil', 'decoy', 'forfeit', 'stats',
-      'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail']) u[`players/${id}/${k}`] = null;
+      'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
 });
