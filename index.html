@@ -1133,7 +1133,7 @@ function onEvent(e) {
   }
   if (e.type === 'blast') {
     const hitMe = Object.values(e.targets || {}).includes(S.pid); // 배열이 객체로 올 때도 처리
-    if (hitMe) { toast(`💥 ${who(e.by)}의 자폭에 휘말렸어요! 체력 -${Logic.AUGS.selfDestruct.v}`, true); flash('rgba(255,122,69,1)'); vibrate([300, 60, 300]); sfx('boom'); }
+    if (hitMe) { hurtBy('자폭', e.by); toast(`💥 ${who(e.by)}의 자폭에 휘말렸어요! 체력 -${Logic.AUGS.selfDestruct.v}`, true); flash('rgba(255,122,69,1)'); vibrate([300, 60, 300]); sfx('boom'); }
     else if (e.by !== S.pid) toast(`💥 ${who(e.by)}가 자폭했어요`);
     return;
   }
@@ -1242,7 +1242,7 @@ function onEvent(e) {
     return;
   }
   if (e.type === 'snipe') {
-    if (e.target === S.pid) { toast(`🎯 ${who(e.by)}에게 저격당했어요! 체력 -${Logic.AUGS.snipe.dmg}`, true); sfx('shot'); vibrate([300, 60, 300]); flash('rgba(255,77,79,1)'); }
+    if (e.target === S.pid) { hurtBy('저격', e.by); toast(`🎯 ${who(e.by)}에게 저격당했어요! 체력 -${Logic.AUGS.snipe.dmg}`, true); sfx('shot'); vibrate([300, 60, 300]); flash('rgba(255,77,79,1)'); }
     else if (e.by !== S.pid && me0.role === 'runner') sfx('shot');
     return;
   }
@@ -1269,7 +1269,7 @@ function onEvent(e) {
   if (e.target === S.pid) {
     $('#ov-qr').classList.remove('on');
     if (e.shield) { toast(`🛡 쉴드가 막았어요! 체력 그대로 · ${min} 무적`, true); flash('rgba(59,163,255,.9)'); sfx('shield'); vibrate([100, 50, 100]); }
-    else { toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min} 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); flash('rgba(255,77,79,.9)'); sfx('caught'); }
+    else { hurtBy('잡힘', e.by); toast(`잡혔어요! 체력 -${RULES.CATCH_DMG} · ${min} 무적, 도망가세요!`, true); vibrate([200, 100, 200, 100, 200]); flash('rgba(255,77,79,.9)'); sfx('caught'); }
     if (e.counter) setTimeout(() => toast(`🛡 카운터 성공! 잡은 추격자 체력 -${Logic.AUGS.counter.dmg}`, true), 1800);
     // 흔들어 탈출: 판정 시간이 남아 있으면 흔들기 창을 띄움. 보상은 판정이 끝난 뒤, 탈출했으면 안 줌
     const sh = S.augs && S.augs.shake, tt = now();
@@ -1541,7 +1541,7 @@ function syncFromDb(room, me) {
   }
   if (me.revive && me.revive.at !== S.reviveAt) {
     S.reviveAt = me.revive.at; S.selfDmg = me.selfDmg || 0; S.aliveWas = true; S.specOn = false;
-    delete S.dead[S.pid]; if (S.stats) delete S.stats.diedAt;
+    delete S.dead[S.pid]; if (S.stats) { delete S.stats.diedAt; delete S.stats.deathWhy; delete S.stats.deathBy; }
     $('#ov-qr').classList.remove('on'); // 띄워 둔 부활용 QR 창 닫기
     const by = (room.players[me.revive.by] || {}).name || '?';
     toast(`🩸 피의 서약! ${by} 덕분에 부활했어요 (체력 ${Math.ceil(me.revive.hp)})`, true); flash('rgba(220,38,38,.95)'); vibrate([300, 100, 300]); sfx('augS');
@@ -2025,7 +2025,7 @@ $('#btnSnipeFire').onclick = safe(async () => {
   const tg = Logic.snipeTarget(S.fix, heading, room.players, room.hits, t);
   push(roomRef('events'), { type: 'snipe', by: S.pid, target: tg ? tg.id : null, at: serverTimestamp() });
   if (!tg) { toast('빗나갔어요…', true); return renderGame(); }
-  if (mirrored(tg.id, 'snipe')) { S.selfDmg += a.dmg; S.lastWrite = 0; return renderGame(); }
+  if (mirrored(tg.id, 'snipe')) { S.selfDmg += a.dmg; S.lastWrite = 0; hurtBy('저격 반사', tg.id); return renderGame(); }
   await runTransaction(roomRef('hits/' + tg.id), cur => ({ ...(cur || {}), ext: ((cur && cur.ext) || 0) + a.dmg }));
   toast(`🎯 명중! ${room.players[tg.id].name} 체력 -${a.dmg} (${Math.round(tg.d)}m)`, true); renderGame();
 });
@@ -2049,7 +2049,7 @@ async function modeCatch(mode, tid, t) {
     push(roomRef('events'), { type: 'jail', by: S.pid, target: tid, at: serverTimestamp() });
     toast(`🚓 ${tp.name} 체포! ${MR.POLICE_FREEZE_SEC}초 동안 제자리 대기`, true); flash('rgba(59,163,255,.9)'); vibrate(200); sfx('catch');
   }
-  if (counter) { S.selfDmg += Logic.AUGS.counter.dmg; S.lastWrite = 0; setTimeout(() => toast(`💥 카운터에 맞았어요! 체력 -${Logic.AUGS.counter.dmg}`, true), 1500); }
+  if (counter) { S.selfDmg += Logic.AUGS.counter.dmg; S.lastWrite = 0; hurtBy('카운터', tid); setTimeout(() => toast(`💥 카운터에 맞았어요! 체력 -${Logic.AUGS.counter.dmg}`, true), 1500); }
   if (av('vampire')) {
     const hp = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid]);
     S.selfDmg -= Math.min(av('vampire'), RULES.HP_MAX - hp); S.lastWrite = 0;
@@ -2093,7 +2093,7 @@ const handleRevive = safe(async text => {
   S.selfDmg += give; S.lastWrite = 0;
   const h = hits[qr.pid] || {}, theirSelf = RULES.HP_MAX - give - (h.catches || 0) * RULES.CATCH_DMG - (h.ext || 0);
   await update(roomRef(), { [`players/${qr.pid}/selfDmg`]: Math.round(theirSelf * 10) / 10, [`players/${qr.pid}/forfeit`]: null,
-    [`players/${qr.pid}/stats/diedAt`]: null, [`players/${qr.pid}/revive`]: { at: t, by: S.pid, hp: give } });
+    [`players/${qr.pid}/stats/diedAt`]: null, [`players/${qr.pid}/stats/deathWhy`]: null, [`players/${qr.pid}/stats/deathBy`]: null, [`players/${qr.pid}/revive`]: { at: t, by: S.pid, hp: give } });
   setCooldown('bloodOath');
   push(roomRef('events'), { type: 'revive', by: S.pid, target: qr.pid, at: serverTimestamp() });
   toast(`🩸 피의 서약! ${tp.name} 부활 (내 체력 절반 ${Math.ceil(give)}를 나눠 줌)`, true); flash('rgba(220,38,38,.95)'); vibrate([200, 80, 200]); sfx('augS');
@@ -2235,9 +2235,20 @@ function comebackCheck(me, hits, t) {
   toast(`✨ 기사회생! 체력 ${v}으로 살아났어요`, true); flash('rainbow'); vibrate([200, 80, 200, 80, 500]); sfx('augSS');
 }
 // 탈락 처리 (어떤 이유든 한 번): 탈락 시각 기록 + 알림. inTick이면 바로 뒤에서 위치와 함께 저장됨
+// 탈락 사유: 마지막으로 체력을 깎은 것 (1분 안), 없으면 '체력 0'
+function hurtBy(why, by) { S.hurt = { why, by: by || null, at: Date.now() }; }
+const deathLabel = (st, players) => st && st.deathWhy ? st.deathWhy + (st.deathBy && players[st.deathBy] ? ` · ${players[st.deathBy].name}` : '') : '';
 function markDead(me, t, inTick) {
   if (!S.stats.diedAt) S.stats.diedAt = t;
-  if (!me.forfeit) { toast('체력 0 — 탈락했어요. 관전 모드로 바뀌어요', true); vibrate([300, 100, 300]); flash('rgba(255,77,79,1)'); sfx('lose'); }
+  if (!S.stats.deathWhy) {
+    let h = S.hurt && Date.now() - S.hurt.at < 60000 ? S.hurt : null;
+    // 잡혀서 체력이 0이 된 순간엔 '잡혔다' 알림보다 체력 변화가 먼저 올 수 있어서, 잡기 기록(누가·언제)으로도 확인
+    const hh = ((S.room && S.room.hits) || {})[S.pid], catchAgo = hh && hh.at && hh.by ? now() - hh.at : Infinity;
+    if (catchAgo < 10000 && catchAgo <= (h ? Date.now() - h.at : Infinity) + 500) h = { why: '잡힘', by: hh.by };
+    S.stats.deathWhy = me.forfeit ? '기권' : h ? h.why : '체력 0';
+    S.stats.deathBy = me.forfeit || !h ? null : h.by;
+  }
+  if (!me.forfeit) { toast(`체력 0 — 탈락했어요 (${deathLabel(S.stats, S.room.players)}). 관전 모드로 바뀌어요`, true); vibrate([300, 100, 300]); flash('rgba(255,77,79,1)'); sfx('lose'); }
   if (!inTick) update(meRef(), { stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
 }
 // 러너스 하이: 움직인 거리 500m마다 체력 +10
@@ -2521,7 +2532,7 @@ $('#btnForfeit').onclick = () => $('#ov-forfeit').classList.add('on');
 $('#btnForfeitNo').onclick = () => $('#ov-forfeit').classList.remove('on');
 $('#btnForfeitYes').onclick = safe(async () => {
   $('#ov-forfeit').classList.remove('on');
-  S.stats.diedAt = now();
+  S.stats.diedAt = now(); S.stats.deathWhy = '기권'; S.stats.deathBy = null;
   await update(meRef(), { forfeit: true, stats: S.stats });
   toast('기권했어요. 관전 모드로 바뀌어요', true); sfx('lose');
 });
@@ -2668,6 +2679,13 @@ function drawSkills(mo) {
     if (last && !last.st) items.push({ key: 'trailM', make: () => L.circleMarker([last.lat, last.lng], { radius: 10, color: '#fff', weight: 3, fillColor: '#fb923c', fillOpacity: .95, interactive: false })
       .bindTooltip(`👣 ${name} (15초 전)`, { permanent: true, direction: 'top', className: 'trailTip' }), update: mk => mk.setLatLng([last.lat, last.lng]) });
   }
+  // 추격자 대기 범위: 숨는 시간·잡은 뒤 정지 중엔 제자리 기준 15m 안에 있어야 함 (안이면 초록, 벗어나면 빨강)
+  const ph0 = room.startAt ? Logic.phaseAt(t, room.startAt, room.timeShift).phase : '';
+  if (me.role === 'chaser' && S.anchor && (ph0 === 'hide' || (me.frozenUntil || 0) > t)) {
+    const out = S.fix && Logic.dist(S.fix, S.anchor) > RULES.WAIT_MOVE_M, col = out ? '#ff4d4f' : '#3ccf7a', a0 = S.anchor;
+    items.push({ key: 'wait' + a0.lat + ',' + a0.lng, make: () => L.circle([a0.lat, a0.lng], { radius: RULES.WAIT_MOVE_M, color: col, weight: 4, dashArray: '8 6', fillColor: col, fillOpacity: .12, interactive: false })
+      .bindTooltip(`대기 범위 ${RULES.WAIT_MOVE_M}m`, { permanent: true, direction: 'top', className: 'trapTip' }), update: mk => mk.setStyle({ color: col, fillColor: col }) });
+  }
   syncLayer(mo, 'skillL', items);
 }
 
@@ -2714,6 +2732,7 @@ function tick() {
   let dmg = 0;
   const warn = [], buzz = []; // buzz: 체력이 깎이는(또는 곧 깎일) 경고 → 진동
   const alarm = m => { warn.push(m); buzz.push(m); };
+  let hurt = null; // 이번에 체력을 깎은 규칙 (탈락 사유용)
   // 1) 추격자 대기 규칙: 숨는 시간 + 잡은 뒤 정지 시간
   // GPS가 약할 때는 억울한 벌칙이 없도록 위치 판정을 잠시 멈춤 (멀리 가 있었다면 신호가 돌아오는 즉시 다시 적용)
   const gpsOk = S.fix.rawAcc <= RULES.GPS_BAD_ACC;
@@ -2726,7 +2745,7 @@ function tick() {
       if (d > RULES.WAIT_MOVE_M) {
         S.waitOut += dt;
         if (S.waitOut >= RULES.WAIT_MOVE_GRACE_SEC) {
-          dmg += RULES.WAIT_MOVE_DMG * dt; alarm(`대기 중 이동! 체력 감소 중 (${Math.round(d)}m)`);
+          dmg += RULES.WAIT_MOVE_DMG * dt; alarm(`대기 중 이동! 체력 감소 중 (${Math.round(d)}m)`); hurt = { why: '대기 중 이동' };
           if (ph.phase === 'hide') hideWaitDmg = RULES.WAIT_MOVE_DMG * dt;
         }
         else alarm(`대기 중이에요! 제자리로 (${Math.round(d)}m)`);
@@ -2747,7 +2766,10 @@ function tick() {
     S.ruleSec += dt;
     const what = outside ? (areaD > area.r ? '구역 밖' : '🌀 자기장 밖') : '탈것 감지', left = RULES.RULE_WARN_SEC - S.ruleSec;
     if (left > 0) alarm(`${what}! ${Math.ceil(left)}초 안에 돌아오세요`);
-    else { dmg += RULES.RULE_DMG * dt; alarm(`${what}! 체력 감소 중`); }
+    else {
+      dmg += RULES.RULE_DMG * dt; alarm(`${what}! 체력 감소 중`);
+      hurt = !outside ? { why: '탈것' } : areaD > area.r ? { why: '구역 밖' } : { why: '자기장 밖', by: room.storm && room.storm.by };
+    }
   } else if (gpsOk) S.ruleSec = 0;
   // 경찰과 도둑: 갇힌 도둑은 감옥(반경 15m) 안에 — 처음 2분은 가는 시간, 들어간 뒤 나가면 10초 경고 후 체력 감소
   const jl = me.role === 'runner' && modeOf(room) === 'police' ? me.jailed : null;
@@ -2759,7 +2781,7 @@ function tick() {
     else {
       S.jailOut += dt; const left = RULES.RULE_WARN_SEC - S.jailOut;
       if (S.jailIn && left > 0) alarm(`🔒 감옥 밖! ${Math.ceil(left)}초 안에 돌아가세요`);
-      else { dmg += RULES.RULE_DMG * dt; alarm('🔒 감옥 밖! 체력 감소 중'); }
+      else { dmg += RULES.RULE_DMG * dt; alarm('🔒 감옥 밖! 체력 감소 중'); hurt = { why: '감옥 밖' }; }
     }
   }
   // 3) 스태미나 (뛸 때만 소모, 0이면 체력으로)
@@ -2775,7 +2797,7 @@ function tick() {
   if (S.augs.booster && (S.augs.booster.until || 0) > t) cost = 0;              // 부스터
   const sp = Logic.spendStamina(S.st, cost * dt);
   S.st = sp.st; dmg += sp.hpLoss * (av('ironman') || 1); // 아드레날린: 체력 감소 줄임
-  if (sp.hpLoss > 0) alarm('스태미나 0! 뛰면 체력이 닳아요');
+  if (sp.hpLoss > 0) { alarm('스태미나 0! 뛰면 체력이 닳아요'); hurt = { why: '스태미나 0에서 뛰기' }; }
   // 4) 추격자: 화살표가 뜰 때 스태미나 회복
   if (me.role === 'chaser' && ph.phase === 'chase' && !waiting) {
     const base = Logic.arrowBase(me, room.startAt), a = Logic.arrowState(t, base, arrowEverySec(), av('foresight') || 0), key = base + ':' + a.idx;
@@ -2814,6 +2836,7 @@ function tick() {
   }
 
   S.selfDmg += dmg; S.warn = warn;
+  if (hurt && dmg > 0) hurtBy(hurt.why, hurt.by);
   // 위험 경고: 처음엔 크게 알림 + 진동, 계속되면 3초마다 진동
   if (buzz.length) {
     if (!S.buzzAt) toast(`⚠️ ${buzz[0]}`, true);
@@ -2946,15 +2969,20 @@ function renderGame() {
     if (!S.specOn) { S.specOn = true; S.snap = []; drawSnap(); $('#arrowBox').className = 'arrowbox'; }
     $('#specList').innerHTML = Object.entries(room.players).filter(([, p]) => p.role).map(([id, p]) => {
       const php = id === S.pid ? hp : Logic.hpOf(p, hits[id]);
-      return `<li><span><span class="badge ${p.role}">${ROLE_NAME[p.role]}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? '🔒 ' : ''}${esc(p.name)}${id === S.pid ? ' (나)' : ''}</span><span class="${php > 0 ? 'ok' : 'dim'}">${php > 0 ? '체력 ' + Math.ceil(php) : (p.forfeit ? '기권' : '탈락')}</span></li>`;
+      return `<li><span><span class="badge ${p.role}">${ROLE_NAME[p.role]}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? '🔒 ' : ''}${esc(p.name)}${id === S.pid ? ' (나)' : ''}</span><span class="${php > 0 ? 'ok' : 'dim'}">${php > 0 ? '체력 ' + Math.ceil(php) : (p.forfeit ? '기권' : `탈락${deathLabel(p.stats, room.players) ? ' · ' + deathLabel(p.stats, room.players) : ''}`)}</span></li>`;
     }).join('');
   }
 
   for (const [id, p] of Object.entries(room.players)) {
     if (!p.role || S.dead[id]) continue;
     const php = id === S.pid ? hp : Logic.hpOf(p, hits[id]);
-    if (php <= 0) { S.dead[id] = true; if (id !== S.pid) toast(`${p.name} 탈락!`); }
+    if (php <= 0) { S.dead[id] = true; if (id !== S.pid) (S.deathQ = S.deathQ || []).push({ id, at: Date.now() }); }
   }
+  S.deathQ = (S.deathQ || []).filter(q => {
+    const p = room.players[q.id] || {}, lb = deathLabel(p.stats, room.players);
+    if (!lb && Date.now() - q.at < 3000) return true;
+    toast(`${p.name} 탈락!${lb ? ` (${lb})` : ''}`, true); return false;
+  });
   drawMaps();
 }
 
@@ -3071,7 +3099,7 @@ const handleScan = safe(async text => {
   });
   if (!res.committed) return toast('방금 다른 추격자가 잡았어요');
   if (shield) update(roomRef(`players/${qr.pid}/augs/shield`), { readyAt: t + Logic.augCdMs('shield') });
-  if (counter) { S.selfDmg += Logic.AUGS.counter.dmg; S.lastWrite = 0; }
+  if (counter) { S.selfDmg += Logic.AUGS.counter.dmg; S.lastWrite = 0; hurtBy('카운터', qr.pid); }
   if (av('vampire')) { // 흡혈: 잡을 때마다 체력 +20
     const hp = Logic.hpOf({ ...S.room.players[S.pid], selfDmg: S.selfDmg, augs: S.augs }, (S.room.hits || {})[S.pid]);
     S.selfDmg -= Math.min(av('vampire'), RULES.HP_MAX - hp); S.lastWrite = 0;
@@ -3106,7 +3134,7 @@ function renderResult() {
     const s = p.stats || {}, km = ((s.dist || 0) / 1000).toFixed(2);
     const caught = p.role === 'chaser' ? `잡음 ${s.catches || 0}` : `잡힘 ${(hits[id] && hits[id].catches) || 0} · 생존 ${fmt(Logic.survivalMs(p, room.startAt, endAt))}`;
     const augs = Object.keys(p.augs || {}).filter(k => Logic.AUGS[k]);
-    return `<li class="col"><div class="top"><span><span class="badge ${p.role}">${ROLE_NAME[p.role]}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? '🔒 ' : ''}${esc(p.name)}${M[p.role] === id ? ' 🏆' : ''}</span><span class="${hp > 0 ? 'ok' : 'dim'}">${hp > 0 ? '체력 ' + Math.ceil(hp) : (p.forfeit ? '기권' : '탈락')}</span></div>`
+    return `<li class="col"><div class="top"><span><span class="badge ${p.role}">${ROLE_NAME[p.role]}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? '🔒 ' : ''}${esc(p.name)}${M[p.role] === id ? ' 🏆' : ''}</span><span class="${hp > 0 ? 'ok' : 'dim'}">${hp > 0 ? '체력 ' + Math.ceil(hp) : (p.forfeit ? '기권' : `탈락${deathLabel(p.stats, P) ? ' · ' + deathLabel(p.stats, P) : ''}`)}</span></div>`
       + `<span class="stat">🏃 ${km}km · 최고 ${Math.round(s.vmax || 0)}km/h · ${caught} · 스킬 ${s.skills || 0}회</span>`
       + (augs.length ? `<div class="insaugs">${augs.map(augChip).join('')}</div>` : '') + '</li>';
   }).join('');
