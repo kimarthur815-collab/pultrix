@@ -52,11 +52,13 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 .warn{color:var(--warn);font-weight:700;font-size:15px;white-space:pre-line}
 .bottom{position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:8px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(17,20,24,.88)}
 .bottom .dim{text-align:center;font-size:15px;padding:4px 0}
-.fab{position:fixed;right:12px;bottom:calc(190px + env(safe-area-inset-bottom));z-index:1100;width:48px;height:48px;padding:0;border-radius:50%;font-size:22px;background:var(--panel)}
-#btnNorth{bottom:calc(246px + env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:center}
+.fab{position:fixed;right:12px;bottom:calc(var(--bh, 178px) + 12px);z-index:1100;width:48px;height:48px;padding:0;border-radius:50%;font-size:22px;background:var(--panel)}
+#btnNorth{bottom:calc(var(--bh, 178px) + 68px);display:flex;align-items:center;justify-content:center}
 #btnNorth svg{width:30px;height:30px;transition:transform .1s linear}
 #btnNorth.on{box-shadow:0 0 0 2px #3ba3ff}
-.joy{position:fixed;left:16px;bottom:calc(190px + env(safe-area-inset-bottom));z-index:1100;width:116px;height:116px;border-radius:50%;background:rgba(17,20,24,.6);border:2px solid rgba(255,255,255,.35);display:none;touch-action:none;user-select:none;-webkit-user-select:none}
+#gmap.fogged .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6) blur(6px)}
+#gmap.fogged::after{content:'';position:absolute;inset:0;z-index:690;background:rgba(190,200,210,.5);pointer-events:none}
+.joy{position:fixed;left:16px;bottom:calc(var(--bh, 178px) + 30px);z-index:1100;width:116px;height:116px;border-radius:50%;background:rgba(17,20,24,.6);border:2px solid rgba(255,255,255,.35);display:none;touch-action:none;user-select:none;-webkit-user-select:none}
 .joy.on{display:block}.joy i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:rgba(255,255,255,.85);pointer-events:none}
 .joy span{position:absolute;left:0;right:0;top:-24px;text-align:center;font-size:13px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none}
 .arrowbox{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1050;width:250px;height:250px;border-radius:50%;background:rgba(17,20,24,.72);display:none;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
@@ -105,7 +107,8 @@ textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line)
 #roleMsg{font-size:30px;min-height:40px}
 /* 증강 */
 .augbar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:4px}
-.augbar:empty{display:none}
+.augbar:empty{display:none}.augbar{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+#augInfoCard .augcard{display:flex;gap:12px;align-items:center;text-align:left}#augInfoCard .augcard small{font-size:15px;color:var(--txt);line-height:1.5}
 .aug{--gc:#7b8494;flex:none;width:auto;margin:0;font-size:13px;font-weight:700;padding:5px 10px 5px 8px;border-radius:999px;color:#fff;line-height:1.2;display:inline-flex;align-items:center;gap:5px;background:#151a20;border:2px solid var(--gc);position:relative;overflow:hidden}
 .aug svg,.augcard .ic svg{width:16px;height:16px;fill:none;stroke:var(--gc);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .aug .g{color:var(--gc);font-weight:900}
@@ -306,6 +309,7 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 <div id="cd"></div>
 <div id="mega"><small id="megaFrom"></small><b id="megaText"></b></div>
 <div id="ov-mega" class="ov"><h2>📢 확성기</h2><p class="dim">모든 사람 화면에 크게 보여요 (최대 20자)</p><input id="megaInput" maxlength="20" placeholder="메시지" style="max-width:360px"><button id="btnMegaSend" class="primary">보내기</button><button id="btnMegaClose">취소</button></div>
+<div id="ov-augInfo" class="ov"><div id="augInfoCard" style="width:min(90vw,360px)"></div><p class="dim small" style="margin-top:14px">화면을 누르면 닫혀요</p></div>
 <div id="ov-set" class="ov"><h2>⚙ 설정</h2><div class="card setlist"><div class="row between"><span>🎵 배경음악</span><button id="setBgm" class="sw"></button></div><div class="row between"><span>🔊 효과음</span><button id="setSfx" class="sw"></button></div></div><button id="btnSetClose">닫기</button></div>
 <div id="ov-memo" class="ov"><h2>📝 방장 규칙 메모</h2><p id="memoTxt" class="memo card"></p><button id="btnMemoClose">닫기</button></div>
 <div id="ov-ping" class="ov"><h2>팀 핑</h2><p class="dim">같은 팀 지도에 20초 동안 보여요</p><div class="pingbtns" style="width:min(90vw,360px)"><button data-ping="seen">👀 여기 있었음</button><button data-ping="gather">📍 여기로 모여</button><button data-ping="danger">⚠️ 위험</button></div><button id="btnPingClose" class="linkbtn">취소</button></div>
@@ -467,17 +471,34 @@ const Logic = (() => {
     const b = rad(brg);
     return { lat: pos.lat + m * Math.cos(b) / 111195, lng: pos.lng + m * Math.sin(b) / (111195 * Math.cos(rad(pos.lat))) };
   }
+  // 움직이는 물체(분신·드론): at 때 lat/lng에서 brg 방향으로 초속 ms m, maxD(구역 경계)에서 멈춤
+  function movingPos(o, now) {
+    if (o.brg == null) return { lat: o.lat, lng: o.lng };
+    const m = (o.ms || 0) * Math.max(0, now - (o.at || now)) / 1000;
+    return movePoint(o, o.brg, o.maxD != null ? Math.min(m, o.maxD) : m);
+  }
   function shownPos(p, now, players) {
     const dc = p.decoy;
-    if (dc && (dc.until || 0) > now) {
-      const m = (dc.ms || 0) * Math.max(0, now - (dc.at || now)) / 1000;
-      const q = dc.brg != null ? movePoint(dc, dc.brg, dc.maxD != null ? Math.min(m, dc.maxD) : m) : dc; // maxD: 조종 분신이 구역 경계에서 멈추는 거리
-      return { ...p, lat: q.lat, lng: q.lng };
-    }
+    if (dc && (dc.until || 0) > now) { const q = movingPos(dc, now); return { ...p, lat: q.lat, lng: q.lng }; }
     const sw = p.swap, q = sw && (sw.until || 0) > now && players && players[sw.with];
     if (q && q.lat != null) return { ...p, lat: q.lat, lng: q.lng };
+    if ((p.lagUntil || 0) > now && p.lag) return { ...p, lat: p.lag.lat, lng: p.lag.lng }; // 잔상: 10초 전 위치
     return p;
   }
+  // 봉쇄선: 내 이동(p1→p2)이 선(q1→q2)을 넘었는지 (평면 근사)
+  function segCross(p1, p2, q1, q2) {
+    const k = 111195 * Math.cos(rad(q1.lat)), P = o => [(o.lng - q1.lng) * k, (o.lat - q1.lat) * 111195];
+    const [a, b, c, d] = [P(p1), P(p2), P(q1), P(q2)];
+    const cr = (o, u, v) => (u[0] - o[0]) * (v[1] - o[1]) - (u[1] - o[1]) * (v[0] - o[0]);
+    const d1 = cr(c, d, a), d2 = cr(c, d, b), d3 = cr(a, b, c), d4 = cr(a, b, d);
+    return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0)) && d1 !== 0 && d2 !== 0;
+  }
+  // 봉쇄선 두 번째 점: 첫 점에서 최대 len m
+  function clampLen(a, b, len) {
+    const d = dist(a, b); return d <= len ? b : movePoint(a, bearing(a, b), len);
+  }
+  // 높이 위장: 상대가 쓰고 있으면 높이 차이를 반대로
+  const shownAlt = (p, myAlt, now) => (typeof p.alt === 'number' && typeof myAlt === 'number' && (p.altFakeUntil || 0) > now ? 2 * myAlt - p.alt : p.alt);
   // pos에서 brg 방향으로 구역(area) 경계까지 거리 (이미 밖이고 바깥쪽이면 0)
   function edgeDist(pos, brg, area) {
     const x = (pos.lng - area.lng) * 111195 * Math.cos(rad(area.lat)), y = (pos.lat - area.lat) * 111195;
@@ -642,7 +663,20 @@ const Logic = (() => {
     blackout:     { name: '블랙아웃', grade: 'S', role: 'chaser', cd: 6, v: 30, d: v => `${v}초 동안 모든 도망자의 미니맵(추격자 위치)·증강 지점·핑이 꺼짐` },
     vampire:      { name: '흡혈', grade: 'A', role: 'chaser', v: 20, d: v => `잡을 때마다 체력 +${v}` },
     chain:        { name: '연쇄', grade: 'S', role: 'chaser', v: 60, d: v => `잡은 뒤 제자리 정지 시간 3분 → ${v / 60}분` },
-    snipe:        { name: '저격', grade: 'S', role: 'chaser', cd: 5, v: 40, dmg: 20, aim: 10, d: v => `폰을 도망자 쪽으로 정확히(±10°) 겨눠 쏘면 ${v}m 안 도망자 체력 -20 (빗나가도 쿨타임)` }
+    snipe:        { name: '저격', grade: 'S', role: 'chaser', cd: 5, v: 40, dmg: 20, aim: 10, d: v => `폰을 도망자 쪽으로 정확히(±10°) 겨눠 쏘면 ${v}m 안 도망자 체력 -20 (빗나가도 쿨타임)` },
+    // ---- 추가 능력 12개 ----
+    drone:        { name: '드론', grade: 'A', role: 'chaser', cd: 4, v: 30, ms: 20 / 3.6, r: 20, d: v => `${v}초 동안 조이스틱으로 드론 조종 (민 만큼 빠르게, 최대 시속 20km · 구역 밖으론 못 나감). 드론 ${AUGS.drone.r}m 안의 도망자가 내 지도에 보임 (도망자에게도 드론이 보임)` },
+    hound:        { name: '사냥개', grade: 'A', role: 'chaser', cd: 4, v: 60, ms: 8 / 3.6, show: 10, d: v => `가장 가까운 도망자를 사냥개가 시속 8km로 최대 ${v}초 쫓아감. 닿으면 그 도망자 위치가 추격자 모두에게 ${AUGS.hound.show}초 보임 (도망자에게도 개가 보임)` },
+    blockade:     { name: '봉쇄선', grade: 'S', role: 'chaser', cd: 6, v: 60, len: 100, d: v => `지도에서 두 점을 찍어 최대 ${AUGS.blockade.len}m 선을 그음 (모두에게 보임). ${v}초 동안 선을 넘은 도망자는 스태미나 0 + 추격자 모두에게 위치 30초 공개` },
+    net:          { name: '그물', grade: 'B', role: 'chaser', cd: 3, v: 15, life: 180, d: v => `쓴 자리 반경 ${v}m에 그물 (3분, 상대에겐 안 보임). 그물 안의 도망자는 뛰면 스태미나 대신 체력이 닳음 (5초 경고 뒤)` },
+    altScan:      { name: '고도 탐지기', grade: 'B', role: 'chaser', cd: 3, v: 10, d: v => `${v}초 동안 거리와 상관없이 가장 가까운 도망자가 나보다 몇 m 위·아래인지 표시 (GPS 고도)` },
+    afterimage:   { name: '잔상', grade: 'A', role: 'runner', cd: 4, v: 30, lag: 10, d: v => `${v}초 동안 상대 화살표·미니맵·탐지에 내 위치가 ${AUGS.afterimage.lag}초 늦게 보임` },
+    spyCam:       { name: '감시 카메라', grade: 'B', role: 'runner', cd: 3, v: 20, life: 300, d: v => `쓴 자리에 카메라 (5분, 상대에겐 안 보임). 반경 ${v}m 안에 추격자가 들어오면 우리 팀에 알림 + 위치 10초 표시` },
+    radioJam:     { name: '전파 방해', grade: 'A', role: 'runner', cd: 4, v: 20, d: v => `${v}초 동안 추격자 탐지 증강이 안 먹힘 (순간 포착·CCTV·위치 추적기·드론·고도 탐지기·발자국 추적, 화살표는 그대로)` },
+    cheer:        { name: '응원', grade: 'B', role: 'runner', cd: 3, v: 15, r: 30, d: v => `${AUGS.cheer.r}m 안의 팀원 체력 +${v} (나는 회복 안 됨)` },
+    altFake:      { name: '높이 위장', grade: 'C', role: 'runner', cd: 2, v: 60, d: v => `${v}초 동안 추격자 화살표·고도 탐지기에 내 높이가 반대(▲↔▼)로 보임` },
+    fog:          { name: '안개', grade: 'A', role: 'all', cd: 4, v: 45, d: v => `${v}초 동안 상대 팀 지도가 뿌옇게 흐려지고, 그동안 상대 화살표·미니맵 갱신이 멈춤` },
+    bounty:       { name: '현상금', grade: 'C', role: 'all', v: 1, d: () => '다음에 잡거나(추격자), 잡혀도 살아남거나 흔들어 탈출하면(도망자) 증강 1개 더 · 한 번 쓰면 사라짐' }
   };
   // 정밀 추적·고속 스캔은 방장이 정한 기본 주기에 비례 (기본값 45초·20초 기준 수치)
   const augArrowSec = v => Math.max(15, Math.round(v * RULES.ARROW_EVERY_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
@@ -801,7 +835,7 @@ const Logic = (() => {
     a.forEach((id, i) => { roles[id] = i < n ? 'chaser' : 'runner'; });
     return roles;
   }
-  return { altLabel, edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
+  return { movingPos, segCross, clampLen, shownAlt, altLabel, edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec, spotStale, spotStaleMs, moveSpot,
     MODES, MODE_RULES, setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
@@ -1073,22 +1107,26 @@ function onOrient(e) {
 }
 // ---------- 분신 조이스틱: 분신이 살아 있는 동안 왼쪽 아래에 표시 ----------
 // 민 만큼 빠르게(최대 시속 10km), 화면 기준 방향(지도가 돌아가 있어도 위로 밀면 화면 위쪽), 손 떼면 멈춤, 구역 경계에서 멈춤
-const JOY_R = 46, joy = { id: null, x: 0, y: 0, sent: 0, last: null, timer: 0 };
-function joyDecoy() {
-  const me = S.room && S.room.players && S.room.players[S.pid], dc = me && me.decoy;
-  return dc && dc.joy && (dc.until || 0) > now() ? dc : null;
+const JOY_R = 46, joy = { id: null, x: 0, y: 0, sent: 0, last: null, timer: 0, key: null };
+// 조이스틱으로 조종하는 것: 분신(조종형) 또는 드론, 둘 다 있으면 마지막에 쓴 것
+function joyObj() {
+  const me = S.room && S.room.players && S.room.players[S.pid]; if (!me) return null;
+  const t = now(), dc = me.decoy && me.decoy.joy && (me.decoy.until || 0) > t ? me.decoy : null, dr = me.drone && (me.drone.until || 0) > t ? me.drone : null;
+  if (dr && (!dc || S.joyKey === 'drone')) return { key: 'drone', o: dr, ms: Logic.AUGS.drone.ms, name: '🛸 드론' };
+  return dc ? { key: 'decoy', o: dc, ms: Logic.AUGS.decoy.ms, name: '분신' } : null;
 }
 function joySend(force) {
-  const dc = joyDecoy(); if (!dc) return;
-  const t = now(), m = Math.min(1, Math.hypot(joy.x, joy.y) / JOY_R), ms = m < .15 ? 0 : m * Logic.AUGS.decoy.ms;
+  const j = joyObj(); if (!j) return;
+  if (joy.key !== j.key) { joy.key = j.key; joy.last = null; }
+  const t = now(), m = Math.min(1, Math.hypot(joy.x, joy.y) / JOY_R), ms = m < .15 ? 0 : m * j.ms;
   const brg = ms ? (Math.atan2(joy.x, -joy.y) * 180 / Math.PI - mapBearing() + 720) % 360 : (joy.last ? joy.last.brg : 0);
   const L0 = joy.last;
   if (!force && L0 && Math.abs(ms - L0.ms) < .25 && (ms === 0 || angDiff(brg, L0.brg) < 8)) return; // 거의 그대로면 안 보냄
   if (!force && t - joy.sent < 250) { if (!joy.timer) joy.timer = setTimeout(() => { joy.timer = 0; joySend(); }, 260); return; }
-  const cur = Logic.shownPos({ decoy: dc }, t), area = S.room.settings && S.room.settings.area;
-  const nx = { lat: cur.lat, lng: cur.lng, at: t, brg, ms, maxD: area ? Logic.edgeDist(cur, brg, area) : 1e9, until: dc.until, joy: 1 };
+  const cur = Logic.movingPos(j.o, t), area = S.room.settings && S.room.settings.area;
+  const nx = { lat: cur.lat, lng: cur.lng, at: t, brg, ms, maxD: area ? Logic.edgeDist(cur, brg, area) : 1e9, until: j.o.until, ...(j.key === 'decoy' ? { joy: 1 } : {}) };
   joy.sent = t; joy.last = nx;
-  update(meRef(), { decoy: nx }).catch(e => console.error(e));
+  update(meRef(), { [j.key]: nx }).catch(e => console.error(e));
 }
 function joyMove(e) {
   const r = $('#joy').getBoundingClientRect();
@@ -1107,10 +1145,10 @@ const joyUp = e => {
 $('#joy').addEventListener('pointerup', joyUp); $('#joy').addEventListener('pointercancel', joyUp);
 // 분신이 살아 있는 동안 조이스틱 표시 + 내 지도의 분신을 부드럽게 (0.2초마다)
 function joyLoop(inGame) {
-  const dc = inGame && joyDecoy(), el = $('#joy');
-  el.classList.toggle('on', !!dc);
-  if (!dc) { if (joy.id != null) { joy.id = null; joy.x = joy.y = 0; $('#joy i').style.transform = ''; } joy.last = null; return; }
-  el.querySelector('span').textContent = `분신 ${fmt(dc.until - now())}`;
+  const j = inGame && joyObj(), el = $('#joy');
+  el.classList.toggle('on', !!j);
+  if (!j) { if (joy.id != null) { joy.id = null; joy.x = joy.y = 0; $('#joy i').style.transform = ''; } joy.last = null; return; }
+  el.querySelector('span').textContent = `${j.name} ${fmt(j.o.until - now())}`;
   if (maps.gmap) drawSkills(maps.gmap);
 }
 // 지도 회전 (S.mapMode): heading 내가 보는 방향이 위(기본, 나침반 없으면 북쪽) / north 북쪽 고정 / manual 두 손가락으로 돌린 방향 유지
@@ -1222,6 +1260,9 @@ function drawJail(mo) {
     .bindTooltip('🔒 감옥', { permanent: true, direction: 'center', className: 'jailTip' }).addTo(mo.map);
 }
 // 블랙아웃: 도망자의 미니맵(추격자 위치)·증강 지점·핑이 꺼짐
+// 전파 방해 중(추격자 탐지 증강 안 먹힘) / 내가 상대 안개 속인지
+const radioJammed = t => { const j = S.room && S.room.radioJam; return !!(j && (j.until || 0) > t); };
+const fogged = t => { const r = S.room, f = r && r.fog, me = r && r.players && r.players[S.pid]; return !!(f && (f.until || 0) > t && me && me.role && f.role !== me.role); };
 const blackedOut = () => { const r = S.room, me = r && r.players[S.pid]; return !!(me && me.role === 'runner' && r.blackout && (r.blackout.until || 0) > now()); };
 function drawMaps() {
   const room = S.room; if (!room) return;
@@ -1454,10 +1495,42 @@ function onEvent(e) {
     return;
   }
   if (e.type === 'cam') {
-    if (me0.role === 'chaser') {
-      S.trapReveals = [...(S.trapReveals || []), { name: who(e.target), lat: e.lat, lng: e.lng, until: now() + 10000, icon: '📹' }];
-      toast(`📹 CCTV에 ${who(e.target)} 포착!`, true); sfx('cam'); vibrate([80, 40, 80]); drawMaps();
+    if (me0.role === (e.camRole || 'chaser')) {
+      S.trapReveals = [...(S.trapReveals || []), { name: who(e.target), lat: e.lat, lng: e.lng, until: now() + 10000, icon: e.spy ? '📷' : '📹' }];
+      toast(e.spy ? `📷 감시 카메라에 추격자 ${who(e.target)} 포착!` : `📹 CCTV에 ${who(e.target)} 포착!`, true); sfx('cam'); vibrate([80, 40, 80]); drawMaps();
     }
+    return;
+  }
+  if (e.type === 'blockade') {
+    if (me0.role === 'runner') { toast(`🚧 ${who(e.by)}의 봉쇄선! 빨간 선을 넘으면 들켜요`, true); vibrate([100, 50, 100]); drawMaps(); }
+    return;
+  }
+  if (e.type === 'block') { // 봉쇄선을 넘은 도망자 → 추격자 모두에게 30초 위치
+    if (me0.role === 'chaser') {
+      S.trapReveals = [...(S.trapReveals || []), { name: who(e.target), lat: e.lat, lng: e.lng, until: now() + 30000, icon: '🚧' }];
+      toast(`🚧 ${who(e.target)}가 봉쇄선을 넘었어요! 30초 위치 표시`, true); vibrate([150, 60, 150]); sfx('trap'); drawMaps();
+    }
+    return;
+  }
+  if (e.type === 'hound') {
+    if (e.target === S.pid) { toast(`🐕 사냥개에게 들켰어요! ${Logic.AUGS.hound.show}초 동안 추격자에게 위치가 보여요`, true); flash('rgba(255,122,69,.9)'); vibrate([200, 80, 200]); }
+    else if (me0.role === 'chaser') { toast(`🐕 사냥개가 ${who(e.target)}를 찾았어요! ${Logic.AUGS.hound.show}초 위치 표시`, true); vibrate([80, 40, 80]); }
+    return;
+  }
+  if (e.type === 'cheer') { // 응원: 30m 안 살아 있는 팀원(쓴 사람 빼고) 체력 +15
+    if (e.by === S.pid || me0.role !== 'runner' || !S.fix || Logic.dist(S.fix, e) > Logic.AUGS.cheer.r) return;
+    const hp = Logic.hpOf({ ...me0, selfDmg: S.selfDmg, augs: S.augs }, ((S.room && S.room.hits) || {})[S.pid]);
+    if (hp <= 0) return;
+    const h = Math.min(Logic.AUGS.cheer.v, RULES.HP_MAX - hp); S.selfDmg -= h; S.lastWrite = 0;
+    toast(`📣 ${who(e.by)}의 응원! 체력 +${Math.round(h)}`, true); sfx('shield'); renderGame();
+    return;
+  }
+  if (e.type === 'fog') {
+    if (me0.role && me0.role !== e.role) { toast(`🌫 ${who(e.by)}의 안개! ${Logic.AUGS.fog.v}초 동안 지도가 흐리고 ${me0.role === 'chaser' ? '화살표가' : '미니맵이'} 멈춰요`, true); vibrate([100, 50, 100]); }
+    return;
+  }
+  if (e.type === 'radioJam') {
+    if (me0.role === 'chaser') toast(`📡 ${who(e.by)}의 전파 방해! ${Logic.AUGS.radioJam.v}초 동안 탐지 증강이 안 먹혀요`, true);
     return;
   }
   if (e.type === 'time') {
@@ -1478,7 +1551,7 @@ function onEvent(e) {
     if (e.pend && tt < e.pend && Logic.augReady(sh, tt)) startShake(e);
     setTimeout(() => {
       const room = S.room, h = (room && room.hits && room.hits[S.pid]) || {};
-      if (room && room.status === 'playing' && h.esc !== e.catchAt && Logic.alive({ ...room.players[S.pid], selfDmg: S.selfDmg, augs: S.augs }, h)) gainRandom('잡힘 보상');
+      if (room && room.status === 'playing' && h.esc !== e.catchAt && Logic.alive({ ...room.players[S.pid], selfDmg: S.selfDmg, augs: S.augs }, h)) { gainRandom('잡힘 보상'); bountyPay(); }
     }, e.pend ? Math.max(0, e.pend - tt) + 1500 : 2500);
   }
   else if (e.by === S.pid) {
@@ -1695,7 +1768,7 @@ $('#btnStart').onclick = safe(async () => {
   const roles = Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
   const game = mergedSettings(room).out; // 모든 폰이 같은 설정으로 시작
   Logic.applySettings(game);
-  const u = { status: 'playing', startAt: Math.round(now()) + RULES.START_DELAY_SEC * 1000, result: null, hits: null, events: null, traps: null, zones: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null, spots: {}, 'settings/game': game };
+  const u = { status: 'playing', startAt: Math.round(now()) + RULES.START_DELAY_SEC * 1000, result: null, hits: null, events: null, traps: null, zones: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null, nets: null, blocks: null, radioJam: null, fog: null, spots: {}, 'settings/game': game };
   if (game.AUG_ON) for (let i = 0; i < game.SPOT_COUNT; i++) u.spots['s' + i] = { ...Logic.randomSpot(room.settings.area), at: 0 };
   for (const id of ids) {
     u[`players/${id}/role`] = roles[id];
@@ -1711,7 +1784,7 @@ $('#btnStart').onclick = safe(async () => {
     u[`players/${id}/decoy`] = null;
     u[`players/${id}/forfeit`] = null;
     u[`players/${id}/stats`] = null;
-    for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt']) u[`players/${id}/${k}`] = null;
+    for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
 });
@@ -1723,7 +1796,7 @@ function enterGame() {
     S.gameKey = key;
     Object.assign(S, {
       augs: me.augs || {}, augBarHtml: null, offerSent: false, lastSnapIdx: null, spotBusy: false, trapBusy: false, fakeBusy: false, trapReveals: [], alarmAt: 0,
-      detects: [], shake: null, mugHit: null, pickCb: null, hist: {}, rhDist: 0, camIn: {}, pingFake: false, trackSnap: {}, supBusy: false,
+      detects: [], shake: null, mugHit: null, pickCb: null, hist: {}, rhDist: 0, camIn: {}, blockHit: {}, blockPrev: null, myTrail: [], netWas: false, hound: null, blockPick: null, pingFake: false, trackSnap: {}, supBusy: false,
       supSeen: Object.fromEntries(Object.entries(room.supplies || {}).filter(([, b]) => now() >= b.pubAt).map(([id]) => [id, 1])), reviveAt: (me.revive && me.revive.at) || null,
       stats: { dist: 0, vmax: 0, skills: 0, catches: 0, ...(me.stats || {}) }, statPos: null, seenPings: new Set(Object.keys(room.pings || {})),
       pingAt: 0, warnWas: false, specOn: false, resultKey: null,
@@ -1746,7 +1819,7 @@ function enterGame() {
   if (S.screen !== 's-game') {
     show('s-game'); $('#ov-invite').classList.remove('on');
     const mo = getMap('gmap');
-    if (!mo.bound) { mo.bound = true; mo.map.on('dragstart', () => { S.follow = false; }); bindLongPress(mo); if (mo.map.setBearing) bindRotate(mo); }
+    if (!mo.bound) { mo.bound = true; mo.map.on('dragstart', () => { S.follow = false; }); mo.map.on('click', e => blockClick(e.latlng)); bindLongPress(mo); if (mo.map.setBearing) bindRotate(mo); }
     setTimeout(() => { mo.map.invalidateSize(); applyBearing(true); }, 50);
     if (me.role === 'runner') takeSnapshot();
   }
@@ -1852,6 +1925,18 @@ const ICONS = {
   blackout: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/>',
   vampire: '<path d="M4 4c3 2 5 3 8 3s5-1 8-3c0 9-3 16-8 16S4 13 4 4z"/><path d="M9 11l1 3 1-3M13 11l1 3 1-3"/>',
   chain: '<rect x="2" y="9" width="10" height="6" rx="3"/><rect x="12" y="9" width="10" height="6" rx="3"/>',
+  drone: '<rect x="8" y="10" width="8" height="5" rx="2"/><path d="M3 6h6M15 6h6M6 6v4M18 6v4M8 12H6M16 12h2"/>',
+  hound: '<path d="M4 20v-6l-1-4 3-2 2 2h6l3-4 2 1v4l-2 3v6"/><path d="M8 20v-4M15 20v-4"/>',
+  blockade: '<path d="M2 9h20v6H2z"/><path d="M6 9l-3 6M12 9l-3 6M18 9l-3 6M5 15v5M19 15v5"/>',
+  net: '<path d="M3 3l18 18M21 3L3 21M3 12h18M12 3v18"/><circle cx="12" cy="12" r="9"/>',
+  altScan: '<path d="M12 3v18M7 8l5-5 5 5M7 16l5 5 5-5"/>',
+  afterimage: '<circle cx="15" cy="7" r="3"/><path d="M11 21v-5l4-4 3 3v6"/><circle cx="8" cy="7" r="3" stroke-dasharray="2 2"/><path d="M4 21v-5l4-4" stroke-dasharray="2 2"/>',
+  spyCam: '<rect x="3" y="7" width="14" height="10" rx="2"/><path d="M17 11l4-2v6l-4-2"/><circle cx="10" cy="12" r="2"/>',
+  radioJam: '<path d="M12 12v9M8 21h8"/><path d="M8 8a5.5 5.5 0 0 1 8 0M5 5a10 10 0 0 1 14 0"/><path d="M3 3l18 18"/>',
+  cheer: '<path d="M3 10v4h4l6 4V6L7 10z"/><path d="M17 8a5 5 0 0 1 0 8M19.5 5.5a9 9 0 0 1 0 13"/>',
+  altFake: '<path d="M7 3v14M3 7l4-4 4 4M17 21V7M13 17l4 4 4-4"/>',
+  fog: '<path d="M4 9h12M2 13h16M6 17h14M8 5h10"/>',
+  bounty: '<circle cx="12" cy="12" r="9"/><path d="M15 9a3 2.5 0 0 0-3-1.5c-2 0-3 1-3 2s1 1.7 3 2 3 1 3 2-1 2-3 2a3 2.5 0 0 1-3-1.5M12 6v1.5M12 16.5V18"/>',
   snipe: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.5"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/>'
 };
 const icon = id => `<svg viewBox="0 0 24 24">${ICONS[id] || ''}</svg>`;
@@ -1882,7 +1967,7 @@ function augBan(role) {
   const mates = all.filter(([id, p]) => id !== S.pid && p.role === role);
   const foes = all.filter(([id, p]) => p.role !== role && Logic.alive(p, hits[id]));
   const ban = [];
-  if (role === 'runner' && !mates.some(([id, p]) => Logic.alive(p, hits[id]))) ban.push('swap');
+  if (role === 'runner' && !mates.some(([id, p]) => Logic.alive(p, hits[id]))) ban.push('swap', 'cheer'); // 응원: 살아 있는 팀원이 없음
   if (role === 'runner' && !mates.length) ban.push('bloodOath');
   if (foes.length < 2) ban.push('fakePing');
   // 1대1처럼 팀원이 없거나 상대 팀이 혼자일 때 쓸모없는 증강
@@ -1905,6 +1990,31 @@ function setCooldown(id, extra) {
   S.augs = { ...S.augs, [id]: nx };
   update(meRef(), { ['augs/' + id]: nx });
 }
+// 봉쇄선: 지도에서 두 점 (두 번째 점은 최대 100m)
+function blockClick(ll) {
+  const bp = S.blockPick, x = S.augs && S.augs.blockade; if (!bp) return;
+  if (!x || !Logic.augReady(x, now())) { S.blockPick = null; return; }
+  const p = { lat: ll.lat, lng: ll.lng };
+  if (!bp.pts.length) { bp.pts.push(p); drawMaps(); return toast('🚧 한 점 더 찍으세요'); }
+  const a = bp.pts[0], b = Logic.clampLen(a, p, Logic.AUGS.blockade.len), t = now(), v = av('blockade');
+  if (Logic.dist(a, b) < 5) return toast('두 점이 너무 가까워요');
+  S.blockPick = null;
+  push(roomRef('blocks'), { by: S.pid, a, b, until: t + v * 1000 });
+  push(roomRef('events'), { type: 'blockade', by: S.pid, at: serverTimestamp() });
+  setCooldown('blockade', { until: t + v * 1000 }); toast(`🚧 봉쇄선 ${Math.round(Logic.dist(a, b))}m! ${v}초 동안 넘는 도망자는 들켜요`, true); sfx('skill');
+  drawMaps(); renderGame();
+}
+// 현상금: 다음 잡기·살아남기·탈출 한 번에 증강 1개 더, 그리고 사라짐
+function bountyPay() {
+  if (!S.augs || !S.augs.bounty) return;
+  loseAug('bounty'); setTimeout(() => gainRandom('💰 현상금'), 1200);
+}
+// 잔상: 10초 전 내 위치
+function lagPos(t) {
+  const tr = S.myTrail || [], cut = t - Logic.AUGS.afterimage.lag * 1000; let q = tr[0];
+  for (const x of tr) { if (x.t <= cut) q = x; else break; }
+  return q ? { lat: q.lat, lng: q.lng } : null;
+}
 // 쿨타임 스킬 사용
 function useAug(id) {
   const room = S.room, me = room && room.players[S.pid], x = S.augs[id], t = now();
@@ -1925,7 +2035,7 @@ function useAug(id) {
   if (id === 'alchemy') return openAlchemy();
   if (id === 'doppel') return openDoppel();
   if (id === 'fakePing') { S.pingFake = true; toast('🎭 지도를 꾹 눌러서 가짜 핑을 찍을 위치를 고르세요', true); return; }
-  if (['trap', 'decoy', 'domain', 'selfDestruct', 'whistle', 'fakeTreasure', 'magnet', 'ink', 'cctv', 'trail', 'steal', 'silence', 'smoke', 'hideout', 'tracker'].includes(id) && !here) return toast('GPS 신호를 기다리는 중…');
+  if (['trap', 'decoy', 'domain', 'selfDestruct', 'whistle', 'fakeTreasure', 'magnet', 'ink', 'cctv', 'trail', 'steal', 'silence', 'smoke', 'hideout', 'tracker', 'drone', 'hound', 'net', 'spyCam', 'cheer'].includes(id) && !here) return toast('GPS 신호를 기다리는 중…');
   // 진짜 위치 기준 가장 가까운 살아 있는 상대 (max 이내)
   const nearestFoe = (max = Infinity) => {
     let best = null;
@@ -1954,7 +2064,7 @@ function useAug(id) {
     push(roomRef('traps'), { by: S.pid, role: me.role, ...here, until: t + Logic.AUGS.trap.life * 1000 });
     setCooldown(id); toast('덫을 설치했어요 (5분)', true);
   } else if (id === 'decoy') {
-    update(meRef(), { decoy: { ...here, at: t, brg: 0, ms: 0, maxD: 0, until: t + v * 1000, joy: 1 } });
+    update(meRef(), { decoy: { ...here, at: t, brg: 0, ms: 0, maxD: 0, until: t + v * 1000, joy: 1 } }); S.joyKey = 'decoy';
     setCooldown(id, { until: t + v * 1000 }); toast(`분신! ${v}초 동안 왼쪽 아래 조이스틱으로 조종하세요 · 상대에겐 분신이 내 위치로 보여요`, true);
   } else if (id === 'whistle') {
     // 가장 가까운(진짜 위치) 살아 있는 도망자 폰을 진동시킴
@@ -2079,7 +2189,7 @@ function useAug(id) {
   } else if (id === 'smoke') {
     const a = Logic.AUGS.smoke;
     push(roomRef('smokes'), { by: S.pid, role: me.role, ...here, until: t + a.sec * 1000 });
-    setCooldown(id, { until: t + a.sec * 1000 }); toast(`💨 연막탄! 반경 ${v}m 안에서는 화살표·순간 포착에 안 잡혀요 (1분)`, true);
+    setCooldown(id, { until: t + a.sec * 1000 }); toast(`💨 연막탄! 반경 ${v}m 안에서는 화살표·순간 포착에 안 잡혀요 (${a.sec}초)`, true);
   } else if (id === 'exit') {
     setCooldown(id, { until: t + v * 1000 }); toast(`🚪 비상구 ${v}초! 구역 밖에 나가도 괜찮아요`, true);
   } else if (id === 'disguise') {
@@ -2088,6 +2198,44 @@ function useAug(id) {
   } else if (id === 'hideout') {
     const a = Logic.AUGS.hideout;
     setCooldown(id, { until: t + a.sec * 1000, lat: here.lat, lng: here.lng }); toast(`🏠 은신처! 1분 동안 반경 ${v}m 안에서 가만히 있으면 회복`, true);
+  } else if (id === 'drone') {
+    update(meRef(), { drone: { ...here, at: t, brg: 0, ms: 0, maxD: 0, until: t + v * 1000 } }); S.joyKey = 'drone';
+    setCooldown(id, { until: t + v * 1000 }); toast(`🛸 드론 ${v}초! 왼쪽 아래 조이스틱으로 조종 · 드론 ${Logic.AUGS.drone.r}m 안 도망자가 보여요`, true);
+  } else if (id === 'hound') {
+    const tg = Logic.nearestRunner(here, room.players, hits, t, room.smokes);
+    if (!tg) return toast('쫓을 도망자가 없어요');
+    S.hound = { lat: here.lat, lng: here.lng, target: tg.id, until: t + v * 1000, sent: 0 };
+    update(meRef(), { hound: { lat: here.lat, lng: here.lng, target: tg.id, until: t + v * 1000 } });
+    setCooldown(id, { until: t + v * 1000 }); toast(`🐕 사냥개 출동! ${room.players[tg.id].name}을(를) 쫓아요`, true);
+  } else if (id === 'blockade') {
+    if (S.blockPick) { S.blockPick = null; drawMaps(); return toast('봉쇄선 취소'); }
+    S.blockPick = { pts: [] }; drawMaps();
+    return toast(`🚧 지도에서 두 점을 찍으세요 (최대 ${Logic.AUGS.blockade.len}m) · 다시 누르면 취소`, true);
+  } else if (id === 'net') {
+    push(roomRef('nets'), { by: S.pid, role: me.role, ...here, until: t + Logic.AUGS.net.life * 1000 });
+    setCooldown(id); toast(`🕸 그물 설치 (3분 · 반경 ${v}m, 상대에겐 안 보여요)`, true);
+  } else if (id === 'altScan') {
+    setCooldown(id, { until: t + v * 1000 }); toast(`📡 고도 탐지기 ${v}초!`, true);
+  } else if (id === 'afterimage') {
+    update(meRef(), { lagUntil: t + v * 1000 }); S.lastWrite = 0;
+    setCooldown(id, { until: t + v * 1000 }); toast(`👻 잔상 ${v}초! 상대에겐 내 위치가 ${Logic.AUGS.afterimage.lag}초 늦게 보여요`, true);
+  } else if (id === 'spyCam') {
+    push(roomRef('cams'), { by: S.pid, role: me.role, ...here, r: v, spy: 1, until: t + Logic.AUGS.spyCam.life * 1000 });
+    setCooldown(id); toast(`📷 감시 카메라 설치 (5분 · 반경 ${v}m)`, true); sfx('cam');
+  } else if (id === 'radioJam') {
+    update(roomRef(), { radioJam: { by: S.pid, until: t + v * 1000 } });
+    push(roomRef('events'), { type: 'radioJam', by: S.pid, at: serverTimestamp() });
+    setCooldown(id, { until: t + v * 1000 }); toast(`📡 전파 방해 ${v}초! 추격자 탐지 증강이 안 먹혀요`, true);
+  } else if (id === 'cheer') {
+    push(roomRef('events'), { type: 'cheer', by: S.pid, ...here, at: serverTimestamp() });
+    setCooldown(id); toast(`📣 응원! ${Logic.AUGS.cheer.r}m 안 팀원 체력 +${v}`, true);
+  } else if (id === 'altFake') {
+    update(meRef(), { altFakeUntil: t + v * 1000 });
+    setCooldown(id, { until: t + v * 1000 }); toast(`🔃 높이 위장 ${v}초! 추격자에겐 내 높이가 반대로 보여요`, true);
+  } else if (id === 'fog') {
+    update(roomRef(), { fog: { by: S.pid, role: me.role, until: t + v * 1000 } });
+    push(roomRef('events'), { type: 'fog', by: S.pid, role: me.role, at: serverTimestamp() });
+    setCooldown(id, { until: t + v * 1000 }); toast(`🌫 안개 ${v}초! 상대 팀 지도가 흐려져요`, true);
   } else if (id === 'tracker') {
     let best = null;
     for (const [pid, p] of Object.entries(room.players)) {
@@ -2282,7 +2430,7 @@ async function modeCatch(mode, tid, t) {
     S.selfDmg -= Math.min(av('vampire'), RULES.HP_MAX - hp); S.lastWrite = 0;
   }
   S.stats.catches = (S.stats.catches || 0) + 1;
-  setTimeout(() => gainRandom('잡기 보상'), 2500);
+  setTimeout(() => { gainRandom('잡기 보상'); bountyPay(); }, 2500);
   renderGame();
 }
 // 경찰과 도둑: 갇힌 팀원의 탈옥용 QR을 찍으면 1명 탈옥 + 1분 무적
@@ -2371,6 +2519,7 @@ const tryEscape = safe(async () => {
   if (ch) await update(roomRef('players/' + sk.chaser), { frozenUntil: ch.prevFrozenUntil || 0 });
   push(roomRef('events'), { type: 'escape', by: S.pid, chaser: sk.chaser, at: serverTimestamp() });
   toast(`📳 탈출 성공! 잡기 취소 + ${a.inv}초 무적`, true); flash('rgba(60,207,122,.9)'); sfx('escape'); vibrate([100, 50, 100, 50, 300]);
+  bountyPay();
   renderGame();
 });
 // 확성기: 20자 메시지를 모든 사람 화면에 크게
@@ -2496,15 +2645,15 @@ function companionNear(me, hits, t) {
 }
 // CCTV: 상대 CCTV 반경 안에 새로 들어갈 때마다 추격자들에게 알림 (도망자 본인은 모름)
 // 경계에서 GPS가 흔들려 알림이 반복되지 않게: 30m 안에 들어오면 알림, 40m 밖으로 나가야 다시 알림 가능
+// 감시 카메라(도망자)는 반대로 추격자가 들어오면 도망자들에게 알림. 전파 방해 중엔 추격자 CCTV가 안 먹힘
 function checkCams(me, t) {
-  if (me.role !== 'runner') return;
-  const r = Logic.AUGS.cctv.v;
   for (const [cid, c] of Object.entries(S.room.cams || {})) {
     if (c.role === me.role || (c.until || 0) <= t) continue;
-    const d = Logic.dist(S.fix, c);
+    if (c.role === 'chaser' && radioJammed(t)) continue;
+    const d = Logic.dist(S.fix, c), r = c.r || Logic.AUGS.cctv.v;
     if (!S.camIn[cid] && d <= r) {
       S.camIn[cid] = true;
-      push(roomRef('events'), { type: 'cam', target: S.pid, cam: cid, lat: S.fix.lat, lng: S.fix.lng, at: serverTimestamp() });
+      push(roomRef('events'), { type: 'cam', target: S.pid, cam: cid, camRole: c.role, spy: c.spy ? 1 : 0, lat: S.fix.lat, lng: S.fix.lng, at: serverTimestamp() });
     } else if (S.camIn[cid] && d > r + 10) S.camIn[cid] = false;
   }
 }
@@ -2560,12 +2709,26 @@ function renderAugBar(alive) {
 }
 // 쿨타임 글자가 1초마다 바뀌면서 증강 바가 다시 그려지면, 누르는 도중에 버튼이 바뀌어 탭이 사라질 수 있음
 // → 손가락을 댄 순간의 버튼을 기억해 두고, 뗐을 때 버튼을 못 찾으면 그걸로 처리
-let augDown = null;
+let augDown = null, augHold = 0, augLongAt = 0;
+// 꾹 누르면(0.5초) 쓰지 않고 설명 카드 (화면을 새로 누르면 닫힘)
+function showAugInfo(id) {
+  const a = Logic.AUGS[id]; if (!a) return;
+  $('#augInfoCard').innerHTML = `<div class="augcard g${a.grade}"><span class="ic">${icon(id)}<i>${a.grade}</i></span><span><b>${a.name}</b><small>${Logic.augDesc(id)}</small></span></div>`;
+  S.infoDown = false; $('#ov-augInfo').classList.add('on'); vibrate(30);
+}
+$('#ov-augInfo').addEventListener('pointerdown', () => { S.infoDown = true; });
+$('#ov-augInfo').onclick = () => { if (S.infoDown) $('#ov-augInfo').classList.remove('on'); }; // 꾹 누른 손가락을 뗄 때는 안 닫힘
 $('#augBar').addEventListener('pointerdown', e => {
   const el = e.target.closest('[data-use],[data-info]');
-  augDown = el ? { use: el.dataset.use, info: el.dataset.info, at: Date.now() } : null;
+  augDown = el ? { use: el.dataset.use, info: el.dataset.info, at: Date.now(), x: e.clientX, y: e.clientY } : null;
+  clearTimeout(augHold); augLongAt = 0;
+  if (augDown) { const id = augDown.use || augDown.info; augHold = setTimeout(() => { augLongAt = Date.now(); showAugInfo(id); }, 500); }
 });
+$('#augBar').addEventListener('pointermove', e => { if (augDown && Math.hypot(e.clientX - augDown.x, e.clientY - augDown.y) > 12) clearTimeout(augHold); });
+['pointerup', 'pointercancel', 'pointerleave'].forEach(n => $('#augBar').addEventListener(n, () => clearTimeout(augHold)));
+$('#augBar').addEventListener('contextmenu', e => e.preventDefault());
 $('#augBar').onclick = e => {
+  if (augLongAt) { augLongAt = 0; augDown = null; return; } // 꾹 누른 뒤엔 쓰지 않음
   const el = e.target.closest('[data-use],[data-info]');
   const d = el ? { use: el.dataset.use, info: el.dataset.info } : augDown && Date.now() - augDown.at < 800 ? augDown : null;
   augDown = null;
@@ -2701,7 +2864,7 @@ const disguised = (p, t) => !!(p && (p.disguiseUntil || 0) > t);
 function drawRadar(mo) {
   if (!mo.radarG) mo.radarG = L.layerGroup().addTo(mo.map);
   const t = now(), x = S.augs && S.augs.radar, room = S.room;
-  const list = !x || (x.until || 0) <= t || !room ? [] : Object.entries(room.players)
+  const list = !x || (x.until || 0) <= t || !room || radioJammed(t) ? [] : Object.entries(room.players) // 전파 방해 중엔 안 보임
     .filter(([id, p]) => p.role === 'runner' && p.lat != null && Logic.alive(p, (room.hits || {})[id]) && !Logic.inSmoke(p, room.smokes, t))
     .map(([id, p]) => [id, Logic.shownPos(p, t, room.players)]);
   mo.radarM = mo.radarM || {};
@@ -2835,9 +2998,9 @@ function drawSkills(mo) {
   // 추격자: 현상수배·무궁화에 걸린 도망자의 진짜 위치 (실시간)
   if (me.role === 'chaser') for (const [id, p] of Object.entries(room.players)) {
     if (p.role !== 'runner' || p.lat == null || !Logic.alive(p, (room.hits || {})[id])) continue;
-    const w = (p.wantedUntil || 0) > t, m = (p.mugungUntil || 0) > t, tn = (p.tauntUntil || 0) > t;
-    if (!w && !m && !tn) continue;
-    const dg = disguised(p, t), label = `${w ? '🎯' : m ? '🌸' : '🤪'} ${dg ? '추격자' : esc(p.name)}`; // 위장 중이면 추격자처럼
+    const w = (p.wantedUntil || 0) > t, m = (p.mugungUntil || 0) > t, tn = (p.tauntUntil || 0) > t, hd = (p.houndUntil || 0) > t;
+    if (!w && !m && !tn && !hd) continue;
+    const dg = disguised(p, t), label = `${w ? '🎯' : m ? '🌸' : tn ? '🤪' : '🐕'} ${dg ? '추격자' : esc(p.name)}`; // 위장 중이면 추격자처럼
     items.push({ key: 'x' + id + (dg ? 'd' : ''), make: () => L.circleMarker([p.lat, p.lng], { radius: 11, color: '#fff', weight: 3, fillColor: dg ? '#ff4d4f' : '#3ba3ff', fillOpacity: .95, interactive: false })
       .bindTooltip(label, { permanent: true, direction: 'top', className: dg ? 'chaserTip' : 'runnerTip' }), update: mk => { mk.setLatLng([p.lat, p.lng]); mk.setTooltipContent(label); } });
   }
@@ -2851,6 +3014,7 @@ function drawSkills(mo) {
   for (const [id, p] of Object.entries(room.players)) {
     const tk = p.tracked;
     if (!p.role || p.role === me.role || !tk || (tk.until || 0) <= t || p.lat == null) continue;
+    if (me.role === 'chaser' && radioJammed(t)) continue; // 전파 방해
     const idx = Math.floor((t - tk.at) / (Logic.AUGS.tracker.every * 1000)), sn = S.trackSnap[id];
     if (!sn || sn.idx !== idx || sn.at !== tk.at) S.trackSnap[id] = { idx, at: tk.at, lat: p.lat, lng: p.lng, t };
     const q = S.trackSnap[id], label = `📍 ${esc(p.name)} (${Math.round((t - q.t) / 1000)}초 전)`;
@@ -2893,17 +3057,58 @@ function drawSkills(mo) {
     items.push({ key: 'storm' + sm.at, make: () => L.circle([area.lat, area.lng], { radius: r, color: '#ff4d4f', weight: 4, dashArray: '10 8', fillColor: '#ff4d4f', fillOpacity: .05, interactive: false })
       .bindTooltip(label, { permanent: true, direction: 'top', className: 'chaserTip' }), update: mk => { mk.setRadius(r); mk.setTooltipContent(label); } });
   }
-  // 우리 팀 CCTV
+  // 우리 팀 CCTV·감시 카메라
   for (const [id, c] of Object.entries(room.cams || {})) {
     if (c.role !== me.role || (c.until || 0) <= t) continue;
-    items.push({ key: 'cam' + id, make: () => L.circle([c.lat, c.lng], { radius: Logic.AUGS.cctv.v, color: '#64748b', weight: 2, dashArray: '4 6', fillColor: '#64748b', fillOpacity: .08, interactive: false })
-      .bindTooltip('📹 CCTV', { permanent: true, direction: 'center', className: 'trapTip' }) });
+    items.push({ key: 'cam' + id, make: () => L.circle([c.lat, c.lng], { radius: c.r || Logic.AUGS.cctv.v, color: '#64748b', weight: 2, dashArray: '4 6', fillColor: '#64748b', fillOpacity: .08, interactive: false })
+      .bindTooltip(c.spy ? '📷 감시 카메라' : '📹 CCTV', { permanent: true, direction: 'center', className: 'trapTip' }) });
+  }
+  // 우리 팀 그물
+  for (const [id, n] of Object.entries(room.nets || {})) {
+    if (n.role !== me.role || (n.until || 0) <= t) continue;
+    items.push({ key: 'net' + id, make: () => L.circle([n.lat, n.lng], { radius: Logic.AUGS.net.v, color: '#94a3b8', weight: 2, dashArray: '2 5', fillColor: '#94a3b8', fillOpacity: .1, interactive: false })
+      .bindTooltip('🕸 그물', { permanent: true, direction: 'center', className: 'trapTip' }) });
+  }
+  // 봉쇄선: 모두에게 보임
+  for (const [id, bl] of Object.entries(room.blocks || {})) {
+    if ((bl.until || 0) <= t || !bl.a || !bl.b) continue;
+    const label = `🚧 봉쇄선 ${Math.ceil((bl.until - t) / 1000)}초`;
+    items.push({ key: 'bl' + id, make: () => L.polyline([[bl.a.lat, bl.a.lng], [bl.b.lat, bl.b.lng]], { color: '#ff4d4f', weight: 7, dashArray: '12 8', opacity: .9, interactive: false })
+      .bindTooltip(label, { permanent: true, direction: 'center', className: 'chaserTip' }), update: mk => mk.setTooltipContent(label) });
+  }
+  if (S.blockPick && S.blockPick.pts[0]) { // 봉쇄선 고르는 중: 첫 점
+    const a0 = S.blockPick.pts[0];
+    items.push({ key: 'blP' + a0.lat + ',' + a0.lng, make: () => L.circleMarker([a0.lat, a0.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#ff4d4f', fillOpacity: .95, interactive: false })
+      .bindTooltip('🚧 첫 점', { permanent: true, direction: 'top', className: 'chaserTip' }) });
+  }
+  // 드론: 모두에게 보임. 주인에겐 탐지 범위 + 범위 안 도망자 (전파 방해 중엔 안 보임)
+  for (const [id, p] of Object.entries(room.players)) {
+    const dr = p.drone; if (!dr || (dr.until || 0) <= t) continue;
+    const q = Logic.movingPos(dr, t), lbl = p.role === me.role ? `🛸 ${esc(p.name)}의 드론` : '🛸 드론';
+    items.push({ key: 'dr' + id + dr.until, make: () => L.circleMarker([q.lat, q.lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#a3a3a3', fillOpacity: .95, interactive: false })
+      .bindTooltip(lbl, { permanent: true, direction: 'top', className: 'trapTip' }), update: mk => mk.setLatLng([q.lat, q.lng]) });
+    if (id !== S.pid) continue;
+    items.push({ key: 'drR' + dr.until, make: () => L.circle([q.lat, q.lng], { radius: Logic.AUGS.drone.r, color: '#a3a3a3', weight: 2, dashArray: '4 6', fill: false, interactive: false }), update: mk => mk.setLatLng([q.lat, q.lng]) });
+    if (radioJammed(t)) continue;
+    for (const [rid, r] of Object.entries(room.players)) {
+      if (r.role !== 'runner' || r.lat == null || !Logic.alive(r, (room.hits || {})[rid]) || (r.stealthUntil || 0) > t || Logic.inSmoke(r, room.smokes, t)) continue;
+      const rp = Logic.shownPos(r, t, room.players); if (Logic.dist(rp, q) > Logic.AUGS.drone.r) continue;
+      const dg = disguised(r, t);
+      items.push({ key: 'drS' + rid + (dg ? 'd' : ''), make: () => L.circleMarker([rp.lat, rp.lng], { radius: 10, color: '#fff', weight: 2, fillColor: dg ? '#ff4d4f' : '#3ba3ff', fillOpacity: .9, interactive: false })
+        .bindTooltip(`🛸 ${dg ? '추격자' : esc(r.name)}`, { permanent: true, direction: 'top', className: dg ? 'chaserTip' : 'runnerTip' }), update: mk => mk.setLatLng([rp.lat, rp.lng]) });
+    }
+  }
+  // 사냥개: 모두에게 보임 (주인은 내 폰에서 계산한 자리)
+  for (const [id, p] of Object.entries(room.players)) {
+    const hd = id === S.pid && S.hound ? S.hound : p.hound; if (!hd || (hd.until || 0) <= t) continue;
+    items.push({ key: 'hd' + id + hd.until, make: () => L.marker([hd.lat, hd.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14], html: '<div style="font-size:24px;line-height:28px;text-align:center">🐕</div>' }) })
+      .bindTooltip(p.role === me.role ? `${esc(p.name)}의 사냥개` : '사냥개', { permanent: true, direction: 'top', offset: [0, -12], className: 'trapTip' }), update: mk => mk.setLatLng([hd.lat, hd.lng]) });
   }
   // 탐지기: 주변 상대 덫·가짜 보물·CCTV
   const dt = S.augs && S.augs.detector;
   if (dt && (dt.until || 0) > t && S.fix) {
     const R = Logic.AUGS.detector.v;
-    for (const [kind, col, label] of [['traps', '#ff7a45', '🪤 상대 덫'], ['fakes', '#ffcf40', '🎁 가짜 보물'], ['cams', '#ff4d4f', '📹 상대 CCTV']]) {
+    for (const [kind, col, label] of [['traps', '#ff7a45', '🪤 상대 덫'], ['fakes', '#ffcf40', '🎁 가짜 보물'], ['cams', '#ff4d4f', '📹 상대 카메라'], ['nets', '#94a3b8', '🕸 상대 그물']]) {
       for (const [id, x] of Object.entries(room[kind] || {})) {
         if (x.role === me.role || (x.until || 0) <= t || Logic.dist(S.fix, x) > R) continue;
         items.push({ key: 'det' + kind + id, make: () => L.circleMarker([x.lat, x.lng], { radius: 9, color: col, weight: 3, dashArray: '3 3', fillColor: '#111418', fillOpacity: .8, interactive: false })
@@ -2914,7 +3119,7 @@ function drawSkills(mo) {
   // 발자국 추적: 대상의 진짜 경로를 15초 늦게 (투명화 중엔 끊김)
   const tr0 = S.augs && S.augs.trail;
   // 내 발자국 추적, 또는 거울로 되돌려져서 내가 그 추격자를 추적
-  const tr = me.role === 'chaser' && tr0 && (tr0.until || 0) > t ? tr0 : me.revTrail && (me.revTrail.until || 0) > t ? me.revTrail : null;
+  const tr = me.role === 'chaser' && tr0 && (tr0.until || 0) > t ? (radioJammed(t) ? null : tr0) : me.revTrail && (me.revTrail.until || 0) > t ? me.revTrail : null; // 전파 방해 중엔 안 보임
   if (tr && tr.target && room.players[tr.target]) {
     const delay = Logic.AUGS.trail.delay * 1000, h = (S.hist[tr.target] || []).filter(x => x.t <= t - delay && x.t >= t - delay - 15000);
     const segs = [[]]; for (const x of h) { if (x.st) { if (segs[segs.length - 1].length) segs.push([]); } else segs[segs.length - 1].push([x.lat, x.lng]); }
@@ -2954,7 +3159,7 @@ function tick() {
   if (me.role === 'runner') {
     const snapIdx = Math.floor((t - room.startAt) / (intelSec() * 1000));
     if (S.lastSnapIdx == null) S.lastSnapIdx = snapIdx;
-    else if (snapIdx > S.lastSnapIdx) { S.lastSnapIdx = snapIdx; takeSnapshot(); }
+    else if (snapIdx > S.lastSnapIdx) { S.lastSnapIdx = snapIdx; if (!fogged(t)) takeSnapshot(); } // 안개 속이면 멈춤
     const idx = Logic.mapRevealIdx(t, room.startAt);
     if (S.lastMapIdx == null) S.lastMapIdx = idx;
     else if (idx > S.lastMapIdx) { S.lastMapIdx = idx; if (meAlive) S.st = Math.min(stMax, S.st + RULES.MAP_RECOVER * recMul); }
@@ -3039,12 +3244,17 @@ function tick() {
   }
   if (companionNear(me, hits, t)) cost *= 0.5;                                  // 동행
   if (S.augs.booster && (S.augs.booster.until || 0) > t) cost = 0;              // 부스터
-  const sp = Logic.spendStamina(S.st, cost * dt);
+  // 그물: 상대 그물 안에선 뛰면 스태미나 대신 체력 (스태미나 0일 때와 같은 양, 5초 경고 뒤)
+  const net = me.role === 'runner' && gpsOk ? Object.values(room.nets || {}).find(n => n.role !== me.role && (n.until || 0) > t && Logic.dist(S.fix, n) <= Logic.AUGS.net.v) : null;
+  if (net && !S.netWas) { toast('🕸 그물에 걸렸어요! 그물 안에서 뛰면 체력이 닳아요', true); vibrate([100, 50, 100]); }
+  S.netWas = !!net;
+  if (net) warn.push('🕸 그물 안 · 뛰면 체력이 닳아요');
+  const sp = net ? { st: S.st, hpLoss: cost * dt } : Logic.spendStamina(S.st, cost * dt), why = net ? '🕸 그물 안' : '스태미나 0';
   S.st = sp.st; S.exh = Logic.exhaust(S.exh, sp.hpLoss, cost > 0, dt);
-  if (sp.hpLoss > 0 && !S.exh.hurt) alarm(`스태미나 0! ${Math.ceil(S.exh.left)}초 뒤부터 체력이 닳아요 · 걷거나 멈추세요`);
+  if (sp.hpLoss > 0 && !S.exh.hurt) alarm(`${why}! ${Math.ceil(S.exh.left)}초 뒤부터 체력이 닳아요 · 걷거나 멈추세요`);
   else if (sp.hpLoss > 0) {
     dmg += sp.hpLoss * (av('ironman') || 1); // 아드레날린: 체력 감소 줄임
-    alarm('스태미나 0! 뛰면 체력이 닳아요'); hurt = { why: '스태미나 0에서 뛰기' };
+    alarm(`${why}! 뛰면 체력이 닳아요`); hurt = net ? { why: '그물 안에서 뛰기', by: net.by } : { why: '스태미나 0에서 뛰기' };
   }
   // 4) 추격자: 화살표가 뜰 때 스태미나 회복
   if (me.role === 'chaser' && ph.phase === 'chase' && !waiting) {
@@ -3065,6 +3275,50 @@ function tick() {
     }
   }
   // 6) 증강 지점 줍기, 상대 덫·가짜 보물, 정기 보상
+  // 잔상용 내 위치 기록 (20초)
+  if (me.role === 'runner') { (S.myTrail = S.myTrail || []).push({ t, lat: S.fix.lat, lng: S.fix.lng }); while (S.myTrail.length && t - S.myTrail[0].t > 20000) S.myTrail.shift(); }
+  // 봉쇄선: 지난 위치 → 지금 위치가 선을 넘으면 (선마다 한 번) 스태미나 0 + 추격자에게 위치
+  if (me.role === 'runner' && gpsOk) {
+    const cur = { lat: S.fix.lat, lng: S.fix.lng };
+    if (S.blockPrev) for (const [bid, bl] of Object.entries(room.blocks || {})) {
+      if ((bl.until || 0) <= t || S.blockHit[bid] || !bl.a || !bl.b || !Logic.segCross(S.blockPrev, cur, bl.a, bl.b)) continue;
+      S.blockHit[bid] = true; S.st = 0;
+      toast('🚧 봉쇄선을 넘었어요! 스태미나 0, 위치가 들켰어요', true); flash('rgba(255,77,79,.9)'); vibrate([200, 80, 200]); sfx('trap');
+      push(roomRef('events'), { type: 'block', by: bl.by, target: S.pid, ...cur, at: serverTimestamp() });
+    }
+    S.blockPrev = cur;
+  }
+  // 사냥개: 내 폰에서 움직임 계산 (대상의 보이는 위치로 시속 8km, 대상을 못 쫓게 되면 가장 가까운 도망자), 1초마다 저장
+  if (S.hound) {
+    const hd = S.hound, a = Logic.AUGS.hound;
+    if ((hd.until || 0) <= t) { S.hound = null; update(meRef(), { hound: null }); }
+    else {
+      const ok = id => { const p = room.players[id], h = hits[id]; return !!(p && p.role === 'runner' && p.lat != null && Logic.alive(p, h) && !((h && h.invUntil || 0) > t) && !((p.stealthUntil || 0) > t) && !Logic.inSmoke(p, room.smokes, t)); };
+      if (!hd.target || !ok(hd.target)) { const nt = Logic.nearestRunner(hd, room.players, hits, t, room.smokes); hd.target = nt ? nt.id : null; }
+      const tp = hd.target && room.players[hd.target];
+      if (tp) {
+        const q = Logic.shownPos(tp, t, room.players), d = Logic.dist(hd, q), step = a.ms * dt;
+        if (d <= Math.max(5, step)) {
+          S.hound = null; update(meRef(), { hound: null });
+          if (Logic.dist(q, tp) > 15) toast('🐕 사냥개가 가짜 위치에 속았어요', true);
+          else { update(roomRef('players/' + hd.target), { houndUntil: t + a.show * 1000 }); push(roomRef('events'), { type: 'hound', by: S.pid, target: hd.target, at: serverTimestamp() }); }
+        } else { const m = Logic.movePoint(hd, Logic.bearing(hd, q), step); hd.lat = m.lat; hd.lng = m.lng; }
+      }
+      if (S.hound && real - (hd.sent || 0) >= 1000) { hd.sent = real; update(meRef(), { 'hound/lat': hd.lat, 'hound/lng': hd.lng, 'hound/target': hd.target || null }); }
+    }
+  }
+  // 고도 탐지기: 거리와 상관없이 가장 가까운 도망자의 높이 차이
+  const as = S.augs.altScan;
+  if (me.role === 'chaser' && as && (as.until || 0) > t) {
+    const left = fmt(as.until - t);
+    if (radioJammed(t)) warn.push(`📡 고도 탐지기: 전파 방해 중 · ${left}`);
+    else {
+      const tg = Logic.nearestRunner(S.fix, room.players, hits, t, room.smokes), p0 = tg && room.players[tg.id];
+      const real0 = p0 && tg.p.lat === p0.lat && tg.p.lng === p0.lng;
+      const lb = !tg ? '대상 없음' : !real0 || typeof p0.alt !== 'number' || typeof S.alt !== 'number' ? '높이를 알 수 없어요' : Logic.altLabel(S.alt, Logic.shownAlt(p0, S.alt, t)) || '비슷한 높이';
+      warn.push(`📡 고도 탐지기${tg && real0 ? ` · ${p0.name}` : ''}: ${lb} · ${left}`);
+    }
+  }
   moveStaleSpots(t);
   if (gpsOk) { checkSpots(t); checkTraps(me, t); checkFakes(me, t); checkCams(me, t); checkSupplies(me, t); }
   // 은신처: 반경 안에서 가만히 있으면 체력·스태미나 회복
@@ -3103,7 +3357,7 @@ function tick() {
   S.warnWas = warn.length > 0;
   if (dead || real - S.lastWrite >= 2000) {
     S.lastWrite = real;
-    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), alt: S.alt == null ? null : Math.round(S.alt * 10) / 10, selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
+    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), alt: S.alt == null ? null : Math.round(S.alt * 10) / 10, lag: (me.lagUntil || 0) > t ? lagPos(t) : null, selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
       stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
   }
   renderGame();
@@ -3130,6 +3384,7 @@ setInterval(countdownLoop, 200);
 function overlayLoop() {
   const room = S.room, inGame = !!room && room.status === 'playing' && !room.result && S.screen === 's-game';
   joyLoop(inGame);
+  $('#gmap').classList.toggle('fogged', inGame && fogged(now()));
   const me = (inGame && room.players[S.pid]) || {}, t = now();
   // 무궁화 배너
   const mg = inGame && room.mugung, mEl = $('#mugung');
@@ -3211,8 +3466,16 @@ function renderGame() {
     const I = intelSec() * 1000, next = room.startAt + (Math.floor((t - room.startAt) / I) + 1) * I;
     info = `추격자 위치 갱신까지 ${Math.ceil((next - t) / 1000)}초`;
   }
+  // 다음 정기 보상(증강 3개 중 1개)까지
+  if (RULES.AUG_ON && alive && !me.offer && room.startAt) {
+    const hideEnd = room.startAt + RULES.HIDE_SEC * 1000, next = hideEnd + ((me.augPicks || 0) + 1) * RULES.AUG_EVERY_SEC * 1000;
+    if (next < hideEnd + RULES.GAME_SEC * 1000 + (room.timeShift || 0)) info = [info, `다음 증강까지 ${fmt(next - t)}`].filter(Boolean).join(' · ');
+  }
   $('#g-info').textContent = alive ? info : '관전 중 · 모든 사람의 실제 위치와 체력이 보여요';
   renderAugBar(alive);
+  // 아래 패널 높이(증강이 많으면 여러 줄)만큼 📍·🧭·조이스틱을 위로
+  const bh = $('#s-game .bottom').offsetHeight;
+  if (bh && bh !== S.bottomH) { S.bottomH = bh; document.documentElement.style.setProperty('--bh', bh + 'px'); }
   $('#btnForfeit').style.display = alive && ph.phase !== 'pre' ? '' : 'none';
   // 관전 모드: 전원 목록
   $('#specList').style.display = alive ? 'none' : 'block';
@@ -3255,6 +3518,7 @@ function drawArrow() {
   const base = Logic.arrowBase(me, room.startAt), a = Logic.arrowState(t, base, arrowEverySec(), av('foresight') || 0);
   if (!a.unlocked) return off(`화살표 열리기까지 ${fmt(a.nextInMs)}`);
   if (!a.visible) return off(`다음 화살표까지 ${fmt(a.nextInMs)}`);
+  if (fogged(t)) return off('🌫 안개 속이라 화살표가 안 떠요');
   box.classList.add('on');
   const tg = S.fix ? Logic.nearestRunner(S.fix, room.players, hits, t, room.smokes) : null;
   // 나침반 교란: 살아 있는 도망자 중 누가 쓰고 있으면 모든 추격자 화살표가 엉뚱한 방향 + 거리 ???
@@ -3268,7 +3532,7 @@ function drawArrow() {
   const arrow = $('#arrow'), txt = $('#arrowTxt');
   // 30m 안이면 높이 차이도 (분신·자리 바꾸기로 보이는 자리가 진짜가 아니면 안 보여 줌)
   const p0 = tg && room.players[tg.id], real = p0 && tg.p.lat === p0.lat && tg.p.lng === p0.lng;
-  const altTxt = real && tg.d <= RULES.ALT_NEAR_M ? Logic.altLabel(S.alt, p0.alt) : '';
+  const altTxt = real && tg.d <= RULES.ALT_NEAR_M ? Logic.altLabel(S.alt, Logic.shownAlt(p0, S.alt, t)) : ''; // 높이 위장이면 반대로
   if (!S.fix) { arrow.style.display = 'none'; txt.textContent = 'GPS 신호를 기다리는 중…'; }
   else if (jammed) {
     arrow.style.display = 'block';
@@ -3366,7 +3630,7 @@ const handleScan = safe(async text => {
   S.stats.catches = (S.stats.catches || 0) + 1;
   setTimeout(() => {
     const h = ((S.room && S.room.hits) || {})[qr.pid] || {};
-    if (h.esc !== t) gainRandom('잡기 보상'); // 흔들어 탈출당했으면 보상 없음
+    if (h.esc !== t) { gainRandom('잡기 보상'); bountyPay(); } // 흔들어 탈출당했으면 보상 없음
   }, pend ? pend - t + 1500 : 2500);
 });
 
@@ -3401,10 +3665,10 @@ function renderResult() {
 // 한 판 더 (방장): 같은 방 로비로, 지난 게임 기록 정리
 $('#btnAgain').onclick = safe(async () => {
   const room = S.room; if (!room || room.hostId !== S.pid) return;
-  const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null };
+  const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null, nets: null, blocks: null, radioJam: null, fog: null };
   for (const id of Object.keys(room.players)) {
     for (const k of ['role', 'selfDmg', 'st', 'frozenUntil', 'anchor', 'qr', 'augs', 'augPicks', 'offer', 'stealthUntil', 'decoy', 'forfeit', 'stats',
-      'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt']) u[`players/${id}/${k}`] = null;
+      'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
 });
@@ -3426,7 +3690,7 @@ const TUT = () => [
   { a: 'catch', t: '잡기는 QR로', b: `만나면 도망자가 <b>내 QR 보여주기</b>, 추격자가 <b>QR 찍어서 잡기</b>를 눌러요.<br>잡히면 체력 <b>-${RULES.CATCH_DMG}</b>, 도망자는 <b>${fmtDur(RULES.CATCH_COOLDOWN_SEC)} 무적</b>, 잡은 추격자는 같은 시간 동안 제자리 정지예요.` },
   { a: 'bars', t: '체력과 스태미나', b: `체력은 100이고 0이 되면 탈락이에요.<br><b>뛰면 스태미나</b>가 줄고, 스태미나가 0인데 계속 뛰면 <b>${RULES.EXHAUST_WARN_SEC}초 경고 뒤 체력이 닳아요</b>. 걷기는 괜찮아요.` },
   { a: 'info', t: '서로의 위치', b: `<b style="color:#ff4d4f">추격자</b>: 추격 시작 ${fmtDur(RULES.ARROW_UNLOCK_SEC)} 뒤부터 <b>${fmtDur(RULES.ARROW_EVERY_SEC)}마다</b> 가장 가까운 도망자 방향 화살표가 잠깐 떠요.<br><b style="color:#3ba3ff">도망자</b>: 미니맵에 추격자 위치가 <b>${fmtDur(RULES.MAP_EVERY_SEC)}마다</b> 갱신돼요.<br>위치가 표시될 때마다 스태미나가 회복돼요.` },
-  { a: 'augs', t: '증강', b: `지도의 <b style="color:#ffcf40">노란 지점</b>(${RULES.SPOT_PICK_M}m 안), <b>정기 보상</b>(3개 중 1개), <b>잡거나 잡힐 때</b> 증강을 얻어요.<br>등급은 D·C·B·A·S·SS, 사기일수록 높아요. <b>사용</b> 버튼이 있는 건 쿨타임 스킬이고, 칩을 누르면 설명이 나와요.` },
+  { a: 'augs', t: '증강', b: `지도의 <b style="color:#ffcf40">노란 지점</b>(${RULES.SPOT_PICK_M}m 안), <b>정기 보상</b>(3개 중 1개), <b>잡거나 잡힐 때</b> 증강을 얻어요.<br>등급은 D·C·B·A·S·SS, 사기일수록 높아요. <b>사용</b> 버튼이 있는 건 쿨타임 스킬이고, 칩을 <b>꾹 누르면</b> 설명이 나와요.` },
   { a: 'rules', t: '이러면 체력이 깎여요', b: `<b>구역 밖</b>으로 나가거나 <b>탈것</b>(시속 ${RULES.VEHICLE_KMH}km 이상)을 타면 ${RULES.RULE_WARN_SEC}초 경고 뒤 초당 체력 -${RULES.RULE_DMG}이에요.<br>게임 중에는 <b>화면을 켜 두세요</b>. 화면이 꺼지면 GPS가 멈춰요.` },
   { a: 'win', t: '승리 조건', b: `<b style="color:#ff4d4f">추격자</b>: 도망자를 전부 탈락시키면 승리<br><b style="color:#3ba3ff">도망자</b>: 추격자를 전부 탈락시키거나, 추격 시간 <b>${fmtDur(RULES.GAME_SEC)}</b> 동안 한 명이라도 살아남으면 승리` }
 ];
