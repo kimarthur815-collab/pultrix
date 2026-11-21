@@ -252,6 +252,15 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 #mugung.hit{animation:mugHit .38s ease-out}
 @keyframes mugHit{0%{transform:translate(-50%,-50%) scale(1.08)}25%{transform:translate(calc(-50% + 8px),calc(-50% - 5px)) scale(1.04)}50%{transform:translate(calc(-50% - 6px),calc(-50% + 4px))}75%{transform:translate(calc(-50% + 3px),-50%)}100%{transform:translate(-50%,-50%)}}
 #mugFx{position:fixed;inset:0;pointer-events:none;z-index:1984;opacity:0;box-shadow:inset 0 0 46px 4px rgba(255,40,40,.85)}
+.asnbtn{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#btnStab{background:linear-gradient(90deg,rgba(255,255,255,.35) var(--p,0%),transparent var(--p,0%)),#c81e3a;color:#fff}
+#btnRebel{background:linear-gradient(90deg,rgba(255,255,255,.35) var(--p,0%),transparent var(--p,0%)),#a78bfa;color:#160f2b}
+#btnStab:disabled,#btnRebel:disabled{opacity:.55}
+#asnWarn{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 70px);z-index:1995;display:none;text-align:center;pointer-events:none;padding:14px 10px;background:rgba(200,20,40,.94);color:#fff;font-weight:900;font-size:22px;animation:asnPulse .5s ease-in-out infinite alternate}
+#asnWarn.on{display:block}@keyframes asnPulse{from{opacity:.7}to{opacity:1}}
+#asnFx{position:fixed;inset:0;pointer-events:none;z-index:1983;opacity:0;transition:opacity .5s;box-shadow:inset 0 0 60px 14px rgba(200,0,30,.8);background:rgba(120,0,20,.1)}
+#asnFx.on{opacity:1}
+.asnGive{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.asnGive small{width:100%}.asnGive button{flex:1 1 40%;padding:10px 8px;font-size:15px}
 #shStop{top:58%;border-color:#a78bfa;box-shadow:0 0 40px rgba(167,139,250,.55)}#shStop b{color:#ddd6fe}
 #mugung.judge,#shStop.judge{border-color:var(--chaser);box-shadow:0 0 40px rgba(255,77,79,.55)}#mugung.judge b,#shStop.judge b{color:#fff}#mugung small,#shStop small{display:block;color:var(--dim);font-size:14px;margin-top:6px}
 #hbFx{position:fixed;inset:0;pointer-events:none;z-index:1985;opacity:0;box-shadow:inset 0 0 60px 18px rgba(255,77,79,.85)}
@@ -348,7 +357,7 @@ button.primary{background:#ffd400;color:#111}
   </div>
   <div class="card">
     <b>게임 모드</b>
-    <div id="l-mode" class="modes"><button data-mode="classic">기본</button><button data-mode="zombie">🧟 좀비</button><button data-mode="police">🚓 경찰과 도둑</button><button data-mode="mafia">🕵️ 마피아</button><button data-mode="ice">🧊 얼음땡</button></div>
+    <div id="l-mode" class="modes"><button data-mode="classic">기본</button><button data-mode="zombie">🧟 좀비</button><button data-mode="police">🚓 경찰과 도둑</button><button data-mode="mafia">🕵️ 마피아</button><button data-mode="ice">🧊 얼음땡</button><button data-mode="assassin">🗡️ 암살전</button></div>
     <p id="l-modeHint" class="dim small" style="margin-top:6px"></p>
     <button id="btnModeTut" style="margin-top:8px">📖 이 모드 방법</button>
     <div id="l-jailRow" class="modes" style="display:none"><button id="btnJail">⭕ 감옥 한 점 찍기</button><button id="btnJailPoly">🔷 감옥 꼭짓점 찍기</button></div>
@@ -395,6 +404,8 @@ button.primary{background:#ffd400;color:#111}
     <button id="btnScan" class="danger">📷 QR 찍어서 잡기</button>
     <button id="btnShowQR" class="primary">내 QR 보여주기</button>
     <button id="btnIce" style="display:none;background:#67e8f9;color:#0b2530">🧊 얼음!</button>
+    <button id="btnStab" class="asnbtn" style="display:none">🗡️ 암살</button>
+    <button id="btnRebel" class="asnbtn" style="display:none">⚔️ 하극상</button>
   </div>
 </section>
 
@@ -464,11 +475,12 @@ button.primary{background:#ffd400;color:#111}
 <div id="netBan" class="ban">📡 연결 끊김 · 다시 연결 중…</div>
 <div id="sndBan" class="ban">🔇 화면을 한 번 눌러 소리 켜기</div>
 <div id="deathBan" class="ban"></div>
-<div id="mugung"><canvas id="mugOwl"></canvas><div id="mugTxt"></div></div><div id="mugFx"></div><div id="shStop"></div><div id="hbFx"></div><div id="bombBar"></div>
+<div id="mugung"><canvas id="mugOwl"></canvas><div id="mugTxt"></div></div><div id="mugFx"></div><div id="asnWarn"></div><div id="asnFx"></div><div id="shStop"></div><div id="hbFx"></div><div id="bombBar"></div>
 <div id="ov-rps" class="ov"><h2 id="rpsTitle">✊ 가위바위보</h2><p id="rpsLast" class="big"></p><p id="rpsSub" class="dim"></p><div id="rpsBtns" class="rpsbtns"><button data-rps="r">✊<small>바위</small></button><button data-rps="s">✌️<small>가위</small></button><button data-rps="p">✋<small>보</small></button></div></div>
 <div id="ov-shake" class="ov"><h2>📳 폰을 세게 흔드세요!</h2><p class="dim">3번 흔들면 50% 확률로 탈출</p><div id="shakeDots" class="shakedots"></div><p id="shakeLeft" class="big"></p></div>
 <div id="ov-snipe" class="ov"><video id="snipeVideo" playsinline muted></video><div class="scope"><i></i></div>
   <div class="snipeHud"><div id="snipeHead"></div><p class="dim" style="color:#cfd6df;text-shadow:0 1px 4px #000">폰을 세워 상대 쪽으로 겨누고 쏘세요 (40m 안 · ±10°, 가까우면 최대 ±35°)</p><button id="btnSnipeFire" class="danger" style="max-width:360px">🎯 발사</button><button id="btnSnipeClose" style="max-width:360px">취소</button></div></div>
+<div id="ov-asnSell" class="ov"><h2 id="asnSellT"></h2><p id="asnSellP" class="dim"></p><button id="btnAsnForgive" class="primary">🤝 용서하기</button><button id="btnAsnSell" class="danger">💸 팔아넘기기</button></div>
 <div id="ov-pick" class="ov"><h2 id="pickTitle"></h2><p id="pickSub" class="dim"></p><div id="pickList" class="cards"></div><button id="btnPickClose">취소</button></div>
 <div id="ov-resume" class="ov"><h2>센서를 다시 켜야 해요</h2><p class="dim">GPS와 나침반을 켜려면 눌러주세요</p><button id="btnResume" class="primary">센서 켜기</button></div>
 <div id="toast" class="toast"></div>
@@ -603,7 +615,7 @@ const Logic = (() => {
   }
   function hpRaw(p, hit) {
     const caught = p.role === 'runner' ? ((hit && hit.catches) || 0) : 0;
-    return RULES.HP_MAX - (p.selfDmg || 0) - caught * RULES.CATCH_DMG - ((hit && hit.ext) || 0); // ext: 자폭 등 남이 준 피해
+    return (p.hpMax || RULES.HP_MAX) - (p.selfDmg || 0) - caught * RULES.CATCH_DMG - ((hit && hit.ext) || 0); // ext: 자폭 등 남이 준 피해 / hpMax: 암살전 부하는 60
   }
   // 시계: 메인에서 서버 기준 시각으로 바꿔 끼움 (테스트에서도 바꿀 수 있게)
   let clock = () => Date.now();
@@ -617,9 +629,102 @@ const Logic = (() => {
     const cb = p.augs && p.augs.comeback;
     if (raw <= 0 && !died && cb && (cb.readyAt || 0) <= clock()) return 1;
     if (raw <= 0 && hit && (hit.pendUntil || 0) > clock()) return 1; // 흔들어 탈출 판정 중엔 탈락 보류
-    return Math.min(RULES.HP_MAX, Math.max(0, raw));
+    if (isAsnRole(p.role)) return Math.min(p.hpMax || RULES.HP_MAX, Math.max(1, raw)); // 암살전: 체력 0 = 기절 (탈락 없음)
+    return Math.min(p.hpMax || RULES.HP_MAX, Math.max(0, raw));
   }
   const alive = (p, hit) => hpOf(p, hit) > 0;
+  // ---------- 암살전 ----------
+  // 역할(role) 자리에 '무리 id'(k로 시작)를 넣음 → 기존 '같은 팀 / 상대 팀' 비교가 무리 단위로 그대로 동작
+  // room.asn = { chain: 'kA,kB,kC'(사슬 순서: 앞 무리가 다음 무리를 노림), crews: { kA: { boss } }, mem: { pid: 무리 }, since: { pid: 무리에 들어온 시각 },
+  //              n: { pid: 잡은 수 }, rebel: { pid: 1 (하극상 씀) }, duelAt: 최후의 결투 시작 시각 }
+  const isAsnRole = r => typeof r === 'string' && r[0] === 'k';
+  const ASN = { STAB_SEC: 3, REBEL_SEC: 3, REBEL_GUARD_SEC: 2, REBEL_GUARD_M: 15, REBEL_WAIT_SEC: 300, INV_SEC: 60, STUN_SEC: 120, STUN_HP: 30,
+    MINION_HP: 60, MINION_ST: 0.7, WARN_M: 30, BEHIND_DEG: 60, FRONT_DEG: 90, NEAR_M: 10, BLOOD_EVERY: 300, BLOOD_SEC: 60,
+    DUEL_SHRINK_SEC: 300, DUEL_MIN_K: 0.35, GIVE_M: 20, PING_SEC: 30, SELL_SEC: 60, KEEP_SEC: 20 };
+  const asnChain = a => (a && a.chain ? String(a.chain).split(',').filter(Boolean) : []);
+  const asnTarget = (a, crew) => { const c = asnChain(a), i = c.indexOf(crew); return i < 0 || c.length < 2 ? null : c[(i + 1) % c.length]; };
+  const asnHunter = (a, crew) => { const c = asnChain(a), i = c.indexOf(crew); return i < 0 || c.length < 2 ? null : c[(i - 1 + c.length) % c.length]; };
+  const asnBoss = (a, crew) => (a && a.crews && a.crews[crew] && a.crews[crew].boss) || null;
+  const asnIsBoss = (a, pid) => !!(a && a.mem && asnBoss(a, a.mem[pid]) === pid);
+  const asnMembers = (a, crew) => Object.entries((a && a.mem) || {}).filter(([, c]) => c === crew).map(([id]) => id);
+  // 시작: 각자 1인 무리(우두머리), 사슬은 무작위
+  function asnStart(ids, now, rnd = Math.random) {
+    const a = ids.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    const crews = {}, mem = {}, since = {}, chain = [];
+    a.forEach((id, i) => { const k = 'k' + i + id.slice(0, 4); crews[k] = { boss: id }; mem[id] = k; since[id] = now; chain.push(k); });
+    return { chain: chain.join(','), crews, mem, since, n: {}, rebel: {}, duelAt: null };
+  }
+  const asnClone = a => ({ ...a, crews: { ...(a.crews || {}) }, mem: { ...(a.mem || {}) }, since: { ...(a.since || {}) }, n: { ...(a.n || {}) }, rebel: { ...(a.rebel || {}) } });
+  function asnDropCrew(b, crew, now) { // 무리를 사슬에서 빼기 (앞 무리는 자동으로 다음 무리를 노림)
+    b.chain = asnChain(b).filter(k => k !== crew).join(','); delete b.crews[crew];
+    if (asnChain(b).length === 2 && !b.duelAt) b.duelAt = now;
+  }
+  // 암살 성공: 부하면 그 사람만, 우두머리면 무리 통째로 잡은 사람 무리로. blood: 피의 시간(사슬 무시). 안 되면 null
+  function asnCatch(a, victim, catcher, now, blood) {
+    if (!a || !a.mem) return null;
+    const cv = a.mem[victim], cc = a.mem[catcher];
+    if (!cv || !cc || cv === cc || !a.crews[cv] || !a.crews[cc]) return null;
+    if (!blood && asnTarget(a, cc) !== cv) return null;
+    const b = asnClone(a), whole = asnBoss(a, cv) === victim, moved = whole ? asnMembers(a, cv) : [victim];
+    for (const id of moved) { b.mem[id] = cc; b.since[id] = now; }
+    if (whole) asnDropCrew(b, cv, now);
+    b.n[catcher] = (b.n[catcher] || 0) + 1;
+    return { asn: b, moved, whole, from: cv, to: cc };
+  }
+  // 하극상 성공: 내가 우두머리, 원래 우두머리는 부하
+  function asnRebel(a, rebel) {
+    const c = a && a.mem && a.mem[rebel], old = c && asnBoss(a, c);
+    if (!c || !old || old === rebel || (a.rebel && a.rebel[rebel])) return null;
+    const b = asnClone(a); b.crews[c] = { ...b.crews[c], boss: rebel }; b.rebel[rebel] = 1;
+    return { asn: b, old };
+  }
+  // 팔아넘기기: 그 부하를 우리 무리를 노리는 무리로
+  function asnSell(a, pid, now) {
+    const c = a && a.mem && a.mem[pid], h = c && asnHunter(a, c);
+    if (!c || !h || h === c || asnBoss(a, c) === pid) return null;
+    const b = asnClone(a); b.mem[pid] = h; b.since[pid] = now;
+    return { asn: b, to: h };
+  }
+  // 우두머리가 기권하면: 살아 있는 부하 중 잡은 수가 가장 많은 사람(같으면 아이디 순)이 새 우두머리. 살아 있는 사람이 없으면 무리를 사슬에서 뺌
+  function asnFix(a, aliveIds, now) {
+    if (!a || !a.chain) return null;
+    const b = asnClone(a); let changed = false;
+    for (const k of asnChain(a)) {
+      const live = asnMembers(a, k).filter(id => aliveIds.includes(id));
+      if (!live.length) { asnDropCrew(b, k, now); changed = true; continue; }
+      if (!live.includes(asnBoss(a, k))) { live.sort((x, y) => ((a.n || {})[y] || 0) - ((a.n || {})[x] || 0) || (x < y ? -1 : 1)); b.crews[k] = { ...b.crews[k], boss: live[0] }; changed = true; }
+    }
+    return changed ? b : null;
+  }
+  // 피의 시간: 추격 시작 5분 뒤부터 5분마다 1분
+  function asnBlood(now, startAt, shift = 0) {
+    const s = startAt + RULES.HIDE_SEC * 1000, e = now - s, P = ASN.BLOOD_EVERY * 1000, D = ASN.BLOOD_SEC * 1000;
+    if (!startAt || e < P) return { on: false, next: s + P };
+    const k = Math.floor(e / P), into = e - k * P;
+    if (phaseAt(now, startAt, shift).phase !== 'chase') return { on: false, next: null };
+    return into < D ? { on: true, until: s + k * P + D, k } : { on: false, next: s + (k + 1) * P };
+  }
+  // 최후의 결투: 구역이 5분 동안 35%까지 줄어듦
+  const asnDuelK = (a, now) => (a && a.duelAt ? Math.max(ASN.DUEL_MIN_K, 1 - (1 - ASN.DUEL_MIN_K) * (now - a.duelAt) / (ASN.DUEL_SHRINK_SEC * 1000)) : 1);
+  const angGap = (x, y) => Math.abs(((x - y) % 360 + 540) % 360 - 180);
+  // 뒤에서 암살: 두 폰이 같은 쪽(±60°)을 보고, 상대가 내 앞쪽(±90°)에 있어야 함. 상대 나침반이 없으면 어느 방향이든 됨
+  // 가까워서 GPS 방향을 믿을 수 없으면(거리 < 두 폰 오차) 앞쪽 검사는 건너뜀
+  function behindOk(myHd, theirHd, brg, d, accSum) {
+    if (myHd == null) return false;
+    if (theirHd == null) return true;
+    if (angGap(myHd, theirHd) > ASN.BEHIND_DEG) return false;
+    return d < Math.max(4, accSum) || angGap(brg, myHd) <= ASN.FRONT_DEG;
+  }
+  // 승리: 무리가 하나 남으면 그 우두머리. 시간이 끝나면 살아 있는 사람이 가장 많은 무리의 우두머리 (같으면 우두머리가 잡은 수)
+  function asnWinner(a, players, hits, now, startAt, shift = 0) {
+    const ch = asnChain(a); if (!ch.length) return null;
+    const live = k => asnMembers(a, k).filter(id => players[id] && alive(players[id], (hits || {})[id])).length;
+    if (ch.length === 1) return { winner: 'asn', boss: asnBoss(a, ch[0]), crew: ch[0], reason: '모두 한 무리가 됨' };
+    if (phaseAt(now, startAt, shift).phase !== 'over') return null;
+    const best = ch.map(k => [k, live(k), ((a.n || {})[asnBoss(a, k)] || 0)]).sort((x, y) => y[1] - x[1] || y[2] - x[2])[0];
+    return { winner: 'asn', boss: asnBoss(a, best[0]), crew: best[0], reason: `시간 끝 · 무리 ${best[1]}명` };
+  }
   // 상대 화면(화살표·미니맵·순간 포착)에 보이는 위치: 분신이 켜져 있으면 분신 자리, 자리 바꾸기 중이면 바꾼 팀원 자리
   // 도플갱어: 분신이 brg 방향으로 초속 ms m씩 걸어감
   function movePoint(pos, brg, m) {
@@ -754,7 +859,7 @@ const Logic = (() => {
   }
   // 게임 모드: classic(기본) · zombie(잡히면 좀비가 됨) · police(경찰과 도둑: 잡히면 감옥)
   // mafia(마피아: 정체 숨김, 마피아는 QR로 잡으면 바로 탈락, 5분마다 투표로 1명 추방)
-  const MODES = { classic: '기본', zombie: '🧟 좀비', police: '🚓 경찰과 도둑', mafia: '🕵️ 마피아', ice: '🧊 얼음땡' };
+  const MODES = { classic: '기본', zombie: '🧟 좀비', police: '🚓 경찰과 도둑', mafia: '🕵️ 마피아', ice: '🧊 얼음땡', assassin: '🗡️ 암살전' };
   const MODE_RULES = { JAIL_MAX_R: 40, JAIL_MIN_R: 3, ICE_MOVE_M: 10, ICE_DRAIN_M: 30, ICE_DRAIN: 1, ICE_FREEZE_SEC: 10, ICE_INV_SEC: 10, ICE_SELF_SEC: 30, JAIL_R: 15, JAIL_GO_SEC: 120, POLICE_FREEZE_SEC: 30, RESCUE_INV_SEC: 60, MF_VOTE_EVERY: 300, MF_VOTE_SEC: 60, MF_SNAP_SEC: 30, MF_PICK_M: 10, MF_GUARD_SEC: 300 };
   function winner(players, hits, now, startAt, shift = 0, mode = 'classic') {
     const list = Object.entries(players || {}).filter(([, p]) => p.role);
@@ -1174,7 +1279,8 @@ const Logic = (() => {
     a.forEach((id, i) => { roles[id] = i < n ? 'chaser' : 'runner'; });
     return roles;
   }
-  return { beatGap, aimAt, rpsWinner, MF_AUGS, aimTarget, assignJobs, voteRound, voteResult, movingPos, segCross, clampLen, shownAlt, altLabel, edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
+  return { isAsnRole, ASN, asnChain, asnTarget, asnHunter, asnBoss, asnIsBoss, asnMembers, asnStart, asnCatch, asnRebel, asnSell, asnFix, asnBlood, asnDuelK, angGap, behindOk, asnWinner,
+    beatGap, aimAt, rpsWinner, MF_AUGS, aimTarget, assignJobs, voteRound, voteResult, movingPos, segCross, clampLen, shownAlt, altLabel, edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec, spotStale, spotStaleMs, moveSpot,
     MODES, MODE_RULES, setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
     interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM, augDomainM, polyCheck, inArea, polyGap, areaRing, POLY_MAX };
@@ -1576,12 +1682,13 @@ renderFs();
 renderSet();
 const ROLE_NAME = { chaser: '추격자', runner: '도망자' };
 // 모드별 역할 이름 (마피아 모드는 경찰·의사 직업 이름)
-const MODE_ROLE = { ice: { chaser: '술래', runner: '도망자' }, zombie: { chaser: '좀비', runner: '생존자' }, police: { chaser: '경찰', runner: '도둑' }, mafia: { chaser: '마피아', runner: '시민' } };
+const MODE_ROLE = { assassin: { chaser: '우두머리', runner: '부하' }, ice: { chaser: '술래', runner: '도망자' }, zombie: { chaser: '좀비', runner: '생존자' }, police: { chaser: '경찰', runner: '도둑' }, mafia: { chaser: '마피아', runner: '시민' } };
 const JOB_NAME = { police: '경찰', doctor: '의사', exPolice: '경찰' };
-const roleName = (role, room, job) => (modeOf(room) === 'mafia' && job && JOB_NAME[job]) || (MODE_ROLE[modeOf(room)] || ROLE_NAME)[role] || '';
+const roleName = (role, room, job, pid) => Logic.isAsnRole(role) ? (pid ? (Logic.asnIsBoss(room && room.asn, pid) ? '우두머리' : '부하') : '암살자') : (modeOf(room) === 'mafia' && job && JOB_NAME[job]) || (MODE_ROLE[modeOf(room)] || ROLE_NAME)[role] || '';
 const ROLE_RGBA = { chaser: 'rgba(255,77,79,.85)', runner: 'rgba(59,163,255,.85)' };
 // 슬롯머신처럼 역할이 돌다가 내 역할에서 멈춤 (배정은 방장이 시작할 때 랜덤으로 이미 정해짐)
 function showRoleReveal(role) {
+  if (Logic.isAsnRole(role)) return asnReveal();
   const reel = $('#reel'), items = [], room = S.room, me = (room && room.players[S.pid]) || {}, mine = roleName(role, room, me.job);
   for (let i = 0; i < 23; i++) items.push(i % 2 ? 'runner' : 'chaser');
   items.push(role);
@@ -1932,7 +2039,7 @@ function drawMaps() {
   if (S.screen === 's-game' && maps.gmap) {
     const me = room.players && room.players[S.pid], mo = maps.gmap;
     drawSelf(mo, me && me.role === 'chaser' ? '#ff4d4f' : '#3ba3ff'); drawArea(mo, area);
-    drawSpots(mo); drawRadar(mo); drawSkills(mo); drawJail(mo);
+    drawSpots(mo); drawRadar(mo); drawSkills(mo); drawJail(mo); drawAsn(mo);
     drawSpectator(mo, me && me.role && !Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid]));
     if (S.follow && S.fix) mo.map.panTo([S.fix.lat, S.fix.lng], { animate: false });
   }
@@ -2092,6 +2199,7 @@ function onEvent(e) {
     if (off < W + 1) { mugSound(off); if (me0.role === 'runner') { const p = mugVib(off); if (p.length) vibrate(p); } }
     return;
   }
+  if (e.type && e.type.startsWith('asn')) return asnEvent(e, me0, who);
   if (e.type === 'chatOpen') {
     if (e.by !== S.pid && me0.role === e.role) { toast(`💬 ${who(e.by)}가 팀 대화방을 열었어요! 위의 💬 버튼`, true); vibrate([60, 40, 60]); }
     return;
@@ -2472,6 +2580,7 @@ function renderLobby() {
   document.querySelectorAll('#l-mode [data-mode]').forEach(b => { b.classList.toggle('on', b.dataset.mode === mode); b.disabled = !isHost; });
   $('#l-chLabel').textContent = { zombie: '처음 좀비 수', police: '경찰 수', mafia: '마피아 수', ice: '술래 수' }[mode] || '추격자 수';
   $('#l-rnLabel').textContent = roleName('runner', room);
+  $('#l-chLabel').parentElement.style.display = $('#l-rnLabel').parentElement.style.display = mode === 'assassin' ? 'none' : ''; // 암살전: 역할 수 없음
   $('#l-modeHint').textContent = (mode === 'classic' ? `잡히면 체력 -${mergedSettings(room).out.CATCH_DMG}, 체력 0이면 탈락` : MODE_HINT[mode]) + (mode === 'police' ? (room.settings.jail ? ' · 감옥 위치 정해짐' : ' · 감옥: 안 정하면 구역 중심') : '');
   $('#l-jailRow').style.display = isHost && mode === 'police' && !S.jailEdit ? '' : 'none';
   renderJailBox(isHost && mode === 'police');
@@ -2521,6 +2630,7 @@ function renderLobby() {
   drawMaps();
 }
 const MODE_HINT = {
+  assassin: `모두 우두머리로 시작해서 몰래 정해진 타깃을 뒤에서 ${Logic.ASN.STAB_SEC}초 꾹 눌러 암살. 잡히면 부하가 되고, 마지막에 남은 우두머리가 승리 · 3명 이상 · 나침반 필요`,
   ice: `잡히면 그 자리에서 얼음(${Logic.MODE_RULES.ICE_MOVE_M}m 넘게 움직이면 체력 감소), 팀원이 QR을 찍어 주면 땡. 술래가 ${Logic.MODE_RULES.ICE_DRAIN_M}m 밖이면 얼음인 사람 체력이 닳아요. 스스로 얼음도 가능. 도망자 전원이 얼면 술래 승리`,
   zombie: '잡히면 바로 좀비가 돼서 같이 쫓아요. 시간 끝까지 버틴 생존자 모두 승리',
   mafia: '마피아가 누군지 몰라요. 마피아는 QR로 몰래 잡고(바로 탈락), 5분마다 투표로 1명 추방. 경찰은 조사·저격총, 의사는 보호. 탈락하면 말하면 안 돼요',
@@ -2651,8 +2761,10 @@ $('#l-r').onchange = safe(async () => {
 $('#btnStart').onclick = safe(async () => {
   const room = S.room, ids = Object.keys(room.players), n = ids.length;
   if (n < 2) return toast('2명 이상이어야 해요');
+  if (modeOf(room) === 'assassin' && n < 3) return toast('암살전은 3명 이상이어야 해요');
   if (S.polyEdit || S.jailEdit) return toast('✔ 완료나 취소를 먼저 눌러 주세요', true);
-  const roles = Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
+  const asn0 = modeOf(room) === 'assassin' ? Logic.asnStart(ids, Math.round(now())) : null; // 암살전: 모두 1인 무리의 우두머리 + 무작위 사슬
+  const roles = asn0 ? { ...asn0.mem } : Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
   const game = mergedSettings(room).out, mafia = modeOf(room) === 'mafia'; // 모든 폰이 같은 설정으로 시작
   const jobs = mafia ? Logic.assignJobs(roles, game.MF_POLICE || 0, game.MF_DOCTOR || 0) : {};
   Logic.applySettings(gameRules({ settings: { ...room.settings, game } }));
@@ -2661,7 +2773,7 @@ $('#btnStart').onclick = safe(async () => {
   for (const id of ids) {
     u[`players/${id}/role`] = roles[id];
     u[`players/${id}/selfDmg`] = 0;
-    u[`players/${id}/st`] = RULES.ST_MAX[roles[id]];
+    u[`players/${id}/st`] = asn0 ? RULES.ST_MAX.runner : RULES.ST_MAX[roles[id]];
     u[`players/${id}/frozenUntil`] = 0;
     u[`players/${id}/anchor`] = null;
     u[`players/${id}/qr`] = roles[id] === 'runner' || mafia ? rid(12, ALNUM) : null; // 마피아 모드: 모두 QR (마피아도 숨어야 하니까)
@@ -2673,9 +2785,11 @@ $('#btnStart').onclick = safe(async () => {
     u[`players/${id}/decoy`] = null;
     u[`players/${id}/forfeit`] = null;
     u[`players/${id}/stats`] = null;
+    for (const k of ['hpMax', 'crewAt', 'stunUntil', 'hd', 'augIn']) u[`players/${id}/${k}`] = null; // 암살전
     for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'iceSelf', 'frame', 'silentUntil', 'tele', 'revealUntil', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag', 'out', 'job', 'guard', 'shadowStop', 'mapHideUntil']) u[`players/${id}/${k}`] = null;
     if (jobs[id]) u[`players/${id}/job`] = jobs[id]; // 마피아 모드: 경찰·의사
   }
+  u.asn = asn0; u.stabs = null; if (!('chats' in u)) u.chats = null;
   // 리플레이: 이번 판 동선은 방 데이터와 따로 저장. 보안 규칙이 아직 옛날 거라 거절되면 리플레이 없이 진행
   u.replayId = null; u.replayExp = null;
   try {
@@ -2694,6 +2808,7 @@ function enterGame() {
   if (S.gameKey !== key) {
     S.gameKey = key;
     Object.assign(S, {
+      asnKey: null, stab: null, sellFor: null, asnInDone: new Set(), bloodK: null, duelSeen: null, asnNearAt: 0, asnFixAt: 0,
       augs: me.augs || {}, augBarHtml: null, offerSent: false, lastSnapIdx: null, spotBusy: false, trapBusy: false, fakeBusy: false, trapReveals: [], alarmAt: 0,
       detects: [], shake: null, mugHit: null, pickCb: null, hist: {}, rhDist: 0, camIn: {}, mfChecked: {}, rifleDropped: false, rifleBusy: false, voteShownK: 0, voteResolving: 0, hurtOut: false, mfSnapIdx: null, blockHit: {}, blockPrev: null, myTrail: [], netWas: false, hound: null, chatLastAt: now(), chatUnread: 0, chatHtml: '', hbNext: 0, shadowHit: {}, shadowDmgAt: null, bombGone: {}, blockPick: null, pingFake: false, trackSnap: {}, supBusy: false,
       supSeen: Object.fromEntries(Object.entries(room.supplies || {}).filter(([, b]) => now() >= b.pubAt).map(([id]) => [id, 1])), reviveAt: (me.revive && me.revive.at) || null,
@@ -2754,7 +2869,7 @@ $('#btnNorth').onclick = () => {
 /* ---------- 증강 ---------- */
 Logic.setClock(now);
 const av = id => Logic.augVal(S.augs, id);
-const stMaxOf = role => RULES.ST_MAX[role] + (av('chaserSt') || 0) + (av('runnerSt') || 0);
+const stMaxOf = role => (Logic.isAsnRole(role) ? Math.round(RULES.ST_MAX.runner * (asnMeBoss() ? 1 : Logic.ASN.MINION_ST)) : RULES.ST_MAX[role]) + (av('chaserSt') || 0) + (av('runnerSt') || 0); // 암살전 부하 70%
 const arrowEverySec = () => { const v = av('arrowBoost'); return v ? Logic.augArrowSec(v) : RULES.ARROW_EVERY_SEC; };
 const intelSec = () => { const v = av('fastIntel'); return v ? Logic.augIntelSec(v) : RULES.MAP_EVERY_SEC; };
 // 단색 선 아이콘 (등급 색으로 칠해짐)
@@ -2882,6 +2997,7 @@ const GRADE_FX = {
 };
 function gainAug(id, source) {
   const me = S.room && S.room.players[S.pid]; if (!me || !id) return;
+  if (asnOn(S.room) && !asnMeBoss() && asnMyAugIds().length >= 1 && !S.augs[id]) return asnTribute([id], 'tribute'); // 암살전 부하는 능력 1칸: 넘치면 우두머리에게
   const r = Logic.addAug(S.augs, id, now());
   if (r.dup) return toast(`${source}: 이미 가진 증강이에요`);
   S.augs = r.augs;
@@ -2912,6 +3028,7 @@ function augBan(role) {
   if (modeOf(room) !== 'ice') ban.push('iceMine', 'remoteThaw');                // 얼음땡 전용
   if (role === 'runner' && !mates.length) ban.push('telepathy', 'sacrifice');    // 팀원이 있어야 의미 있음  // 좀비·경찰과 도둑: 잡기가 체력·정지 방식이 아니라 의미 없음
   if (modeOf(room) === 'mafia') ban.push(...Object.keys(Logic.AUGS).filter(id => !Logic.MF_AUGS.includes(id))); // 마피아: 정체가 드러나지 않는 공통 증강만
+  if (modeOf(room) === 'assassin') ban.push('timeThief', 'bounty', 'teamChat', 'allIn'); // 암살전: 추격자·도망자 전제이거나 단톡방이 이미 있음
   return ban;
 }
 function gainRandom(source) {
@@ -3043,6 +3160,7 @@ function useAug(id) {
   if (!me || !x || !Logic.augReady(x, t) || Logic.AUGS[id].auto) return;
   if ((me.silenceUntil || 0) > t) return toast(`🔇 침묵 중이라 스킬을 못 써요 (${fmt(me.silenceUntil - t)})`);
   if (fxOn('stop', t)) return toast('⏸ 시간 정지 중이라 능력을 못 써요');
+  if (asnOn(room) && asnStunned(me, t)) return toast('😵 기절 중이라 능력을 못 써요');
   const v = av(id), here = S.fix ? { lat: S.fix.lat, lng: S.fix.lng } : null, hits = room.hits || {};
   if (id === 'insight') return openInsight();
   if (id === 'cordon') { S.cordonPick = true; return toast('🕸 포위망 칠 곳을 지도에서 탭하세요', true); }
@@ -3994,10 +4112,10 @@ function checkSupplies(me, t) {
   }
 }
 // 팀 대화방: 우리 팀 대화방이 열려 있는 동안(살아 있을 때만) 💬 버튼. 도청이 있으면 상대 팀 글도 보임
-const chatOpenOf = (room, me, t) => { const co = room && me && me.role && room.chatOpen && room.chatOpen[me.role]; return co && (co.until || 0) > t ? co : null; };
+const chatOpenOf = (room, me, t) => { if (asnOn(room) && me && Logic.isAsnRole(me.role)) return { until: Infinity, asn: 1 }; /* 암살전: 무리 단톡방은 항상 */ const co = room && me && me.role && room.chatOpen && room.chatOpen[me.role]; return co && (co.until || 0) > t ? co : null; };
 function chatMsgs(room, me) {
   const ear = !!av('eavesdrop');
-  return Object.entries(room.chats || {}).map(([id, m]) => ({ id, ...m })).filter(m => m.role === me.role || (ear && m.role)).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-40);
+  return Object.entries(room.chats || {}).map(([id, m]) => ({ id, ...m })).filter(m => (asnOn(room) ? (m.role === me.role ? (m.at || 0) >= (me.crewAt || 0) : ear && m.role === Logic.asnTarget(room.asn, me.role)) : m.role === me.role || (ear && m.role))).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-40);
 }
 function chatLoop(inGame, room, me, t) {
   const ov = $('#ov-chat'), btn = $('#btnChat');
@@ -4016,12 +4134,12 @@ function chatLoop(inGame, room, me, t) {
   $('#chatBadge').textContent = S.chatUnread ? String(Math.min(S.chatUnread, 9)) : '';
   if (!ov.classList.contains('on')) return;
   S.chatUnread = 0;
-  $('#chatLeft').textContent = co ? `${fmt(co.until - t)} 남음` : '';
+  $('#chatLeft').textContent = co && !co.asn ? `${fmt(co.until - t)} 남음` : '';
   const html = msgs.map(m => `<div class="cmsg ${m.by === S.pid ? 'mine' : m.role !== me.role ? 'enemy' : ''}"><b>${m.role !== me.role ? '🎧 상대 팀 · ' : ''}${name(m.by)}</b>${esc(m.text)}</div>`).join('');
   if (html !== S.chatHtml) { S.chatHtml = html; const L = $('#chatList'); L.innerHTML = html; L.scrollTop = L.scrollHeight; }
 }
 function openChat() {
-  const room = S.room, enemy = roleName(((room.players[S.pid] || {}).role === 'chaser' ? 'runner' : 'chaser'), room);
+  const room = S.room, enemy = asnOn(room) ? '적' : roleName(((room.players[S.pid] || {}).role === 'chaser' ? 'runner' : 'chaser'), room);
   const q = ['📍 모여!', '💨 흩어져!', '🆘 도와줘!', `⚠️ ${enemy} 근처!`, `👀 ${enemy} 봤어!`, '✦ 증강 지점 있어', '✋ 기다려', '👍 알겠어'];
   $('#chatQuick').innerHTML = q.map(x => `<button data-chatq="${esc(x)}">${esc(x)}</button>`).join('');
   S.chatHtml = ''; S.chatUnread = 0; $('#ov-chat').classList.add('on');
@@ -4130,6 +4248,7 @@ let augDown = null, augHold = 0, augLongAt = 0;
 function showAugInfo(id) {
   const a = Logic.AUGS[id]; if (!a) return;
   $('#augInfoCard').innerHTML = `<div class="augcard g${a.grade}"><span class="ic">${icon(id)}<i>${a.grade}</i></span><span><b>${a.name}</b><small>${Logic.augDesc(id)}</small></span></div>`;
+  asnGiveHtml(id);
   S.infoDown = false; $('#ov-augInfo').classList.add('on'); vibrate(30);
 }
 $('#ov-augInfo').addEventListener('pointerdown', () => { S.infoDown = true; });
@@ -4316,7 +4435,7 @@ function bindLongPress(mo) {
 function openPing(ll) {
   const room = S.room, me = room && room.players[S.pid];
   if (!me || !me.role || room.status !== 'playing' || !Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid])) return;
-  const left = 10000 - (Date.now() - S.pingAt);
+  const left = (asnOn(room) ? Logic.ASN.PING_SEC * 1000 : 10000) - (Date.now() - S.pingAt); // 암살전: 지시 핑 30초에 1번
   if (left > 0 && !S.pingFake) return toast(`핑은 ${Math.ceil(left / 1000)}초 뒤에 다시 찍을 수 있어요`);
   $('#ov-ping h2').textContent = S.pingFake ? '🎭 위조 핑' : '팀 핑';
   $('#ov-ping p').textContent = S.pingFake ? '상대 팀 지도에 그 팀원이 찍은 것처럼 20초 동안 보여요' : '같은 팀 지도에 20초 동안 보여요';
@@ -4638,6 +4757,7 @@ function tick() {
   const stMax = stMaxOf(me.role), recMul = av('recoverBoost') || 1;
   S.st = Math.min(S.st, stMax); // 빼앗긴 스태미나 증강 등으로 최대치가 줄었을 때
   comebackCheck(me, hits, t); lastStandCheck(me, hits, t);
+  if (asnOn(room)) asnPre(room, me, t);
   const meAlive = Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]);
   // 잡히거나 남의 공격으로 탈락한 경우도 탈락 시각·알림 기록
   if (me.out && !S.hurtOut) { S.hurtOut = true; hurtBy({ mafia: '마피아에게 잡힘', vote: '투표로 추방', shot: '경찰 저격', misfire: '시민을 쏨' }[me.out.why] || '탈락', me.out.by); }
@@ -4712,7 +4832,7 @@ function tick() {
   // 2) 구역 밖 / 탈것
   const area = room.settings && room.settings.area;
   // 자기장: 도망자에게는 줄어든 반경이 구역
-  const areaK = area && me.role === 'runner' ? Logic.stormR(area.r, room.storm, t) / area.r : 1;
+  const areaK = area && asnOn(room) ? Logic.asnDuelK(room.asn, t) : area && me.role === 'runner' ? Logic.stormR(area.r, room.storm, t) / area.r : 1; // 암살전 최후의 결투: 구역이 줄어듦
   const inFull = !area || !S.fix || Logic.inArea(S.fix, area), inNow = !area || !S.fix || Logic.inArea(S.fix, area, areaK);
   const exitOn = S.augs.exit && (S.augs.exit.until || 0) > t; // 비상구: 구역 밖이어도 괜찮음
   const outside = gpsOk && !!area && !inNow && !exitOn;
@@ -4831,6 +4951,7 @@ function tick() {
       if (real - S.alarmAt > 3000) { S.alarmAt = real; vibrate([150, 80, 150]); }
     }
   }
+  if (asnOn(room)) asnTick(room, me, t, gpsOk, warn);
   // 6) 증강 지점 줍기, 상대 덫·가짜 보물, 정기 보상
   // 잔상용 내 위치 기록 (20초)
   if (me.role === 'runner') { (S.myTrail = S.myTrail || []).push({ t, lat: S.fix.lat, lng: S.fix.lng }); while (S.myTrail.length && t - S.myTrail[0].t > 20000) S.myTrail.shift(); }
@@ -4912,6 +5033,7 @@ function tick() {
     toast(`👣 움직였어요! 체력 -${sa.dmg}`, true); flash('rgba(167,139,250,.95)'); vibrate([300, 100, 300]); sfx('trap');
   }
 
+  if (asnOn(room) && asnStunned(me, t)) dmg = 0; // 기절 중엔 더 안 깎임
   S.selfDmg += dmg; S.warn = warn;
   if (hurt && dmg > 0) hurtBy(hurt.why, hurt.by);
   // 위험 경고: 처음엔 크게 알림 + 진동, 계속되면 3초마다 진동
@@ -4931,7 +5053,7 @@ function tick() {
   S.warnWas = warn.length > 0;
   if (dead || real - S.lastWrite >= 2000) {
     S.lastWrite = real;
-    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, posAt: Math.round(t), acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), alt: S.alt == null ? null : Math.round(S.alt * 10) / 10, lag: (me.lagUntil || 0) > t ? lagPos(t) : null, selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
+    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, posAt: Math.round(t), hd: asnHd(), acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), alt: S.alt == null ? null : Math.round(S.alt * 10) / 10, lag: (me.lagUntil || 0) > t ? lagPos(t) : null, selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
       stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
   }
   renderGame();
@@ -4958,6 +5080,7 @@ setInterval(countdownLoop, 200);
 function overlayLoop() {
   const room = S.room, inGame = !!room && room.status === 'playing' && !room.result && S.screen === 's-game';
   joyLoop(inGame);
+  asnOverlay(inGame, room, (inGame && room.players[S.pid]) || {}, now());
   if (inGame) rpsLoop(room);
   $('#gwrap').classList.toggle('fogged', inGame && fogged(now()));
   { const t0 = now(); const g = $('#gwrap').classList; const fl = inGame && fxOn('flip', t0); if (g.contains('flipped') !== fl) { g.toggle('flipped', fl); if (maps.gmap && maps.gmap.map._rotApply) maps.gmap.map._rotApply(); } g.toggle('rainy', inGame && (fxOn('rain', t0) || fxOn('rain', t0, true))); g.toggle('stopped', inGame && fxOn('stop', t0)); g.toggle('golden', inGame && fxOn('gold', t0, true)); }
@@ -5188,12 +5311,401 @@ setInterval(() => { // 미니맵 배지: 찍힌 지 몇 초 됐는지 + 오래�
   }
 }, 1000);
 
+// ---------- 암살전 (화면·진행) ----------
+// 무리 = 역할 자리에 들어간 'k…' 아이디. 진짜 기록은 room.asn (사슬·무리·우두머리), players/{id}/role은 그걸 따라 씀
+const asnOn = room => modeOf(room) === 'assassin' && !!(room && room.asn);
+const asnMeBoss = () => !!(S.room && Logic.asnIsBoss(S.room.asn, S.pid));
+const asnHd = () => (asnOn(S.room) && S.compass && S.heading != null ? Math.round(S.heading) : null);
+const asnStunned = (p, t) => ((p && p.stunUntil) || 0) > t;
+const asnMyAugIds = () => Object.keys(S.augs || {}).filter(k => Logic.AUGS[k]);
+const asnName = id => ((S.room && S.room.players[id]) || {}).name || '?';
+// 매초 (tick 앞부분): 내 기록 맞추기, 무리 바뀜 알림, 받은 능력, 체력 0 → 기절
+function asnPre(room, me, t) {
+  const a = room.asn, mine = a.mem && a.mem[S.pid]; if (!mine) return;
+  const boss = Logic.asnIsBoss(a, S.pid), want = boss ? null : Logic.ASN.MINION_HP;
+  if (me.role !== mine || (me.hpMax || null) !== want) {
+    const u = { role: mine, hpMax: want }; if (me.role !== mine) u.crewAt = (a.since && a.since[S.pid]) || t;
+    update(meRef(), u);
+  }
+  const key = mine + ':' + (boss ? 'b' : 'm');
+  if (S.asnKey && S.asnKey !== key) asnChanged(room, S.asnKey, key);
+  S.asnKey = key;
+  // 받은 능력 (양도·상납·몰수·교환)
+  for (const [k, g] of Object.entries(me.augIn || {})) {
+    if (S.asnInDone.has(k)) continue;
+    S.asnInDone.add(k); update(meRef(), { ['augIn/' + k]: null });
+    if (!g || !Logic.AUGS[g.aug]) continue;
+    if (!Logic.asnIsBoss(a, S.pid)) {
+      if (g.why === 'give') { const cur = asnMyAugIds(); if (cur.length) asnTribute(cur, 'swap'); }
+      else if (asnMyAugIds().length >= 1) { asnTribute([g.aug], 'tribute'); continue; } // 부하는 1칸: 꽉 차 있으면 우두머리에게
+    }
+    const r = Logic.addAug(S.augs, g.aug, now());
+    if (r.dup) { toast(`${asnName(g.from)}에게서 받은 [${Logic.AUGS[g.aug].name}]은 이미 있어요`); continue; }
+    S.augs = r.augs; if (g.readyAt) S.augs[g.aug] = { ...S.augs[g.aug], readyAt: g.readyAt };
+    update(meRef(), { ['augs/' + g.aug]: S.augs[g.aug] });
+    toast(`🎁 ${asnName(g.from)}${{ give: '의 양도', tribute: '의 상납', confiscate: '에게서 몰수', swap: '와 교환' }[g.why] || ''}: [${Logic.AUGS[g.aug].name}]`, true); vibrate([60, 40, 60]);
+  }
+  // 체력 0 → 2분 기절 (탈락 없음), 체력 30으로
+  const raw = Logic.hpRaw({ ...me, selfDmg: S.selfDmg }, (room.hits || {})[S.pid]);
+  if (raw <= 0 && !me.forfeit && !asnStunned(me, t)) {
+    S.selfDmg += raw - Logic.ASN.STUN_HP;
+    update(meRef(), { stunUntil: t + Logic.ASN.STUN_SEC * 1000, selfDmg: S.selfDmg });
+    push(roomRef('events'), { type: 'asnStun', by: S.pid, at: serverTimestamp() });
+    toast(`😵 기절! ${Logic.ASN.STUN_SEC / 60}분 동안 암살·능력을 못 쓰고 위치가 적에게 보여요`, true); flash('rgba(156,163,175,.9)'); vibrate([400, 100, 400]); sfx('lose');
+  }
+}
+function asnChanged(room, oldKey, newKey) {
+  const a = room.asn, [oc, ob] = oldKey.split(':'), [nc, nb] = newKey.split(':'), bossName = asnName(Logic.asnBoss(a, nc));
+  if (oc !== nc) {
+    toast(`🗡️ ${bossName}의 부하가 됐어요! 이제 ${bossName} 무리와 함께 움직여요 · 1분 무적`, true); flash('rgba(59,163,255,.9)'); vibrate([300, 100, 300]);
+    S.chatLastAt = now(); S.chatHtml = ''; // 새 무리 대화는 지금부터
+    if (nb === 'm') asnKeepOne('부하가 됐어요');
+  } else if (ob === 'm' && nb === 'b') { toast('👑 우두머리가 됐어요! 이제 타깃 화살표가 보여요', true); flash('rgba(255,77,79,.9)'); vibrate([200, 80, 200]); }
+  else if (ob === 'b' && nb === 'm') { toast(`⚔️ 하극상을 당했어요! 이제 ${bossName}의 부하예요`, true); flash('rgba(167,139,250,.9)'); vibrate([400, 100, 400]); asnKeepOne('우두머리 자리를 뺏겼어요'); }
+  S.st = Math.min(S.st, stMaxOf(nc));
+}
+// 부하가 되면 능력 1개만 남기고 나머지는 우두머리에게 (20초 안에 안 고르면 등급 높은 것)
+function asnKeepOne(why) {
+  const ids = asnMyAugIds(); if (ids.length <= 1) return;
+  const best = ids.slice().sort((x, y) => Logic.GRADES.indexOf(gradeOf(y)) - Logic.GRADES.indexOf(gradeOf(x)))[0];
+  let fired = false;
+  const done = keep => { if (fired) return; fired = true; clearTimeout(S.keepT); const rest = asnMyAugIds().filter(k => k !== keep); if (rest.length) asnTribute(rest, 'tribute'); };
+  openPick('능력 1개만 남겨요', `${why} · 나머지는 우두머리에게 바쳐요 (${Logic.ASN.KEEP_SEC}초 뒤 자동)`, ids.map(k => [k, { name: `[${gradeOf(k)}] ${Logic.AUGS[k].name}` }, Logic.augDesc(k)]), done);
+  clearTimeout(S.keepT);
+  S.keepT = setTimeout(() => { if (S.pickCb === done) { S.pickCb = null; $('#ov-pick').classList.remove('on'); } done(best); }, Logic.ASN.KEEP_SEC * 1000);
+}
+// 내 능력을 우리 우두머리에게 보냄 (상납·몰수·교환)
+function asnTribute(ids, why) {
+  const room = S.room, a = room && room.asn, boss = a && Logic.asnBoss(a, a.mem[S.pid]);
+  if (!boss || boss === S.pid || !ids.length) return;
+  const u = {};
+  for (const id of ids) { const x = (S.augs || {})[id]; u[`players/${boss}/augIn/${rid(8, ALNUM)}`] = { aug: id, from: S.pid, why, readyAt: (x && x.readyAt) || 0 }; }
+  update(roomRef(), u);
+  for (const id of ids) if (S.augs[id]) loseAug(id);
+  toast(`${why === 'confiscate' ? '🫳 몰수' : why === 'swap' ? '🔁 교환' : '🎁 상납'}: ${ids.map(k => Logic.AUGS[k].name).join(', ')} → ${asnName(boss)}`);
+}
+// 우두머리 → 부하 양도 (20m 안)
+function asnGive(aug, to) {
+  const room = S.room, a = room && room.asn, p = room && room.players[to];
+  if (!asnOn(room) || !asnMeBoss() || !S.augs[aug] || !p || a.mem[to] !== a.mem[S.pid] || to === S.pid) return;
+  if (!S.fix || p.lat == null || Logic.dist(S.fix, p) > Logic.ASN.GIVE_M + Math.min(20, (S.fix.acc || 0) + (p.acc || 0))) return toast(`${p.name}이(가) ${Logic.ASN.GIVE_M}m 안에 있어야 건넬 수 있어요`);
+  const x = S.augs[aug];
+  update(roomRef(`players/${to}/augIn/${rid(8, ALNUM)}`), { aug, from: S.pid, why: 'give', readyAt: x.readyAt || 0 });
+  loseAug(aug); toast(`🎁 ${p.name}에게 [${Logic.AUGS[aug].name}] 양도`);
+}
+function asnGiveHtml(id) {
+  const room = S.room; if (!asnOn(room) || !asnMeBoss() || !S.augs[id] || room.status !== 'playing') return;
+  const a = room.asn, mins = Logic.asnMembers(a, a.mem[S.pid]).filter(x => x !== S.pid && room.players[x]);
+  if (!mins.length) return;
+  $('#augInfoCard').insertAdjacentHTML('beforeend', `<div class="asnGive"><small class="dim">부하에게 양도 (${Logic.ASN.GIVE_M}m 안, 부하 칸이 차 있으면 서로 바꿈)</small>${mins.map(x => `<button data-give="${x}" data-aug="${id}">🎁 ${esc(room.players[x].name)}</button>`).join('')}</div>`);
+}
+$('#augInfoCard').addEventListener('click', e => { const b = e.target.closest('[data-give]'); if (b) asnGive(b.dataset.aug, b.dataset.give); });
+// 지금 암살할 수 있는 사람 (가까운 순): 타깃 무리(피의 시간엔 다른 무리 누구나), 무적 아님, GPS상 가까움
+function asnCands(room, t) {
+  const a = room.asn, hits = room.hits || {}, my = a.mem[S.pid], blood = Logic.asnBlood(t, room.startAt, room.timeShift).on, tgt = Logic.asnTarget(a, my), out = [];
+  if (!S.fix) return out;
+  for (const [id, p] of Object.entries(room.players)) {
+    if (id === S.pid || !p.role || p.lat == null || !Logic.alive(p, hits[id])) continue;
+    const c = a.mem[id]; if (!c || c === my || (!blood && c !== tgt)) continue;
+    if (((hits[id] && hits[id].invUntil) || 0) > t) continue;
+    const d = Logic.dist(S.fix, p), lim = Logic.nearLimit(S.fix, p, Logic.ASN.NEAR_M);
+    if (d <= lim) out.push({ id, p, d });
+  }
+  return out.sort((x, y) => x.d - y.d);
+}
+// 하극상: 부하 된 지 5분, 판마다 한 번, 우두머리 뒤에서 3초 + 우두머리 15m 안 다른 부하 1명당 2초
+function asnRebelInfo(room, me, t) {
+  const a = room.asn, my = a.mem[S.pid], boss = Logic.asnBoss(a, my), A = Logic.ASN;
+  if (!boss || boss === S.pid || (a.rebel || {})[S.pid]) return null;
+  const wait = ((a.since || {})[S.pid] || 0) + A.REBEL_WAIT_SEC * 1000 - t;
+  if (wait > 0) return { ok: false, why: `${fmt(wait)} 뒤 가능` };
+  const bp = room.players[boss];
+  if (!bp || bp.lat == null || !S.fix || Logic.dist(S.fix, bp) > Logic.nearLimit(S.fix, bp, A.NEAR_M)) return { ok: false, why: '우두머리 뒤로 가까이' };
+  const guards = Logic.asnMembers(a, my).filter(id => id !== S.pid && id !== boss && room.players[id] && room.players[id].lat != null && Logic.dist(room.players[id], bp) <= A.REBEL_GUARD_M).length;
+  return { ok: true, boss, sec: A.REBEL_SEC + A.REBEL_GUARD_SEC * guards, guards };
+}
+function asnRender(room, me, t, alive, ph) {
+  const sb = $('#btnStab'), rb = $('#btnRebel');
+  if (!asnOn(room) || !alive || ph.phase !== 'chase') { sb.style.display = rb.style.display = 'none'; if (S.stab) asnHoldEnd('cancel'); return; }
+  sb.style.display = 'block';
+  if (S.stab) return; // 누르는 중엔 asnHoldLoop가 글자를 바꿈
+  const stun = asnStunned(me, t), c = !stun ? asnCands(room, t)[0] : null;
+  sb.disabled = !c || stun || !S.compass;
+  sb.style.setProperty('--p', '0%');
+  sb.innerHTML = stun ? `😵 기절 중 ${fmt(me.stunUntil - t)}` : !S.compass ? '🧭 나침반이 켜져야 암살할 수 있어요' : c ? `🗡️ ${esc(c.p.name)} 암살 · ${Logic.ASN.STAB_SEC}초 꾹` : '🗡️ 암살 · 타깃 뒤로 가까이 가세요';
+  const rv = asnRebelInfo(room, me, t);
+  rb.style.display = rv ? 'block' : 'none';
+  if (rv) { rb.disabled = !rv.ok || stun || !S.compass; rb.style.setProperty('--p', '0%'); rb.innerHTML = rv.ok ? `⚔️ 하극상 · ${rv.sec}초 꾹${rv.guards ? ` (호위 ${rv.guards}명)` : ''}` : `⚔️ 하극상 · ${rv.why}`; }
+}
+function asnHoldStart(rebel) {
+  const room = S.room, me = room && room.players[S.pid], t = now();
+  if (S.stab || !asnOn(room) || !me || asnStunned(me, t) || !S.compass) return;
+  let tg, need;
+  if (rebel) { const rv = asnRebelInfo(room, me, t); if (!rv || !rv.ok) return; tg = rv.boss; need = rv.sec * 1000; }
+  else { const c = asnCands(room, t)[0]; if (!c) return; tg = c.id; need = Logic.ASN.STAB_SEC * 1000; }
+  const p0 = performance.now();
+  S.stab = { tg, rebel, need, start: p0, last: p0, bad: 0 };
+  set(roomRef('stabs/' + S.pid), { tg, at: Math.round(t), need, rb: rebel ? 1 : 0 }).catch(e => console.error(e));
+  sfx('trap'); requestAnimationFrame(asnHoldLoop);
+}
+// 누르는 동안: 거리·뒤 판정이 0.5초 넘게 깨지면 실패, 시간을 다 채우면 성공
+function asnHoldLoop() {
+  const s = S.stab; if (!s) return;
+  const room = S.room, t = now(), el = $(s.rebel ? '#btnRebel' : '#btnStab');
+  if (!room || !asnOn(room) || room.result || room.status !== 'playing') return asnHoldEnd('cancel');
+  const pn = performance.now(), dtm = pn - s.last, elapsed = pn - s.start; s.last = pn;
+  const a = room.asn, my = a.mem[S.pid], p = room.players[s.tg], hits = room.hits || {};
+  let why = '';
+  const valid = s.rebel ? Logic.asnBoss(a, my) === s.tg && !(a.rebel || {})[S.pid]
+    : !!(p && a.mem[s.tg] && a.mem[s.tg] !== my && (Logic.asnBlood(t, room.startAt, room.timeShift).on || a.mem[s.tg] === Logic.asnTarget(a, my)) && Logic.alive(p, hits[s.tg]) && !(((hits[s.tg] && hits[s.tg].invUntil) || 0) > t));
+  if (!valid) why = 'gone';
+  else if (!S.fix || !p || p.lat == null) why = 'far';
+  else {
+    const d = Logic.dist(S.fix, p);
+    if (d > Logic.nearLimit(S.fix, p, Logic.ASN.NEAR_M) * 1.2) why = 'far';
+    else if (!Logic.behindOk(S.heading, p.hd, Logic.bearing(S.fix, p), d, Math.min(30, (S.fix.acc || 0) + (p.acc || 0)))) why = 'turn';
+  }
+  s.bad = why ? s.bad + dtm : 0;
+  if (why === 'gone' || s.bad > 500) return asnHoldEnd(why);
+  el.style.setProperty('--p', Math.min(100, elapsed / s.need * 100).toFixed(1) + '%');
+  el.innerHTML = `${s.rebel ? '⚔️ 하극상' : '🗡️ 암살'} 중… ${Math.max(0, (s.need - elapsed) / 1000).toFixed(1)}초`;
+  if (elapsed >= s.need) return asnHoldDone();
+  requestAnimationFrame(asnHoldLoop);
+}
+function asnHoldEnd(why) {
+  const s = S.stab; if (!s) return;
+  S.stab = null;
+  remove(roomRef('stabs/' + S.pid)).catch(() => {});
+  for (const b of ['#btnStab', '#btnRebel']) $(b).style.setProperty('--p', '0%');
+  const elapsed = performance.now() - s.start;
+  if (s.rebel && elapsed >= 1000 && why !== 'cancel' && why !== 'gone') return asnRebelFail();
+  const msg = { turn: '👀 상대가 돌아봤어요! 암살 실패', far: '거리가 멀어져서 실패', gone: '이제 노릴 수 없는 상대예요' }[why];
+  if (msg) { toast(msg, true); vibrate(120); }
+  renderGame();
+}
+function asnHoldDone() {
+  const s = S.stab; if (!s) return;
+  S.stab = null;
+  remove(roomRef('stabs/' + S.pid)).catch(() => {});
+  for (const b of ['#btnStab', '#btnRebel']) $(b).style.setProperty('--p', '0%');
+  if (s.rebel) asnRebelCommit(); else asnCatchCommit(s.tg);
+}
+// 암살 성공: room.asn을 한 번에 바꾸고, 옮겨진 사람들의 역할·체력 최대치·무적을 씀
+function asnCatchCommit(tg) {
+  const room = S.room, blood = Logic.asnBlood(now(), room.startAt, room.timeShift).on; let res = null;
+  runTransaction(roomRef('asn'), cur => { if (!cur || !cur.chain) return; res = Logic.asnCatch(cur, tg, S.pid, Math.round(now()), blood); return res ? res.asn : undefined; })
+    .then(r => {
+      if (!r.committed || !res) { toast('암살 실패: 그새 상황이 바뀌었어요', true); return renderGame(); }
+      const t = Math.round(now()), u = {};
+      for (const id of res.moved) { u[`players/${id}/role`] = res.to; u[`players/${id}/hpMax`] = Logic.ASN.MINION_HP; u[`players/${id}/crewAt`] = t; u[`hits/${id}/invUntil`] = t + Logic.ASN.INV_SEC * 1000; }
+      update(roomRef(), u);
+      push(roomRef('events'), { type: 'asnCatch', by: S.pid, target: tg, whole: res.whole ? 1 : 0, n: res.moved.length, at: serverTimestamp() });
+      S.stats.catches = (S.stats.catches || 0) + 1;
+      toast(res.whole && res.moved.length > 1 ? `🗡️ ${asnName(tg)} 암살! 무리 ${res.moved.length}명이 통째로 우리 편` : `🗡️ ${asnName(tg)} 암살! 이제 우리 무리의 부하예요`, true);
+      flash('rgba(255,77,79,.95)'); vibrate([100, 50, 300]); sfx('win'); renderGame();
+    }).catch(e => { console.error(e); toast('암살 저장 실패 · 다시 해 주세요', true); });
+}
+function asnRebelCommit() {
+  let res = null;
+  runTransaction(roomRef('asn'), cur => { if (!cur || !cur.chain) return; res = Logic.asnRebel(cur, S.pid); return res ? res.asn : undefined; })
+    .then(r => {
+      if (!r.committed || !res) return toast('하극상 실패: 그새 상황이 바뀌었어요', true);
+      update(roomRef(), { [`players/${S.pid}/hpMax`]: null, [`players/${res.old}/hpMax`]: Logic.ASN.MINION_HP });
+      push(roomRef('events'), { type: 'asnRebel', by: S.pid, target: res.old, at: serverTimestamp() });
+      toast(`⚔️ 하극상 성공! ${asnName(res.old)}의 자리를 뺏었어요`, true); flash('rgba(167,139,250,.95)'); vibrate([300, 100, 300]); sfx('augS');
+    }).catch(e => console.error(e));
+}
+// 하극상 실패: 기회를 쓰고, 내 능력은 모두 우두머리에게(몰수), 우두머리가 용서/팔아넘기기
+function asnRebelFail() {
+  const a = S.room && S.room.asn, boss = a && Logic.asnBoss(a, a.mem[S.pid]);
+  runTransaction(roomRef('asn/rebel/' + S.pid), cur => (cur ? undefined : 1)).then(r => {
+    if (!r.committed) return;
+    const ids = asnMyAugIds(); if (ids.length) asnTribute(ids, 'confiscate');
+    push(roomRef('events'), { type: 'asnRebelFail', by: S.pid, target: boss, at: serverTimestamp() });
+    toast('⚔️ 하극상 실패! 능력을 몰수당했어요. 우두머리가 처분을 정해요', true); flash('rgba(167,139,250,.9)'); vibrate([300, 100, 300]); sfx('trap');
+  }).catch(e => console.error(e));
+}
+function asnOpenSell(rebel) {
+  const room = S.room, a = room.asn, my = a.mem[S.pid], h = Logic.asnHunter(a, my), hb = h && Logic.asnBoss(a, h);
+  S.sellFor = { rebel, until: Date.now() + Logic.ASN.SELL_SEC * 1000 };
+  $('#asnSellT').textContent = `⚔️ ${asnName(rebel)}가 반란을 시도했다!`;
+  $('#asnSellP').textContent = `능력은 몰수했어요. ${Logic.ASN.SELL_SEC}초 안에 안 고르면 용서해요.`;
+  const can = !!(h && h !== my);
+  $('#btnAsnSell').disabled = !can;
+  $('#btnAsnSell').textContent = can ? `💸 ${asnName(hb)} 무리에 팔아넘기기` : '팔아넘길 무리가 없어요';
+  $('#ov-asnSell').classList.add('on'); vibrate([200, 80, 200]);
+}
+$('#btnAsnForgive').onclick = () => {
+  const f = S.sellFor; S.sellFor = null; $('#ov-asnSell').classList.remove('on');
+  if (f) { push(roomRef('events'), { type: 'asnForgive', by: S.pid, target: f.rebel, at: serverTimestamp() }); toast(`🤝 ${asnName(f.rebel)}를 용서했어요`); }
+};
+$('#btnAsnSell').onclick = () => {
+  const f = S.sellFor; S.sellFor = null; $('#ov-asnSell').classList.remove('on'); if (!f) return;
+  let res = null;
+  runTransaction(roomRef('asn'), cur => { if (!cur || !cur.chain) return; res = Logic.asnSell(cur, f.rebel, Math.round(now())); return res ? res.asn : undefined; })
+    .then(r => {
+      if (!r.committed || !res) return toast('팔아넘기기 실패: 그새 상황이 바뀌었어요');
+      const t = Math.round(now());
+      update(roomRef(), { [`players/${f.rebel}/role`]: res.to, [`players/${f.rebel}/crewAt`]: t, [`players/${f.rebel}/hpMax`]: Logic.ASN.MINION_HP });
+      push(roomRef('events'), { type: 'asnSold', by: S.pid, target: f.rebel, at: serverTimestamp() });
+      toast(`💸 ${asnName(f.rebel)}를 팔아넘겼어요`, true);
+    }).catch(e => console.error(e));
+};
+// 매초 (tick 중간): 경고·스태미나 회복·무리 정리
+function asnTick(room, me, t, gpsOk, warn) {
+  const a = room.asn, my = a.mem[S.pid], hits = room.hits || {}, A = Logic.ASN, ph = Logic.phaseAt(t, room.startAt, room.timeShift);
+  if (asnStunned(me, t)) warn.push(`😵 기절 ${fmt(me.stunUntil - t)} · 암살·능력 못 씀 · 위치가 적에게 보여요`);
+  if (!S.compass) warn.push('🧭 나침반이 꺼져 있어요 · 암살을 못 하고, 어느 방향에서든 암살당해요');
+  const blood = Logic.asnBlood(t, room.startAt, room.timeShift);
+  if (blood.on) warn.push(`🩸 피의 시간 ${fmt(blood.until - t)} · 아무나 암살할 수 있어요`);
+  // 위치가 표시되던 주기마다 스태미나 회복 (도망자와 같음)
+  const idx = Logic.mapRevealIdx(t, room.startAt);
+  if (S.lastMapIdx == null) S.lastMapIdx = idx;
+  else if (idx > S.lastMapIdx) { S.lastMapIdx = idx; S.st = Math.min(stMaxOf(me.role), S.st + RULES.MAP_RECOVER * (av('recoverBoost') || 1)); }
+  if (ph.phase === 'chase') {
+    tipOnce('asnStab', `타깃 무리 뒤로 가까이 가면 🗡️ 암살 버튼이 켜져요. 같은 방향을 보고 ${A.STAB_SEC}초 꾹!`);
+    tipOnce('asnChat', '💬 무리 단톡방은 항상 열려 있어요. 지도를 꾹 누르면 무리에게 핑을 찍어요');
+    // 나를 노리는 무리(피의 시간엔 다른 무리 누구나)가 30m 안
+    if (gpsOk && S.fix) {
+      const hc = blood.on ? null : Logic.asnHunter(a, my); let nd = Infinity;
+      for (const [id, p] of Object.entries(room.players)) {
+        if (id === S.pid || p.lat == null || !Logic.alive(p, hits[id])) continue;
+        const c = a.mem[id]; if (!c || c === my || (hc && c !== hc)) continue;
+        nd = Math.min(nd, Logic.dist(S.fix, p));
+      }
+      if (nd <= A.WARN_M) { warn.push(`🗡️ ${blood.on ? '다른 무리' : '나를 노리는 무리'}가 ${A.WARN_M}m 안에 있어요!`); if (Date.now() - (S.asnNearAt || 0) > 8000) { S.asnNearAt = Date.now(); vibrate([120, 60, 120]); } }
+    }
+  }
+  // 우두머리가 기권했거나 무리 전원이 기권: 살아 있는 사람 중 아이디가 가장 앞선 폰 한 대가 정리
+  if (Date.now() - (S.asnFixAt || 0) > 3000) {
+    S.asnFixAt = Date.now();
+    const aliveIds = Object.entries(room.players).filter(([id, p]) => p.role && Logic.alive(id === S.pid ? { ...p, selfDmg: S.selfDmg, augs: S.augs } : p, hits[id])).map(([id]) => id).sort();
+    if (aliveIds[0] === S.pid && Logic.asnFix(a, aliveIds, t)) runTransaction(roomRef('asn'), cur => (cur && cur.chain ? Logic.asnFix(cur, aliveIds, Math.round(now())) || undefined : undefined)).catch(e => console.error(e));
+  }
+}
+// 0.2초마다: 등 뒤 경고, 피의 시간 화면, 결투 알림, 처분 시간
+function asnOverlay(inGame, room, me, t) {
+  const on = inGame && asnOn(room), w = $('#asnWarn'), fx = $('#asnFx');
+  if (!on) { w.classList.remove('on'); fx.classList.remove('on'); if (S.stab) asnHoldEnd('cancel'); return; }
+  const st = Object.values(room.stabs || {}).filter(s => s && s.tg === S.pid && t - (s.at || 0) < (s.need || 3000) + 1500);
+  if (st.length) {
+    if (!w.classList.contains('on')) { w.classList.add('on'); sfx('warn'); }
+    w.textContent = '⚠️ 등 뒤에 누가 있다! 돌아보세요';
+    if (Date.now() - (S.stabBuzz || 0) > 700) { S.stabBuzz = Date.now(); vibrate([200, 60, 200]); }
+    if (Date.now() - (S.hdSent || 0) > 300) { S.hdSent = Date.now(); const u = { hd: asnHd() }; if (S.fix) Object.assign(u, { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc) }); update(meRef(), u); }
+  } else w.classList.remove('on');
+  const bl = Logic.asnBlood(t, room.startAt, room.timeShift);
+  fx.classList.toggle('on', bl.on);
+  if (bl.on && S.bloodK !== bl.k) { S.bloodK = bl.k; toast(`🩸 피의 시간! ${Logic.ASN.BLOOD_SEC}초 동안 아무나 암살할 수 있어요`, true); sfx('wanted'); vibrate([300, 100, 300, 100, 300]); }
+  if (room.asn.duelAt && S.duelSeen !== room.asn.duelAt) { S.duelSeen = room.asn.duelAt; toast('⚔️ 최후의 결투! 우두머리 둘만 남았어요 · 화살표가 계속 보이고 구역이 줄어요', true); sfx('minute'); vibrate([200, 100, 200]); }
+  if (S.sellFor && Date.now() > S.sellFor.until) $('#btnAsnForgive').click();
+}
+// 화살표: 우두머리만. 타깃 무리에서 가장 가까운 사람. 최후의 결투면 계속
+function asnArrow(box, off) {
+  const room = S.room, a = room.asn, t = now(), hits = room.hits || {}, my = a.mem[S.pid];
+  if (!my || !room.players[S.pid]) return off();
+  const ph = Logic.phaseAt(t, room.startAt, room.timeShift);
+  if (ph.phase === 'hide') return off(`추격 시작까지 ${fmt(ph.remainMs)}`);
+  if (ph.phase !== 'chase') return off();
+  if (!Logic.asnIsBoss(a, S.pid)) return off(`화살표는 우두머리(${asnName(Logic.asnBoss(a, my))})만 봐요 · 💬 단톡방과 핑으로 지시를 받으세요`);
+  const tc = Logic.asnTarget(a, my); if (!tc) return off();
+  const tb = asnName(Logic.asnBoss(a, tc)), duel = !!a.duelAt;
+  let st = null;
+  if (!duel) {
+    st = Logic.arrowState(t, Logic.arrowBase({}, room.startAt), arrowEverySec(), av('foresight') || 0);
+    if (!st.unlocked) return off(`🎯 타깃: ${tb} 무리 · 화살표 열리기까지 ${fmt(st.nextInMs)}`);
+    if (!st.visible) return off(`🎯 타깃: ${tb} 무리 · 다음 화살표까지 ${fmt(st.nextInMs)}`);
+  }
+  if (fogged(t)) return off('🌫 안개 속이라 화살표가 안 떠요');
+  if (fxOn('stop', t)) return off('⏸ 시간 정지! 화살표가 멈췄어요');
+  box.classList.add('on');
+  const key = duel ? 'duel' : 'a' + st.idx;
+  if (S.arrowPopKey !== key) { S.arrowPopKey = key; box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop'); sfx('arrow'); vibrate(80); }
+  let best = null;
+  if (S.fix) for (const id of Logic.asnMembers(a, tc)) {
+    const p = room.players[id]; if (!p || p.lat == null || !Logic.alive(p, hits[id])) continue;
+    const q = Logic.shownPos(p, t, room.players), d = Logic.dist(S.fix, q); if (!best || d < best.d) best = { id, q, d };
+  }
+  const arrow = $('#arrow'), txt = $('#arrowTxt');
+  if (!S.fix) { arrow.style.display = 'none'; txt.textContent = 'GPS 신호를 기다리는 중…'; }
+  else if (!best) { arrow.style.display = 'none'; txt.textContent = '타깃 무리 위치를 아직 몰라요'; }
+  else if (best.d <= RULES.ARROW_NEAR_M) { arrow.style.display = 'none'; txt.textContent = `${asnName(best.id)} 근처에 있어요!`; }
+  else {
+    arrow.style.display = 'block';
+    const b = Logic.bearing(S.fix, best.q);
+    rotateArrow(S.compass && S.heading != null ? b - S.heading : b);
+    txt.textContent = [`🎯 ${asnName(best.id)}`, S.compass ? '' : '나침반 없음 · 화면 위쪽이 북쪽'].filter(Boolean).join(' · ');
+  }
+  return duel ? '⚔️ 최후의 결투 · 화살표가 계속 보여요' : `화살표 표시 중 ${Math.ceil(st.showLeftMs / 1000)}초`;
+}
+// 지도: 우리 무리(👑 우두머리), 기절한 적
+function drawAsn(mo) {
+  const room = S.room, items = [];
+  if (asnOn(room) && room.status === 'playing') {
+    const a = room.asn, my = a.mem[S.pid], t = now(), hits = room.hits || {};
+    for (const [id, p] of Object.entries(room.players)) {
+      if (id === S.pid || !p.role || p.lat == null || !Logic.alive(p, hits[id])) continue;
+      const c = a.mem[id], stun = asnStunned(p, t);
+      let bo = null;
+      if (c === my) bo = { name: p.name, col: '#3ba3ff', pre: Logic.asnBoss(a, c) === id ? '👑' : '', sub: stun ? '😵' : null };
+      else if (stun) bo = { name: p.name, col: '#9ca3af', pre: '😵', sub: '기절' };
+      if (bo) items.push({ key: (c === my ? 'm' : 's') + id, make: () => badge([p.lat, p.lng], bo), update: m => badgeSet(m, [p.lat, p.lng], bo) });
+    }
+  }
+  syncLayer(mo, 'asnL', items);
+}
+function asnReveal() {
+  const room = S.room, a = room.asn, my = a.mem[S.pid], tg = Logic.asnBoss(a, Logic.asnTarget(a, my)), reel = $('#reel');
+  reel.style.transition = 'none'; reel.style.transform = 'translateY(0)'; reel.innerHTML = '<div class="chaser-t">우두머리</div>';
+  $('#roleMsg').textContent = '당신은 우두머리!'; $('#roleMsg').className = 'big chaser-t';
+  $('#roleSub').textContent = `🎯 몰래 정해진 타깃: ${asnName(tg)} · ${fmtDur(RULES.HIDE_SEC)} 동안 흩어진 뒤, 타깃 뒤로 가서 ${Logic.ASN.STAB_SEC}초 꾹`;
+  $('#btnRoleOk').style.visibility = 'visible'; $('#ov-role').classList.add('on');
+  flash(ROLE_RGBA.chaser); vibrate([200, 80, 200]);
+}
+function asnEvent(e, me0, who) {
+  if (e.type === 'asnCatch') {
+    if (e.by !== S.pid && e.target !== S.pid) deathBan(`🗡️ ${who(e.by)} → ${who(e.target)} 암살${e.whole && e.n > 1 ? ` · 무리 ${e.n}명 통째로` : ''}`);
+  } else if (e.type === 'asnRebel') {
+    if (e.by !== S.pid && e.target !== S.pid) deathBan(`⚔️ 하극상! ${who(e.by)}가 ${who(e.target)}의 자리를 뺏었어요`);
+  } else if (e.type === 'asnRebelFail') {
+    if (e.target === S.pid) asnOpenSell(e.by);
+    else if (e.by !== S.pid && me0.role === ((S.room.players[e.target] || {}).role)) toast(`⚔️ ${who(e.by)}의 하극상 실패!`, true);
+  } else if (e.type === 'asnSold') {
+    if (e.target === S.pid) { toast(`💸 ${who(e.by)}가 나를 적 무리에 팔아넘겼어요`, true); vibrate([300, 100, 300]); }
+    else if (e.by !== S.pid) deathBan(`💸 ${who(e.by)}가 ${who(e.target)}를 팔아넘겼어요`);
+  } else if (e.type === 'asnForgive') {
+    if (e.target === S.pid) toast(`🤝 ${who(e.by)}가 용서해 줬어요`, true);
+  } else if (e.type === 'asnStun') {
+    if (e.by !== S.pid) deathBan(`😵 ${who(e.by)} 기절`);
+  }
+}
+function asnResult(room, r) {
+  const P = room.players, a = room.asn || {}, n = a.n || {}, won = r.boss === S.pid, endAt = r.at || now();
+  $('#r-title').textContent = `👑 ${(P[r.boss] || {}).name || '?'} 승리!`;
+  $('#r-sub').textContent = [r.reason, won ? '이겼어요 🎉' : '졌어요'].filter(Boolean).join(' · ');
+  const ranked = Object.entries(P).filter(([, p]) => p.role).sort(([x], [y]) => (y === r.boss) - (x === r.boss) || (n[y] || 0) - (n[x] || 0));
+  const top = ranked.filter(([id]) => id !== r.boss).sort(([x], [y]) => (n[y] || 0) - (n[x] || 0))[0];
+  $('#r-mvp').innerHTML = top && n[top[0]] ? `<div class="mvp">🏆 암살왕 · ${esc(top[1].name)} <span class="dim small">${n[top[0]]}번 암살</span></div>` : '';
+  $('#r-list').innerHTML = ranked.map(([id, p], i) => {
+    const c = a.mem && a.mem[id], boss = c && Logic.asnBoss(a, c), isB = boss === id, sz = c ? Logic.asnMembers(a, c).length - 1 : 0;
+    const s = p.stats || {}, km = ((s.dist || 0) / 1000).toFixed(2), augs = Object.keys(p.augs || {}).filter(k => Logic.AUGS[k]);
+    return `<li class="col"><div class="top"><span><span class="badge ${isB ? 'chaser' : 'runner'}">${isB ? '우두머리' : '부하'}</span> ${p.forfeit ? '🏳️ ' : ''}${esc(p.name)}${id === S.pid ? ' (나)' : ''}${id === r.boss ? ' 👑' : ''}</span><span class="dim small">${i + 1}위</span></div>`
+      + `<span class="stat">${isB ? `부하 ${sz}명` : `${esc((P[boss] || {}).name || '?')}의 부하`} · 암살 ${n[id] || 0}번 · 🏃 ${km}km · 생존 ${fmt(Logic.survivalMs(p, room.startAt, endAt))}</span>`
+      + (augs.length ? `<div class="insaugs">${augs.map(augChip).join('')}</div>` : '') + '</li>';
+  }).join('');
+}
+for (const [sel, rebel] of [['#btnStab', false], ['#btnRebel', true]]) {
+  const el = $(sel);
+  el.addEventListener('pointerdown', e => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (x) {} asnHoldStart(rebel); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => el.addEventListener(n, () => { if (S.stab && S.stab.rebel === rebel) asnHoldEnd('release'); }));
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
 function checkWin() {
   const room = S.room;
   if (!room || room.result || room.status !== 'playing' || S.winSent) return;
   const players = { ...room.players };
   if (players[S.pid]) players[S.pid] = { ...players[S.pid], selfDmg: S.selfDmg, augs: S.augs };
-  const w = Logic.winner(players, room.hits, now(), room.startAt, room.timeShift, modeOf(room));
+  const w = asnOn(room) ? Logic.asnWinner(room.asn, players, room.hits, now(), room.startAt, room.timeShift) : Logic.winner(players, room.hits, now(), room.startAt, room.timeShift, modeOf(room));
   if (!w) return;
   S.winSent = true;
   runTransaction(roomRef('result'), cur => (cur ? undefined : { ...w, at: now() }))
@@ -5209,11 +5721,11 @@ function renderGame() {
   const frozen = (me.frozenUntil || 0) > t, inv = ((hits[S.pid] && hits[S.pid].invUntil) || 0) - t;
   $('#btnMemo').style.display = memoOf(room) ? '' : 'none';
   const mafia = modeOf(room) === 'mafia';
-  $('#g-role').textContent = roleName(me.role, room, me.job);
-  $('#g-role').className = 'badge ' + (mafia ? 'mf' : me.role); // 마피아 모드: 옆 사람이 색으로 못 알아보게
+  $('#g-role').textContent = roleName(me.role, room, me.job, S.pid);
+  $('#g-role').className = 'badge ' + (mafia ? 'mf' : asnOn(room) ? (asnMeBoss() ? 'chaser' : 'runner') : me.role); // 마피아 모드: 옆 사람이 색으로 못 알아보게
   $('#g-phase').textContent = ph.phase === 'pre' ? '곧 시작' : ph.phase === 'hide' ? (isC ? `${roleName('runner', room)} 숨는 중` : '숨는 시간') : ph.phase === 'chase' ? (mafia ? '진행 중' : '추격 중') : '종료';
   $('#g-time').textContent = fmt(ph.remainMs);
-  $('#g-hp').style.width = hp + '%'; $('#g-hpv').textContent = Math.ceil(hp);
+  $('#g-hp').style.width = (hp / (me.hpMax || RULES.HP_MAX) * 100) + '%'; $('#g-hpv').textContent = Math.ceil(hp);
   $('#g-st').style.width = (S.st / stMax * 100) + '%'; $('#g-stv').textContent = `${Math.floor(S.st)}/${stMax}`;
   // 위험 표시: 체력 50 이하 주황, 25 이하 빨강 깜빡임 / 스태미나 20% 이하 깜빡임 / 마지막 1분 타이머 깜빡임
   $('#g-hp').className = hp <= 25 ? 'low' : hp <= 50 ? 'mid' : '';
@@ -5245,6 +5757,7 @@ function renderGame() {
   const reviver = !isC && !alive && Object.entries(room.players).some(([id, p]) => id !== S.pid && p.role === 'runner' && p.augs && p.augs.bloodOath && Logic.alive(p, hits[id]));
   $('#btnShowQR').style.display = (!isC && (alive || reviver)) || (mafia && alive) ? 'block' : 'none'; // 마피아 모드: 모두 QR
   $('#btnShowQR').textContent = !alive ? '🩸 부활용 QR 보여주기' : mode === 'ice' && (me.jailed || iceOn(me)) ? '🧊 땡용 QR 보여주기' : me.jailed ? '🔓 탈옥용 QR 보여주기' : '내 QR 보여주기';
+  if (asnOn(room)) { $('#btnScan').style.display = 'none'; $('#btnShowQR').style.display = 'none'; } // 암살전: QR 대신 암살 버튼
   // 얼음땡: 스스로 얼음 버튼 (추격 중, 안 얼었을 때)
   const iceUses = RULES.ICE_SELF_USES, iceUsed = (me.iceSelf && me.iceSelf.used) || 0;
   $('#btnIce').style.display = mode === 'ice' && !isC && alive && !me.jailed && iceUses > 0 && ph.phase === 'chase' ? 'block' : 'none';
@@ -5259,7 +5772,7 @@ function renderGame() {
     const I = Logic.MODE_RULES.MF_SNAP_SEC * 1000, next = room.startAt + (Math.floor((t - room.startAt) / I) + 1) * I;
     info = [vr.open ? `🗳 투표 중 ${fmt(vr.endsAt - t)}` : vr.next ? `다음 투표까지 ${fmt(vr.next - t)}` : '', `위치 갱신까지 ${Math.ceil((next - t) / 1000)}초`].filter(Boolean).join(' · ');
   }
-  else if (isC) info = drawArrow();
+  else if (isC || asnOn(room)) info = drawArrow();
   else {
     $('#arrowBox').className = 'arrowbox';
     const I = intelSec() * 1000, next = room.startAt + (Math.floor((t - room.startAt) / I) + 1) * I;
@@ -5276,6 +5789,7 @@ function renderGame() {
     info = [`👂 ${Logic.AUGS.listen.r}m 안 도망자 ${n}명`, info].filter(Boolean).join(' · ');
   }
   $('#g-info').textContent = alive ? info : '관전 중 · 모든 사람의 실제 위치와 체력이 보여요';
+  asnRender(room, me, t, alive, ph);
   renderAugBar(alive);
   // 아래 패널 높이(증강이 많으면 여러 줄)만큼 📍·🧭·조이스틱을 위로
   const bh = $('#s-game .bottom').offsetHeight;
@@ -5289,7 +5803,7 @@ function renderGame() {
     if (!S.specOn) { S.specOn = true; S.snap = []; drawSnap(); $('#arrowBox').className = 'arrowbox'; }
     $('#specList').innerHTML = Object.entries(room.players).filter(([, p]) => p.role).map(([id, p]) => {
       const php = id === S.pid ? hp : Logic.hpOf(p, hits[id]);
-      return `<li><span><span class="badge ${p.role}">${roleName(p.role, room, p.job)}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? (modeOf(room) === 'ice' ? '🧊 ' : '🔒 ') : ''}${esc(p.name)}${id === S.pid ? ' (나)' : ''}</span><span class="${php > 0 ? 'ok' : 'dim'}">${php > 0 ? '체력 ' + Math.ceil(php) : (p.forfeit ? '기권' : `탈락${deathLabel(p.stats, room.players) ? ' · ' + deathLabel(p.stats, room.players) : ''}`)}</span></li>`;
+      return `<li><span><span class="badge ${p.role}">${roleName(p.role, room, p.job, id)}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? (modeOf(room) === 'ice' ? '🧊 ' : '🔒 ') : ''}${esc(p.name)}${id === S.pid ? ' (나)' : ''}</span><span class="${php > 0 ? 'ok' : 'dim'}">${php > 0 ? '체력 ' + Math.ceil(php) : (p.forfeit ? '기권' : `탈락${deathLabel(p.stats, room.players) ? ' · ' + deathLabel(p.stats, room.players) : ''}`)}</span></li>`;
     }).join('');
   }
 
@@ -5316,6 +5830,7 @@ function drawArrow() {
   const box = $('#arrowBox'), room = S.room;
   const off = (txt = '') => { box.classList.remove('on', 'pop'); return txt; };
   if (!room || room.status !== 'playing') return off();
+  if (asnOn(room)) return asnArrow(box, off);
   const me = room.players && room.players[S.pid], t = now(), hits = room.hits || {};
   if (!me || me.role !== 'chaser' || !Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid])) return off();
   const ph = Logic.phaseAt(t, room.startAt, room.timeShift);
@@ -5464,6 +5979,7 @@ function renderResult() {
     update(meRef(), u).catch(e => console.error(e));
   }
   $('#btnReplay').style.display = room.replayId ? '' : 'none';
+  if (r.winner === 'asn') asnResult(room, r); else {
   $('#r-title').textContent = r.winner ? `${roleName(r.winner, room)} 승리!` : '게임 종료';
   $('#r-sub').textContent = [r.reason, me.role ? (me.role === r.winner ? '이겼어요 🎉' : '졌어요') : ''].filter(Boolean).join(' · ');
   const endAt = r.at || now(), P = room.players, M = Logic.mvp(P, room.startAt, endAt);
@@ -5474,22 +5990,24 @@ function renderResult() {
     const s = p.stats || {}, km = ((s.dist || 0) / 1000).toFixed(2);
     const caught = p.role === 'chaser' ? `잡음 ${s.catches || 0}` : `잡힘 ${(hits[id] && hits[id].catches) || 0} · 생존 ${fmt(Logic.survivalMs(p, room.startAt, endAt))}`;
     const augs = Object.keys(p.augs || {}).filter(k => Logic.AUGS[k]);
-    return `<li class="col"><div class="top"><span><span class="badge ${p.role}">${roleName(p.role, room, p.job)}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? (modeOf(room) === 'ice' ? '🧊 ' : '🔒 ') : ''}${esc(p.name)}${M[p.role] === id ? ' 🏆' : ''}</span><span class="${hp > 0 ? 'ok' : 'dim'}">${hp > 0 ? '체력 ' + Math.ceil(hp) : (p.forfeit ? '기권' : `탈락${deathLabel(p.stats, P) ? ' · ' + deathLabel(p.stats, P) : ''}`)}</span></div>`
+    return `<li class="col"><div class="top"><span><span class="badge ${p.role}">${roleName(p.role, room, p.job, id)}</span> ${p.zombieAt ? '🧟 ' : ''}${p.jailed ? (modeOf(room) === 'ice' ? '🧊 ' : '🔒 ') : ''}${esc(p.name)}${M[p.role] === id ? ' 🏆' : ''}</span><span class="${hp > 0 ? 'ok' : 'dim'}">${hp > 0 ? '체력 ' + Math.ceil(hp) : (p.forfeit ? '기권' : `탈락${deathLabel(p.stats, P) ? ' · ' + deathLabel(p.stats, P) : ''}`)}</span></div>`
       + `<span class="stat">🏃 ${km}km · 최고 ${Math.round(s.vmax || 0)}km/h · ${caught} · 스킬 ${s.skills || 0}회</span>`
       + (augs.length ? `<div class="insaugs">${augs.map(augChip).join('')}</div>` : '') + '</li>';
   }).join('');
+  }
   const isHost = room.hostId === S.pid;
   $('#btnAgain').style.display = isHost ? 'block' : 'none';
   $('#r-wait').textContent = isHost ? '같은 멤버로 로비에 돌아가요 (구역·설정 그대로, 역할은 다시 랜덤)' : "방장이 '한 판 더'를 누르면 같은 방에서 다시 시작해요";
   const key = room.startAt + ':' + r.at;
-  if (S.resultKey !== key) { S.resultKey = key; sfx(me.role && me.role === r.winner ? 'win' : 'lose'); }
+  if (S.resultKey !== key) { S.resultKey = key; sfx((r.winner === 'asn' ? r.boss === S.pid : me.role && me.role === r.winner) ? 'win' : 'lose'); }
 }
 // 한 판 더 (방장): 같은 방 로비로, 지난 게임 기록 정리
 $('#btnAgain').onclick = safe(async () => {
   const room = S.room; if (!room || room.hostId !== S.pid) return;
   const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null, nets: null, blocks: null, radioJam: null, fog: null, votes: null, rifle: null, rps: null, bombs: null, chats: null, chatOpen: null, fx: null, iceMines: null, shelters: null };
+  u.asn = null; u.stabs = null;
   for (const id of Object.keys(room.players)) {
-    for (const k of ['role', 'selfDmg', 'st', 'frozenUntil', 'anchor', 'qr', 'augs', 'augPicks', 'offer', 'stealthUntil', 'decoy', 'forfeit', 'stats',
+    for (const k of ['hpMax', 'crewAt', 'stunUntil', 'hd', 'augIn', 'role', 'selfDmg', 'st', 'frozenUntil', 'anchor', 'qr', 'augs', 'augPicks', 'offer', 'stealthUntil', 'decoy', 'forfeit', 'stats',
       'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'iceSelf', 'frame', 'silentUntil', 'tele', 'revealUntil', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag', 'out', 'job', 'guard', 'shadowStop', 'mapHideUntil']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
@@ -5527,6 +6045,18 @@ const blink = (vals, dur, kt) => `<animate attributeName="opacity" values="${val
 const col = (vals, dur, kt) => `<animate attributeName="fill" values="${vals}" ${kt ? `keyTimes="${kt}"` : ''} dur="${dur}s" repeatCount="indefinite"/>`;
 const area = '<circle cx="110" cy="58" r="50" fill="none" stroke="#ffb020" stroke-width="2" stroke-dasharray="6 6"/>';
 const MART = {
+  // 암살전
+  a_chain: sv('<circle cx="110" cy="58" r="40" fill="none" stroke="#2a313b" stroke-width="2" stroke-dasharray="5 5"/>' + dot(TC.d, mv('M110 18 A40 40 0 1 1 109.9 18', 5), 3)
+    + at(110, 18, TC.r) + at(150, 58, TC.b) + at(110, 98, TC.g) + at(70, 58, TC.y) + lbl(110, 62, '각자 다음 사람을', TC.d, '', 9) + lbl(110, 74, '몰래 노려요', TC.d, '', 9) + lbl(185, 30, '🎯', TC.d, '', 14)),
+  a_stab: sv('<line x1="10" y1="62" x2="210" y2="62" stroke="#2a313b" stroke-width="2"/>'
+    + dot(TC.b, mv('M60 62 L150 62 L150 62', 5, 'keyPoints="0;1;1" keyTimes="0;0.6;1" calcMode="linear"')) + dot(TC.r, mv('M20 62 L130 62 L130 62', 5, 'keyPoints="0;1;1" keyTimes="0;0.6;1" calcMode="linear"'))
+    + lbl(110, 30, '같은 방향 · 뒤에서 3초 꾹', TC.r, blink('0;0;1;1', 5, '0;0.55;0.6;1')) + lbl(110, 98, '앞사람이 돌아보면 실패', TC.d)),
+  a_crew: sv(at(150, 58, TC.r, '', 11) + lbl(150, 38, '👑', TC.d, '', 14) + at(170, 80, TC.r, '', 6) + `<circle cx="0" cy="0" r="8" stroke="#fff" stroke-width="2">${col(`${TC.b};${TC.b};${TC.r};${TC.r}`, 5, '0;0.5;0.55;1')}${mv('M40 58 L130 58 L130 58', 5, 'keyPoints="0;1;1" keyTimes="0;0.5;1" calcMode="linear"')}</circle>`
+    + lbl(60, 30, '잡히면', TC.d) + lbl(60, 98, '우두머리의 부하', TC.r, blink('0;0;1;1', 5, '0;0.5;0.55;1'))),
+  a_rebel: sv(at(120, 58, TC.r, '', 11) + lbl(120, 38, '👑', TC.d, '', 14) + at(160, 70, TC.r, '', 6) + `<circle cx="0" cy="0" r="7" fill="#a78bfa" stroke="#fff" stroke-width="2">${mv('M60 80 L100 64 L100 64', 4, 'keyPoints="0;1;1" keyTimes="0;0.5;1" calcMode="linear"')}</circle>`
+    + lbl(110, 104, '⚔️ 하극상', '#a78bfa', blink('0;0;1;1', 4, '0;0.55;0.6;1'))),
+  a_blood: sv('<circle cx="110" cy="58" r="50" fill="rgba(200,20,40,.25)" stroke="#c81e3a" stroke-width="2">' + blink('.3;1;.3', 1.2) + '</circle>'
+    + dot(TC.r, mv('M70 40 L150 80 L70 40', 4)) + dot(TC.b, mv('M150 40 L70 80 L150 40', 4.5)) + dot(TC.g, mv('M110 20 L110 96 L110 20', 5)) + lbl(110, 62, '🩸 아무나!', '#fff', '', 12)),
   // 기본
   c_roles: sv(area + at(110, 58, TC.r, '<animate attributeName="r" values="8;11;8" dur="1.2s" repeatCount="indefinite"/>') + dot(TC.b, mv('M110 58 L70 35 L110 58', 4)) + dot(TC.b, mv('M110 58 L150 40 L110 58', 4.5)) + dot(TC.b, mv('M110 58 L120 95 L110 58', 5)) + lbl(110, 116, '추격자 1명 · 나머지는 도망자')),
   c_hide: sv(area + '<circle cx="110" cy="58" r="16" fill="rgba(255,77,79,.1)" stroke="#ff4d4f" stroke-dasharray="4 4"/>' + dot(TC.r, mv('M110 58 L110 58 L160 40', 6, 'keyPoints="0;0;1" keyTimes="0;0.5;1" calcMode="linear"')) + dot(TC.b, mv('M110 58 L165 38 L165 38', 6, 'keyPoints="0;1;1" keyTimes="0;0.4;1" calcMode="linear"')) + dot(TC.b, mv('M110 58 L62 80 L62 80', 6, 'keyPoints="0;1;1" keyTimes="0;0.4;1" calcMode="linear"'))
@@ -5564,6 +6094,14 @@ const MART = {
   m_win: sv('<path d="M85 18h50v22a25 25 0 0 1-50 0z" fill="none" stroke="#f5b800" stroke-width="4"/><path d="M110 65v14M94 88h32" stroke="#f5b800" stroke-width="4" stroke-linecap="round"/>' + lbl(110, 110, '마피아 전원 탈락 → 시민 승리 · 시민 ≤ 마피아 → 마피아 승리', TC.d, '', 9))
 };
 const MODE_TUT = {
+  assassin: () => { const A = Logic.ASN; return [
+    { a: 'a_chain', t: '🗡️ 암살전', b: '모두 <b>우두머리</b>로 시작해요. 각자 몰래 <b>타깃 1명</b>이 정해지고, 누가 나를 노리는지는 몰라요. 타깃 무리 뒤로 가까이 가면 <b>🗡️ 암살</b> 버튼이 켜져요.' },
+    { a: 'a_stab', t: '뒤에서 암살', b: `상대와 <b>같은 방향</b>을 보고 뒤에서 <b>${A.STAB_SEC}초 꾹</b>! 당하는 쪽엔 "등 뒤에 누가 있다!"가 떠서, 그때 <b>뒤돌아보면</b> 막을 수 있어요. 나침반이 꺼져 있으면 암살을 못 하고, 어느 방향에서든 당해요.` },
+    { a: 'a_crew', t: '부하', b: `잡히면 탈락 대신 잡은 쪽 우두머리의 <b>부하</b>가 돼요(${A.INV_SEC}초 무적). 우두머리를 잡으면 그 무리가 <b>통째로</b> 넘어와요. 부하는 체력 ${A.MINION_HP}, 스태미나 ${Math.round(A.MINION_ST * 100)}%, 능력 1개. 화살표는 우두머리만 보고, 무리는 💬 단톡방과 핑으로 움직여요. 우두머리는 능력을 꾹 눌러 부하에게 양도할 수 있어요.` },
+    { a: 'a_rebel', t: '하극상', b: `부하가 된 지 ${A.REBEL_WAIT_SEC / 60}분 지나면 한 판에 한 번, 우두머리 뒤에서 꾹 눌러 <b>자리를 뺏을</b> 수 있어요. 우두머리 근처 다른 부하 1명당 ${A.REBEL_GUARD_SEC}초씩 더 걸려요. 실패하면 능력을 몰수당하고, 우두머리가 <b>용서</b>할지 적에게 <b>팔아넘길</b>지 정해요.` },
+    { a: 'a_blood', t: '피의 시간 · 최후의 결투', b: `${A.BLOOD_EVERY / 60}분마다 ${A.BLOOD_SEC}초 동안 <b>아무나</b> 암살할 수 있어요. 우두머리가 둘만 남으면 <b>최후의 결투</b>: 화살표가 계속 보이고 구역이 줄어들어요.` },
+    { a: 'z_win', t: '승리', b: `모두 한 무리가 되면 그 <b>우두머리</b> 승리! 시간이 끝나면 무리가 가장 큰 우두머리가 이겨요. 체력이 0이 되면 탈락 대신 ${A.STUN_SEC / 60}분 <b>기절</b>(암살·능력 못 씀, 위치 공개)해요.` }
+  ]; },
   ice: () => [
     { a: 'c_roles', t: '🧊 얼음땡', b: '<b style="color:#ff4d4f">술래</b>가 <b style="color:#3ba3ff">도망자</b>를 쫓아요. 잡기는 기본 모드처럼 QR로 해요.' },
     { a: 'i_freeze', t: '잡히면 얼음', b: `잡히면 <b>그 자리에서 얼음</b>! ${Logic.MODE_RULES.ICE_MOVE_M}m 넘게 움직이면 체력이 깎여요. 술래가 <b>${Logic.MODE_RULES.ICE_DRAIN_M}m 밖</b>에 있으면 얼음인 사람 체력이 초당 ${Logic.MODE_RULES.ICE_DRAIN}씩 닳아요.` },
@@ -5659,7 +6197,7 @@ function rpFinish(room, w) {
     const st = (id === S.pid ? S.stats : p.stats) || {};
     P[id] = { name: p.name || '?', role: p.role, job: p.job || null, zombieAt: p.zombieAt || null, diedAt: st.diedAt || null, why: st.deathWhy || null, by: st.deathBy || null, forfeit: p.forfeit ? 1 : null };
   }
-  const KEEP = ['catch', 'infect', 'jail', 'rescue', 'escape', 'rpsWin', 'revive', 'mfOut', 'bombBoom'];
+  const KEEP = ['asnCatch', 'catch', 'infect', 'jail', 'rescue', 'escape', 'rpsWin', 'revive', 'mfOut', 'bombBoom'];
   const ev = Object.values(room.events || {}).filter(e => e && KEEP.includes(e.type) && e.at)
     .map(e => ({ type: e.type, by: e.by || null, target: e.target || null, chaser: e.chaser || null, at: e.at })).slice(-300);
   update(rpRef(room.replayId, 'meta'), { endAt: now(), winner: w.winner || null, reason: w.reason || null, players: P, events: ev }).catch(e => console.error(e));
@@ -5730,7 +6268,7 @@ function rpSegs(pts, T = Infinity) {
   if (cur.length) out.push(cur);
   return out;
 }
-const RP_EV = { catch: ['✖', '잡힘'], infect: ['🧟', '감염'], jail: ['🔒', '체포'], rescue: ['🔓', '탈옥'], escape: ['📳', '탈출'], rpsWin: ['✌️', '가위바위보 승리'], revive: ['🩸', '부활'], mfOut: ['💀', '탈락'], bombBoom: ['💥', '시한폭탄'], dead: ['💀', '탈락'], forfeit: ['🏳️', '기권'] };
+const RP_EV = { asnCatch: ['🗡️', '암살'], catch: ['✖', '잡힘'], infect: ['🧟', '감염'], jail: ['🔒', '체포'], rescue: ['🔓', '탈옥'], escape: ['📳', '탈출'], rpsWin: ['✌️', '가위바위보 승리'], revive: ['🩸', '부활'], mfOut: ['💀', '탈락'], bombBoom: ['💥', '시한폭탄'], dead: ['💀', '탈락'], forfeit: ['🏳️', '기권'] };
 const rpWho = e => (e.type === 'escape' || e.type === 'rpsWin' ? e.by : e.target || e.by);
 function openReplay(id) {
   if (!db || !id) return toast('리플레이를 열 수 없어요');
