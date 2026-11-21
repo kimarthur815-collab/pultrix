@@ -498,7 +498,7 @@ const RULES = {
   EXHAUST_RESET_SEC: 3,      // 이 시간 이상 걷거나 멈추면 경고 시간이 다시 처음부터
   MF_POLICE: 1,              // 마피아 모드: 경찰 수 (추천: 4명 이상이면 1)
   MF_DOCTOR: 1,              // 마피아 모드: 의사 수 (추천: 5명 이상이면 1)
-  ST_PER_MS: 1.5,            // 스태미나 소모 배율: 걷기 속도를 넘는 1m/s당 초당 소모 (방장이 ×0.5~×4로 바꿀 수 있음)
+  ST_MUL: 1,                 // 스태미나 소모 배율 (방장이 ×0.5~×2로 바꿀 수 있음). 기본 소모는 ST_BASE_PER_MS
   ARROW_UNLOCK_SEC: 120,     // 추격 시작(또는 정지 해제) 후 화살표가 열리는 시간
   ARROW_EVERY_SEC: 40,       // 화살표 주기 (도망자 미니맵 갱신의 약 2배)
   ARROW_SHOW_SEC: 10,        // 화살표가 보이는 시간 (주기 40초 기준, 주기에 비례해서 바뀜)
@@ -542,10 +542,12 @@ const Logic = (() => {
     return (deg(Math.atan2(y, x)) + 360) % 360;
   }
   // 속도(m/s) → 초당 스태미나 소모. 걷기는 0, 탈것 속도에서 상한.
+  // 걷기 속도를 넘는 1m/s당 초당 소모 (설정 ×1 기준). 예전 기본 ×1.5 → ×2를 새 ×1로
+  const ST_BASE_PER_MS = 2;
   function staminaCostPerSec(speed, walkKmh = RULES.WALK_KMH) {
     const walk = walkKmh / 3.6, cap = RULES.VEHICLE_KMH / 3.6;
     const v = Math.min(Math.max(speed || 0, 0), cap);
-    return v > walk ? (v - walk) * RULES.ST_PER_MS : 0;
+    return v > walk ? (v - walk) * ST_BASE_PER_MS * (RULES.ST_MUL || 1) : 0;
   }
   // 스태미나가 모자라면 모자란 만큼 체력에서 1:1로 깎임
   function spendStamina(st, cost) {
@@ -1110,7 +1112,7 @@ const Logic = (() => {
       WAIT_MOVE_DMG: RULE_DEFAULTS.WAIT_MOVE_DMG,
       ST_RUNNER: RULE_DEFAULTS.ST_MAX.runner,
       ST_CHASER: RULE_DEFAULTS.ST_MAX.chaser,
-      ST_PER_MS: RULE_DEFAULTS.ST_PER_MS,
+      ST_MUL: RULE_DEFAULTS.ST_MUL,
       AUG_ON: 1,
       SPOT_COUNT: Math.min(6, Math.max(2, Math.ceil(n / 2)) + (r > 600 ? 1 : 0)),
       AUG_EVERY_SEC: gameMin * 60 / 3,
@@ -1131,7 +1133,7 @@ const Logic = (() => {
     return out;
   }
   // 방에 저장된 설정을 RULES에 적용 (없는 값은 기본값)
-  const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON', 'ST_PER_MS', 'MF_POLICE', 'MF_DOCTOR', 'MAP_HIDE_USES', 'ICE_SELF_USES'];
+  const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON', 'ST_MUL', 'MF_POLICE', 'MF_DOCTOR', 'MAP_HIDE_USES', 'ICE_SELF_USES'];
   function applySettings(g) {
     g = g || {};
     for (const k of SETTING_KEYS) RULES[k] = g[k] ?? RULE_DEFAULTS[k];
@@ -2282,7 +2284,7 @@ const SET_FIELDS = [
   { g: '체력·잡기', k: 'WAIT_MOVE_DMG', name: '대기 중 이동 벌칙', step: 1, min: 0, max: 50, f: v => `초당 -${v}` },
   { g: '체력·잡기', k: 'ST_RUNNER', name: '도망자 스태미나', step: 10, min: 50, max: 300, f: v => `${v}` },
   { g: '체력·잡기', k: 'ST_CHASER', name: '추격자 스태미나', step: 10, min: 50, max: 300, f: v => `${v}` },
-  { g: '체력·잡기', k: 'ST_PER_MS', name: '스태미나 소모 배율', step: 0.5, min: 0.5, max: 4, f: v => `×${v}` },
+  { g: '체력·잡기', k: 'ST_MUL', name: '스태미나 소모 배율', step: 0.25, min: 0.5, max: 2, f: v => `×${v}` },
   { g: '증강', k: 'AUG_ON', name: '증강', toggle: true, f: v => (v ? '켜짐' : '꺼짐') },
   { g: '증강', k: 'SPOT_COUNT', name: '증강 지점 수', step: 1, min: 0, max: 10, f: v => `${v}개`, aug: true },
   { g: '증강', k: 'AUG_EVERY_SEC', name: '보상 선택 간격', step: 60, min: 120, max: 1800, f: fmtDur, aug: true },
