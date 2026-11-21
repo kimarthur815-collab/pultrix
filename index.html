@@ -344,7 +344,9 @@ button.primary{background:#ffd400;color:#111}
     <div id="l-mode" class="modes"><button data-mode="classic">기본</button><button data-mode="zombie">🧟 좀비</button><button data-mode="police">🚓 경찰과 도둑</button><button data-mode="mafia">🕵️ 마피아</button><button data-mode="ice">🧊 얼음땡</button></div>
     <p id="l-modeHint" class="dim small" style="margin-top:6px"></p>
     <button id="btnModeTut" style="margin-top:8px">📖 이 모드 방법</button>
-    <button id="btnJail" style="display:none;margin-top:8px">🔒 감옥 위치 찍기</button>
+    <div id="l-jailRow" class="modes" style="display:none"><button id="btnJail">⭕ 감옥 한 점 찍기</button><button id="btnJailPoly">🔷 감옥 꼭짓점 찍기</button></div>
+    <div id="l-jailEdit" class="modes" style="display:none"><button id="btnJUndo">↶ 하나 지우기</button><button id="btnJClear">다 지우기</button><button id="btnJDone" class="primary">✔ 완료</button><button id="btnJCancel">취소</button></div>
+    <p id="l-jailHint" class="dim small" style="display:none;margin:6px 0 0"></p>
   </div>
   <div id="l-memoCard" class="card">
     <b>📝 방장 규칙 메모</b>
@@ -646,7 +648,7 @@ const Logic = (() => {
     return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
   }
   // 찍은 꼭짓점 검사 → { ok, why } 또는 { ok, lat, lng, r }
-  function polyCheck(pts) {
+  function polyCheck(pts, minR = AREA_MIN_M, maxR = AREA_MAX_M, what = '구역') {
     if (pts.length < POLY_MIN) return { ok: false, why: `꼭짓점을 ${POLY_MIN}개 이상 찍어 주세요` };
     if (pts.length > POLY_MAX) return { ok: false, why: `꼭짓점은 ${POLY_MAX}개까지예요` };
     const o = pts[0], v = pts.map(p => toXY(p, o)), n = v.length;
@@ -658,7 +660,7 @@ const Logic = (() => {
     for (let i = 0; i < n; i++) { const [x0, y0] = v[i], [x1, y1] = v[(i + 1) % n], c = x0 * y1 - x1 * y0; A += c; cx += (x0 + x1) * c; cy += (y0 + y1) * c; }
     A /= 2;
     const r = Math.round(Math.sqrt(Math.abs(A) / Math.PI));
-    if (r < AREA_MIN_M || r > AREA_MAX_M) return { ok: false, r, why: `구역이 너무 ${r < AREA_MIN_M ? '작아요' : '커요'} (넓이로 치면 반경 ${r}m, ${AREA_MIN_M}~${AREA_MAX_M}m만 돼요)` };
+    if (r < minR || r > maxR) return { ok: false, r, why: `${what}이 너무 ${r < minR ? '작아요' : '커요'} (넓이로 치면 반경 ${r}m, ${minR}~${maxR}m만 돼요)` };
     const c = fromXY(cx / (6 * A), cy / (6 * A), o);
     return { ok: true, lat: c.lat, lng: c.lng, r };
   }
@@ -735,7 +737,7 @@ const Logic = (() => {
   // 게임 모드: classic(기본) · zombie(잡히면 좀비가 됨) · police(경찰과 도둑: 잡히면 감옥)
   // mafia(마피아: 정체 숨김, 마피아는 QR로 잡으면 바로 탈락, 5분마다 투표로 1명 추방)
   const MODES = { classic: '기본', zombie: '🧟 좀비', police: '🚓 경찰과 도둑', mafia: '🕵️ 마피아', ice: '🧊 얼음땡' };
-  const MODE_RULES = { ICE_MOVE_M: 10, ICE_DRAIN_M: 30, ICE_DRAIN: 1, ICE_FREEZE_SEC: 10, ICE_INV_SEC: 10, ICE_SELF_SEC: 30, JAIL_R: 15, JAIL_GO_SEC: 120, POLICE_FREEZE_SEC: 30, RESCUE_INV_SEC: 60, MF_VOTE_EVERY: 300, MF_VOTE_SEC: 60, MF_SNAP_SEC: 30, MF_PICK_M: 10, MF_GUARD_SEC: 300 };
+  const MODE_RULES = { JAIL_MAX_R: 40, JAIL_MIN_R: 3, ICE_MOVE_M: 10, ICE_DRAIN_M: 30, ICE_DRAIN: 1, ICE_FREEZE_SEC: 10, ICE_INV_SEC: 10, ICE_SELF_SEC: 30, JAIL_R: 15, JAIL_GO_SEC: 120, POLICE_FREEZE_SEC: 30, RESCUE_INV_SEC: 60, MF_VOTE_EVERY: 300, MF_VOTE_SEC: 60, MF_SNAP_SEC: 30, MF_PICK_M: 10, MF_GUARD_SEC: 300 };
   function winner(players, hits, now, startAt, shift = 0, mode = 'classic') {
     const list = Object.entries(players || {}).filter(([, p]) => p.role);
     const runners = list.filter(([, p]) => p.role === 'runner'), chasers = list.filter(([, p]) => p.role === 'chaser');
@@ -1738,6 +1740,19 @@ function drawSelf(mo, color) {
   if (!mo.centered) { mo.map.setView(ll, 17); mo.centered = true; }
 }
 // 꼭짓점 찍는 중: 찍은 순서대로 선 + 번호 점 (처음 점과 마지막 점도 점선으로 이어서 닫힌 모양 미리 보기)
+function drawJailDraft(mo) {
+  const pts = S.jailEdit, key = pts ? pts.map(p => p.lat + ',' + p.lng).join(';') : '';
+  if (mo.jdKey === key) return;
+  mo.jdKey = key;
+  if (mo.jd) { mo.jd.remove(); mo.jd = null; }
+  if (!pts || !pts.length) return;
+  const g = L.layerGroup().addTo(mo.map), ll = pts.map(p => [p.lat, p.lng]);
+  if (ll.length >= 3) L.polygon(ll, { color: '#cbd5e1', weight: 3, fillColor: '#334155', fillOpacity: .35, dashArray: '4 6', interactive: false }).addTo(g);
+  else if (ll.length === 2) L.polyline(ll, { color: '#cbd5e1', weight: 3, interactive: false }).addTo(g);
+  ll.forEach((x, i) => L.marker(x, { interactive: false, icon: L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:#cbd5e1;color:#111;font:800 12px/22px sans-serif;text-align:center;border:2px solid #111">${i + 1}</div>` }) }).addTo(g));
+  mo.jd = g;
+}
 function drawPolyDraft(mo) {
   const pts = S.polyEdit, key = pts ? pts.map(p => p.lat + ',' + p.lng).join(';') : '';
   if (mo.draftKey === key) return;
@@ -1765,11 +1780,12 @@ function drawArea(mo, area, fit) {
 }
 // 경찰과 도둑: 감옥 (모두에게 보임)
 function drawJail(mo) {
-  const room = S.room, j = room && modeOf(room) === 'police' ? jailOf(room) : null, key = j ? j.lat + ',' + j.lng : '';
+  const room = S.room, j = room && modeOf(room) === 'police' && !(S.jailEdit && mo === maps.lmap) ? jailOf(room) : null, key = j ? j.lat + ',' + j.lng + (j.poly ? JSON.stringify(j.poly) : '') : '';
   if (mo.jailKey === key) return;
   if (mo.jailM) { mo.jailM.remove(); mo.jailM = null; }
   mo.jailKey = key;
-  if (j) mo.jailM = L.circle([j.lat, j.lng], { radius: Logic.MODE_RULES.JAIL_R, color: '#94a3b8', weight: 4, fillColor: '#334155', fillOpacity: .45, interactive: false })
+  const st = { color: '#94a3b8', weight: 4, fillColor: '#334155', fillOpacity: .45, interactive: false };
+  if (j) mo.jailM = (j.poly ? L.polygon(j.poly, st) : L.circle([j.lat, j.lng], { radius: Logic.MODE_RULES.JAIL_R, ...st }))
     .bindTooltip('🔒 감옥', { permanent: true, direction: 'center', className: 'jailTip' }).addTo(mo.map);
 }
 // 블랙아웃: 도망자의 미니맵(추격자 위치)·증강 지점·핑이 꺼짐
@@ -1782,7 +1798,7 @@ const blackedOut = () => { const r = S.room, me = r && r.players[S.pid]; return 
 function drawMaps() {
   const room = S.room; if (!room) return;
   const area = room.settings && room.settings.area;
-  if (S.screen === 's-lobby' && maps.lmap) { drawSelf(maps.lmap, '#3ba3ff'); drawArea(maps.lmap, S.polyEdit ? null : area, true); drawPolyDraft(maps.lmap); drawJail(maps.lmap); }
+  if (S.screen === 's-lobby' && maps.lmap) { drawSelf(maps.lmap, '#3ba3ff'); drawArea(maps.lmap, S.polyEdit ? null : area, true); drawPolyDraft(maps.lmap); drawJailDraft(maps.lmap); drawJail(maps.lmap); }
   if (S.screen === 's-game' && maps.gmap) {
     const me = room.players && room.players[S.pid], mo = maps.gmap;
     drawSelf(mo, me && me.role === 'chaser' ? '#ff4d4f' : '#3ba3ff'); drawArea(mo, area);
@@ -2318,7 +2334,8 @@ function renderLobby() {
   $('#l-chLabel').textContent = { zombie: '처음 좀비 수', police: '경찰 수', mafia: '마피아 수', ice: '술래 수' }[mode] || '추격자 수';
   $('#l-rnLabel').textContent = roleName('runner', room);
   $('#l-modeHint').textContent = (mode === 'classic' ? `잡히면 체력 -${mergedSettings(room).out.CATCH_DMG}, 체력 0이면 탈락` : MODE_HINT[mode]) + (mode === 'police' ? (room.settings.jail ? ' · 감옥 위치 정해짐' : ' · 감옥: 안 정하면 구역 중심') : '');
-  $('#btnJail').style.display = isHost && mode === 'police' ? 'block' : 'none';
+  $('#l-jailRow').style.display = isHost && mode === 'police' && !S.jailEdit ? '' : 'none';
+  renderJailBox(isHost && mode === 'police');
   // 방장 규칙 메모: 방장만 쓰고, 모두에게 글자로만 보임
   const memo = memoOf(room);
   $('#l-memo').style.display = isHost ? 'block' : 'none';
@@ -2327,7 +2344,7 @@ function renderLobby() {
   $('#l-memoTxt').style.display = isHost || !memo ? 'none' : 'block';
   $('#l-memoCard').style.display = isHost || memo ? 'block' : 'none';
   $('#l-memoHint').textContent = isHost ? `${$('#l-memo').value.length}/300 · 모두에게 글자로 보이고, 게임 중엔 📝로 다시 볼 수 있어요` : '';
-  $('#btnJail').textContent = S.jailPick ? '지도를 탭하면 감옥이 돼요 (취소하려면 다시 누르기)' : '🔒 감옥 위치 찍기';
+  $('#btnJail').textContent = S.jailPick ? '지도를 탭하세요 (다시 누르면 취소)' : '⭕ 감옥 한 점 찍기';
   renderSettings(room, isHost);
   syncRecommend(room);
   const allReady = players.every(([, p]) => p.ready);
@@ -2342,6 +2359,11 @@ function renderLobby() {
     mo.map.on('click', safe(async e => {
       if (!S.room || S.room.hostId !== S.pid) return;
       const a = S.room.settings && S.room.settings.area;
+      if (S.jailEdit) { // 감옥 꼭짓점 (구역 안)
+        if (a && !Logic.inArea(e.latlng, a)) return toast('감옥은 구역 안에 있어야 해요');
+        if (S.jailEdit.length >= Logic.POLY_MAX) return toast(`꼭짓점은 ${Logic.POLY_MAX}개까지예요`);
+        S.jailEdit.push({ lat: e.latlng.lat, lng: e.latlng.lng }); renderJailBox(true); return drawMaps();
+      }
       if (S.jailPick) { // 경찰과 도둑: 감옥 위치 (구역 안)
         if (a && !Logic.inArea(e.latlng, a)) return toast('감옥은 구역 안에 있어야 해요');
         S.jailPick = false;
@@ -2363,7 +2385,7 @@ const MODE_HINT = {
   ice: `잡히면 그 자리에서 얼음(${Logic.MODE_RULES.ICE_MOVE_M}m 넘게 움직이면 체력 감소), 팀원이 QR을 찍어 주면 땡. 술래가 ${Logic.MODE_RULES.ICE_DRAIN_M}m 밖이면 얼음인 사람 체력이 닳아요. 스스로 얼음도 가능. 도망자 전원이 얼면 술래 승리`,
   zombie: '잡히면 바로 좀비가 돼서 같이 쫓아요. 시간 끝까지 버틴 생존자 모두 승리',
   mafia: '마피아가 누군지 몰라요. 마피아는 QR로 몰래 잡고(바로 탈락), 5분마다 투표로 1명 추방. 경찰은 조사·저격총, 의사는 보호. 탈락하면 말하면 안 돼요',
-  police: `잡히면 감옥(반경 ${Logic.MODE_RULES.JAIL_R}m)행, 팀원이 QR을 찍어 주면 탈옥. 도둑 전원이 동시에 갇히면 경찰 승리`
+  police: `잡히면 감옥행, 팀원이 QR을 찍어 주면 탈옥. 도둑 전원이 동시에 갇히면 경찰 승리`
 };
 // 이번 게임에 쓰는 규칙: 마피아 모드는 숨는 시간 없이 바로 (방장 설정 값은 그대로 둠)
 const gameRules = room => { const g = (room && room.settings && room.settings.game) || null; return g && modeOf(room) === 'mafia' ? { ...g, HIDE_SEC: 0 } : g; };
@@ -2380,14 +2402,45 @@ $('#l-memo').addEventListener('input', () => {
 $('#btnMemo').onclick = () => { $('#memoTxt').textContent = memoOf(S.room); $('#ov-memo').classList.add('on'); };
 $('#btnMemoClose').onclick = () => $('#ov-memo').classList.remove('on');
 const modeOf = room => (room && room.settings && room.settings.mode) || 'classic';
-const jailOf = room => (room.settings && (room.settings.jail || room.settings.area)) || null;
+const asArr = v => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.keys(v).sort((a, b) => a - b).map(k => asArr(v[k])) : v);
+const jailOf = room => { const st = room.settings || {}, j = st.jail; return j ? (j.poly ? { ...j, poly: asArr(j.poly) } : j) : st.area ? { lat: st.area.lat, lng: st.area.lng } : null; };
+// 감옥 안인지: 꼭짓점 감옥이면 모양 안, 아니면 반경 15m
+const inJail = (p, j) => !!(j && (j.poly ? Logic.inArea(p, j) : Logic.dist(p, j) <= Logic.MODE_RULES.JAIL_R));
 $('#l-mode').onclick = safe(async e => {
   const b = e.target.closest('[data-mode]'), room = S.room;
   if (!b || !room || room.hostId !== S.pid) return;
-  S.jailPick = false;
+  S.jailPick = false; S.jailEdit = null;
   await update(roomRef('settings'), { mode: b.dataset.mode });
 });
-$('#btnJail').onclick = () => { S.jailPick = !S.jailPick; if (S.room) renderLobby(); };
+$('#btnJail').onclick = () => { S.jailPick = !S.jailPick; S.jailEdit = null; if (S.room) renderLobby(); };
+// 감옥 꼭짓점: 구역 꼭짓점과 같은 방식, 크기는 넓이로 치면 반경 3~40m
+function renderJailBox(show) {
+  const ed = S.jailEdit, hint = $('#l-jailHint');
+  $('#l-jailEdit').style.display = show && ed ? '' : 'none';
+  if (!show) { hint.style.display = 'none'; return; }
+  const j = S.room && S.room.settings && S.room.settings.jail && jailOf(S.room);
+  hint.style.display = '';
+  if (ed) {
+    const chk = Logic.polyCheck(ed, Logic.MODE_RULES.JAIL_MIN_R, Logic.MODE_RULES.JAIL_MAX_R, '감옥');
+    $('#btnJDone').disabled = !chk.ok; $('#btnJUndo').disabled = $('#btnJClear').disabled = !ed.length;
+    hint.textContent = chk.ok ? `✔ 완료를 누르면 이 모양이 감옥이 돼요 (반경 약 ${chk.r}m 크기)` : `감옥 둘레를 따라 순서대로 탭하세요 (${ed.length}/${Logic.POLY_MAX}) · ${chk.why}`;
+  } else hint.textContent = j && j.poly ? `지금 감옥: 꼭짓점 ${j.poly.length}개 (반경 약 ${j.r}m 크기)` : j ? `지금 감옥: 찍은 곳 반경 ${Logic.MODE_RULES.JAIL_R}m` : `지금 감옥: 구역 가운데 반경 ${Logic.MODE_RULES.JAIL_R}m`;
+}
+$('#btnJailPoly').onclick = () => {
+  const j = S.room && S.room.settings && S.room.settings.jail && jailOf(S.room);
+  S.jailPick = false; S.jailEdit = j && j.poly ? j.poly.map(([lat, lng]) => ({ lat, lng })) : [];
+  if (S.room) renderLobby(); drawMaps();
+};
+$('#btnJUndo').onclick = () => { if (S.jailEdit) { S.jailEdit.pop(); renderJailBox(true); drawMaps(); } };
+$('#btnJClear').onclick = () => { if (S.jailEdit) { S.jailEdit = []; renderJailBox(true); drawMaps(); } };
+$('#btnJCancel').onclick = () => { S.jailEdit = null; if (S.room) renderLobby(); drawMaps(); };
+$('#btnJDone').onclick = safe(async () => {
+  const pts = S.jailEdit; if (!pts) return;
+  const chk = Logic.polyCheck(pts, Logic.MODE_RULES.JAIL_MIN_R, Logic.MODE_RULES.JAIL_MAX_R, '감옥');
+  if (!chk.ok) return toast(chk.why, true);
+  await set(roomRef('settings/jail'), { lat: chk.lat, lng: chk.lng, r: chk.r, poly: pts.map(p => [p.lat, p.lng]) });
+  S.jailEdit = null; toast(`🔒 꼭짓점 ${pts.length}개 감옥 완성`); renderLobby(S.room); drawMaps();
+});
 // 친구 초대: 방 코드가 들어간 사이트 링크를 QR로 보여줌
 const inviteUrl = () => location.origin + location.pathname + '?room=' + S.code;
 $('#btnInvite').onclick = () => {
@@ -2427,7 +2480,7 @@ function renderPolyBox() {
 $('#l-shape').onclick = safe(async e => {
   const b = e.target.closest('[data-shape]'); if (!b || !S.room || S.room.hostId !== S.pid) return;
   const a = S.room.settings && S.room.settings.area;
-  if (b.dataset.shape === 'poly') { S.polyEdit = a && a.poly ? a.poly.map(([lat, lng]) => ({ lat, lng })) : []; S.jailPick = false; }
+  if (b.dataset.shape === 'poly') { S.polyEdit = a && a.poly ? a.poly.map(([lat, lng]) => ({ lat, lng })) : []; S.jailPick = false; S.jailEdit = null; }
   else {
     S.polyEdit = null;
     if (a && a.poly) { // 꼭짓점 구역 → 넓이가 같은 원
@@ -2459,7 +2512,7 @@ $('#l-r').onchange = safe(async () => {
 $('#btnStart').onclick = safe(async () => {
   const room = S.room, ids = Object.keys(room.players), n = ids.length;
   if (n < 2) return toast('2명 이상이어야 해요');
-  if (S.polyEdit) return toast('✔ 완료나 취소를 먼저 눌러 주세요', true);
+  if (S.polyEdit || S.jailEdit) return toast('✔ 완료나 취소를 먼저 눌러 주세요', true);
   const roles = Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
   const game = mergedSettings(room).out, mafia = modeOf(room) === 'mafia'; // 모든 폰이 같은 설정으로 시작
   const jobs = mafia ? Logic.assignJobs(roles, game.MF_POLICE || 0, game.MF_DOCTOR || 0) : {};
@@ -4498,12 +4551,12 @@ function tick() {
       hurt = !outside ? { why: '탈것' } : !inFull ? { why: '구역 밖' } : { why: '자기장 밖', by: room.storm && room.storm.by };
     }
   } else if (gpsOk) S.ruleSec = 0;
-  // 경찰과 도둑: 갇힌 도둑은 감옥(반경 15m) 안에 — 처음 2분은 가는 시간, 들어간 뒤 나가면 10초 경고 후 체력 감소
+  // 경찰과 도둑: 갇힌 도둑은 감옥(반경 15m 원 또는 꼭짓점 모양) 안에 — 처음 2분은 가는 시간, 들어간 뒤 나가면 10초 경고 후 체력 감소
   const jl = me.role === 'runner' && modeOf(room) === 'police' ? me.jailed : null;
   if (jl && gpsOk) {
     const MR = Logic.MODE_RULES, jail = jailOf(room), jd = jail ? Logic.dist(S.fix, jail) : 0;
     if (S.jailAt !== jl.at) { S.jailAt = jl.at; S.jailIn = false; S.jailOut = 0; }
-    if (jd <= MR.JAIL_R) { S.jailIn = true; S.jailOut = 0; warn.push('🔒 감옥 · 팀원이 QR을 찍으면 탈옥'); }
+    if (!jail || inJail(S.fix, jail)) { S.jailIn = true; S.jailOut = 0; warn.push('🔒 감옥 · 팀원이 QR을 찍으면 탈옥'); }
     else if (!S.jailIn && t - jl.at < MR.JAIL_GO_SEC * 1000) warn.push(`🔒 감옥으로 가세요! ${fmt(MR.JAIL_GO_SEC * 1000 - (t - jl.at))} 남음 (${Math.round(jd)}m)`);
     else {
       S.jailOut += dt; const left = RULES.RULE_WARN_SEC - S.jailOut;
@@ -5221,7 +5274,7 @@ const MODE_TUT = {
   ],
   police: () => [
     { a: 'p_roles', t: '🚓 경찰과 도둑', b: '<b style="color:#ff4d4f">경찰</b>은 <b style="color:#3ba3ff">도둑</b>을 잡아 감옥에 보내요. 감옥 위치는 방장이 지도에서 정해요.' },
-    { a: 'p_jail', t: '체포 → 감옥', b: `잡히면 <b>${fmtDur(Logic.MODE_RULES.JAIL_GO_SEC)} 안에 감옥</b>(반경 ${Logic.MODE_RULES.JAIL_R}m)으로 가야 해요. 감옥 밖으로 나가면 체력이 깎여요.` },
+    { a: 'p_jail', t: '체포 → 감옥', b: `잡히면 <b>${fmtDur(Logic.MODE_RULES.JAIL_GO_SEC)} 안에 감옥</b>(기본 반경 ${Logic.MODE_RULES.JAIL_R}m, 방장이 꼭짓점으로 모양을 정할 수도 있어요)으로 가야 해요. 감옥 밖으로 나가면 체력이 깎여요.` },
     { a: 'p_rescue', t: '탈옥', b: `갇히지 않은 도둑이 갇힌 팀원의 QR을 찍으면 탈옥! 풀려난 도둑은 <b>${fmtDur(Logic.MODE_RULES.RESCUE_INV_SEC)} 무적</b>이에요.` },
     { a: 'p_win', t: '승리 조건', b: `살아 있는 도둑이 <b>모두 동시에</b> 갇히면 경찰 승리, <b>${fmtDur(RULES.GAME_SEC)}</b>이 끝나면 도둑 승리예요.` }
   ],
