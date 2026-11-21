@@ -114,6 +114,14 @@ textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line)
 .tipline:empty{display:none}.tipline.tipnew{animation:tipIn .35s ease-out}@keyframes tipIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 #tipBubble{display:none;cursor:pointer;font-size:15px;font-weight:700;color:#fde68a;background:rgba(17,20,24,.96);border:2px solid #fbbf24;border-radius:12px;padding:9px 12px;margin:0 0 6px;word-break:keep-all;box-shadow:0 0 24px rgba(251,191,36,.35)}
 #tipBubble.on{display:block;animation:tipIn .35s ease-out}#tipBubble small{display:block;font-weight:500;font-size:12px;color:var(--dim);margin-top:2px}
+#ov-chat .chatbox{width:min(92vw,400px);display:flex;flex-direction:column;gap:6px}#ov-chat h2{margin:0}#ov-chat h2 small{font-size:14px;color:var(--dim);font-weight:600}
+.chatlist{height:min(40vh,320px);overflow-y:auto;background:#0b0e12;border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;text-align:left}
+.chatlist:empty::before{content:'아직 대화가 없어요';color:var(--dim);font-size:14px;margin:auto}
+.cmsg{font-size:15px;line-height:1.35;padding:6px 9px;border-radius:10px;background:#1b2028;max-width:88%;word-break:break-all;align-self:flex-start}
+.cmsg b{font-size:12px;color:var(--dim);display:block;font-weight:600}.cmsg.mine{align-self:flex-end;background:#1d3557}.cmsg.enemy{background:#3a1d1d;border:1px dashed #ff4d4f}
+.chatquick{display:flex;flex-wrap:wrap;gap:5px;justify-content:center}.chatquick button{width:auto;margin:0;padding:7px 9px;font-size:14px}
+.chatin{display:flex;gap:6px;align-items:center}.chatin input{flex:1;margin:0;padding:11px}.chatin button{width:auto;margin:0;padding:11px 14px}
+#btnChat{position:relative}#chatBadge{position:absolute;top:-6px;right:-6px;background:var(--chaser);color:#fff;border-radius:9px;font-size:11px;font-style:normal;padding:0 5px;line-height:17px}#chatBadge:empty{display:none}
 .augbar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:4px}
 .augbar:empty{display:none}.augbar{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 #augInfoCard .augcard{display:flex;gap:12px;align-items:center;text-align:left}#augInfoCard .augcard small{font-size:15px;color:var(--txt);line-height:1.5}
@@ -289,7 +297,7 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 <section id="s-game" class="screen">
   <div id="gmap"></div>
   <div class="hud">
-    <div class="row"><span id="g-role" class="badge"></span><span id="g-phase"></span><span id="g-time" class="time"></span><button id="btnVote" class="hudbtn" title="투표" style="display:none">🗳</button><button id="btnMemo" class="hudbtn" title="방장 규칙 메모" style="display:none">📝</button><button class="btnSet hudbtn" title="설정">⚙</button><button id="btnForfeit" class="hudbtn" title="기권">🏳</button></div>
+    <div class="row"><span id="g-role" class="badge"></span><span id="g-phase"></span><span id="g-time" class="time"></span><button id="btnVote" class="hudbtn" title="투표" style="display:none">🗳</button><button id="btnMemo" class="hudbtn" title="방장 규칙 메모" style="display:none">📝</button><button id="btnChat" class="hudbtn" title="팀 대화방" style="display:none">💬<i id="chatBadge"></i></button><button class="btnSet hudbtn" title="설정">⚙</button><button id="btnForfeit" class="hudbtn" title="기권">🏳</button></div>
     <div class="bar"><i id="g-hp"></i><span>체력 <b id="g-hpv"></b></span></div>
     <div class="bar st"><i id="g-st"></i><span>스태미나 <b id="g-stv"></b></span></div>
     <div id="g-status" class="status dim"></div>
@@ -340,6 +348,8 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
   </div>
   <button id="btnConsentOk" class="primary" disabled>동의하고 계속</button><button id="btnConsentNo" class="linkbtn">동의하지 않음</button></div>
 <div id="ov-set" class="ov"><h2>⚙ 설정</h2><div class="card setlist"><div class="row between"><span>🎵 배경음악</span><button id="setBgm" class="sw"></button></div><div class="row between"><span>🔊 효과음</span><button id="setSfx" class="sw"></button></div><div class="row between"><span>📍 위치정보 동의</span><button id="setConsent" class="sw"></button></div></div><button id="btnSetClose">닫기</button></div>
+<div id="ov-chat" class="ov"><div class="chatbox"><h2>💬 팀 대화방 <small id="chatLeft"></small></h2><div id="chatList" class="chatlist"></div><div id="chatQuick" class="chatquick"></div>
+  <div class="chatin"><input id="chatIn" maxlength="30" placeholder="최대 30자" autocomplete="off"><button id="btnChatSend" class="primary">보내기</button></div><button id="btnChatClose" class="linkbtn">닫기</button></div></div>
 <div id="ov-memo" class="ov"><h2>📝 방장 규칙 메모</h2><p id="memoTxt" class="memo card"></p><button id="btnMemoClose">닫기</button></div>
 <div id="ov-ping" class="ov"><h2>팀 핑</h2><p class="dim">같은 팀 지도에 20초 동안 보여요</p><div class="pingbtns" style="width:min(90vw,360px)"><button data-ping="seen">👀 여기 있었음</button><button data-ping="gather">📍 여기로 모여</button><button data-ping="danger">⚠️ 위험</button></div><button id="btnPingClose" class="linkbtn">취소</button></div>
 <div id="ov-forfeit" class="ov"><h2>기권할까요?</h2><p class="dim">바로 탈락하고 관전 모드로 바뀌어요</p><button id="btnForfeitYes" class="danger" style="max-width:360px">기권하기</button><button id="btnForfeitNo">계속하기</button></div>
@@ -377,7 +387,7 @@ const RULES = {
   HIDE_SEC: 300,             // 도망자 숨는 시간 (추격자 대기)
   GAME_SEC: 1800,            // 숨는 시간이 끝난 뒤 제한시간 — 버티면 도망자 승리
   CATCH_DMG: 50,             // 잡힐 때 도망자 체력 감소
-  CATCH_COOLDOWN_SEC: 180,   // 잡은 추격자 정지 + 잡힌 도망자 무적 시간
+  CATCH_COOLDOWN_SEC: 120,   // 잡은 추격자 정지 + 잡힌 도망자 무적 시간
   CATCH_MAX_DIST_M: 20,      // QR 찍을 때 GPS 거리가 이보다 멀면 무효 (꼼수 방지) — 두 폰의 GPS 오차만큼 더 인정
   CATCH_MAX_DIST_CAP_M: 80,  // 실내처럼 GPS가 부정확할 때도 최대 이 거리까지만 인정
   WAIT_MOVE_M: 15,           // 대기 중 처음 자리에서 이만큼 벗어나면
@@ -394,8 +404,8 @@ const RULES = {
   MF_DOCTOR: 1,              // 마피아 모드: 의사 수 (추천: 5명 이상이면 1)
   ST_PER_MS: 1.5,            // 스태미나 소모 배율: 걷기 속도를 넘는 1m/s당 초당 소모 (방장이 ×0.5~×4로 바꿀 수 있음)
   ARROW_UNLOCK_SEC: 120,     // 추격 시작(또는 정지 해제) 후 화살표가 열리는 시간
-  ARROW_EVERY_SEC: 45,       // 화살표 주기
-  ARROW_SHOW_SEC: 10,        // 화살표가 보이는 시간 (주기 45초 기준, 주기에 비례해서 바뀜)
+  ARROW_EVERY_SEC: 40,       // 화살표 주기 (도망자 미니맵 갱신의 약 2배)
+  ARROW_SHOW_SEC: 10,        // 화살표가 보이는 시간 (주기 40초 기준, 주기에 비례해서 바뀜)
   ARROW_NEAR_M: 15,
   ALT_NEAR_M: 30,            // 화살표: 도망자가 이 거리 안이면 높이 차이도 표시 (GPS 고도)
   ALT_DIFF_M: 6,             // 높이 차이가 이보다 클 때만 (약 2층, GPS 고도 오차 때문)          // 이 거리 안이면 화살표 대신 '근처에 있어요!'
@@ -460,7 +470,7 @@ const Logic = (() => {
     if (now < end) return { phase: 'chase', remainMs: end - now };
     return { phase: 'over', remainMs: 0 };
   }
-  // 화살표가 보이는 시간: 주기의 약 22% (기본 45초 → 10초), 최소 5초
+  // 화살표가 보이는 시간: 주기의 25% (기본 40초 → 10초), 최소 5초
   function arrowShowSec(everySec) {
     return Math.max(5, Math.round(everySec * RULE_DEFAULTS.ARROW_SHOW_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
   }
@@ -644,7 +654,7 @@ const Logic = (() => {
   // ===== 증강 =====  등급은 증강마다 하나로 고정(사기일수록 높음), cd: 쿨타임(분, 30분 게임 기준·게임 시간에 비례)
   const GRADES = ['D', 'C', 'B', 'A', 'S', 'SS'];
   const AUGS = {
-    arrowBoost:   { name: '정밀 추적', grade: 'A', role: 'chaser', v: 30, d: v => `화살표 주기 ${augArrowSec(v)}초 (기본 ${RULES.ARROW_EVERY_SEC}초)` },
+    arrowBoost:   { name: '정밀 추적', grade: 'A', role: 'chaser', v: 27, d: v => `화살표 주기 ${augArrowSec(v)}초 (기본 ${RULES.ARROW_EVERY_SEC}초)` },
     distance:     { name: '공간 지각', grade: 'B', role: 'chaser', v: 10, d: v => `화살표에 도망자까지 거리 표시 (${v}m 단위)` },
     radar:        { name: '순간 포착', grade: 'S', role: 'chaser', cd: 5, v: 10, d: v => `${v}초 동안 모든 도망자 위치 표시` },
     chaserSt:     { name: '질주 본능', grade: 'B', role: 'chaser', v: 50, d: v => `스태미나 최대치 +${v}, 즉시 가득` },
@@ -668,13 +678,13 @@ const Logic = (() => {
     foresight:    { name: '예측', grade: 'C', role: 'chaser', v: 3, d: v => `화살표 보이는 시간 +${v}초` },
     footsteps:    { name: '발자국', grade: 'C', role: 'runner', v: 5, d: () => '미니맵에 추격자 이동 방향도 같이 표시' },
     selfDestruct: { name: '자폭', grade: 'C', role: 'all', cd: 5, v: 30, r: 15, d: v => `내 체력이 절반이 되고, 반경 15m 안 상대 전원 체력 -${v} (무적인 도망자는 제외)` },
-    domain:       { name: '영역전개', grade: 'SS', role: 'all', cd: 6, v: 25, sec: 30, walk: 3, mult: 5, d: v => `쓴 자리에 반경 ${v}m 영역 30초. 안에 들어온 상대는 걷기만 해도 초당 3, 뛰면 5배로 스태미나 소모` },
+    domain:       { name: '영역전개', grade: 'SS', role: 'all', cd: 6, v: 40, sec: 30, walk: 3, mult: 5, d: v => `쓴 자리에 반경 ${augDomainM(v)}m 영역 30초 (구역 300m 기준 40m, 구역 크기에 비례). 안에 들어온 상대는 걷기만 해도 초당 3, 뛰면 5배로 스태미나 소모` },
     mugung:       { name: '무궁화 꽃이 피었습니다', grade: 'S', role: 'chaser', cd: 6, v: 10, warn: 2, ms: 1, reveal: 20, d: v => `도망자에게 2초 예고 후 ${v}초 판정. 그동안 초속 1m 넘게 움직인 도망자는 스태미나 0 + 20초 동안 추격자 전원에게 위치 공개` },
     shake:        { name: '흔들어 탈출', grade: 'B', role: 'runner', cd: 3, auto: true, v: 50, win: 3, n: 3, inv: 10, d: v => `잡힌 뒤 3초 안에 폰을 세게 3번 흔들면 ${v}% 확률로 잡기 취소 + 10초 무적 (흔들면 쿨타임 시작)` },
     jam:          { name: '나침반 교란', grade: 'A', role: 'runner', cd: 4, v: 30, d: v => `${v}초 동안 모든 추격자 화살표가 엉뚱한 방향을 가리킴` },
     counterIntel: { name: '역탐지', grade: 'B', role: 'runner', v: 5, d: v => `추격자가 화살표·순간 포착으로 나를 보면 알림 + 그 추격자 위치 ${v}초 표시` },
     wanted:       { name: '현상수배', grade: 'A', role: 'chaser', cd: 4, v: 30, d: v => `도망자 1명을 골라 ${v}초 동안 추격자 전원 지도에 진짜 위치 공개 (투명화·분신·자리 바꾸기 무시)` },
-    eavesdrop:    { name: '도청', grade: 'C', role: 'all', v: 1, d: () => '상대 팀 핑도 내 지도에 보임' },
+    eavesdrop:    { name: '도청', grade: 'C', role: 'all', v: 1, d: () => '상대 팀 핑도 내 지도에 보이고, 상대 팀 대화방 글도 보임' },
     swap:         { name: '자리 바꾸기', grade: 'A', role: 'runner', cd: 4, v: 30, d: v => `팀원 1명을 골라 ${v}초 동안 상대 화면에서 서로 위치가 바뀌어 보임` },
     fakeTreasure: { name: '가짜 보물', grade: 'B', role: 'all', cd: 3, v: 300, d: () => '쓴 자리에 상대에게만 보이는 가짜 증강 지점 (5분). 밟은 상대는 스태미나 0 + 30초 동안 나에게 위치가 들킴' },
     magnet:       { name: '자석', grade: 'C', role: 'all', cd: 2, v: 50, d: v => `가장 가까운 증강 지점을 내 쪽으로 ${v}m 끌어옴` },
@@ -710,7 +720,7 @@ const Logic = (() => {
     tracker:      { name: '위치 추적기', grade: 'B', role: 'chaser', cd: 3, v: 15, sec: 120, every: 20, d: v => `${v}m 안 도망자에게 붙이면 2분 동안 20초마다 추격자 전원 지도에 위치가 찍힘` },
     blackout:     { name: '블랙아웃', grade: 'S', role: 'chaser', cd: 6, v: 30, d: v => `${v}초 동안 모든 도망자의 미니맵(추격자 위치)·증강 지점·핑이 꺼짐` },
     vampire:      { name: '흡혈', grade: 'A', role: 'chaser', v: 20, d: v => `잡을 때마다 체력 +${v}` },
-    chain:        { name: '연쇄', grade: 'S', role: 'chaser', v: 60, d: v => `잡은 뒤 제자리 정지 시간 3분 → ${v / 60}분` },
+    chain:        { name: '연쇄', grade: 'S', role: 'chaser', v: 60, d: v => `잡은 뒤 제자리 정지 시간 ${fmtSec(RULES.CATCH_COOLDOWN_SEC)} → ${fmtSec(Math.min(v, RULES.CATCH_COOLDOWN_SEC))}` },
     snipe:        { name: '저격', grade: 'S', role: 'chaser', cd: 5, v: 40, dmg: 20, aim: 10, d: v => `폰을 도망자 쪽으로 겨눠(±10°, 가까우면 GPS 오차만큼 최대 ±35°) 쏘면 ${v}m 안 도망자 체력 -20 (빗나가도 쿨타임)` },
     // ---- 추가 능력 12개 ----
     drone:        { name: '드론', grade: 'A', role: 'chaser', cd: 4, v: 30, ms: 20 / 3.6, r: 20, d: v => `${v}초 동안 조이스틱으로 드론 조종 (민 만큼 빠르게, 최대 시속 20km · 구역 밖으론 못 나감). 드론 ${AUGS.drone.r}m 안의 도망자가 내 지도에 보임 (도망자에게도 드론이 보임)` },
@@ -729,6 +739,7 @@ const Logic = (() => {
     heartbeat:    { name: '심장박동', grade: 'B', role: 'chaser', cd: 3, v: 30, r: 80, near: 10, d: v => `${v}초 동안 가장 가까운 도망자가 ${AUGS.heartbeat.r}m 안이면 폰이 심장처럼 뛰고, 가까울수록 빨라짐 (${AUGS.heartbeat.near}m 안에서 가장 빠름 · 화면 테두리도 같이 뜀)` },
     shadowStep:   { name: '그림자 밟기', grade: 'A', role: 'chaser', cd: 4, v: 60, back: 20, r: 30, hitR: 5, stop: 5, ms: 1, dmg: 20, d: v => `${v}초 동안 ${AUGS.shadowStep.r}m 안 도망자의 ${AUGS.shadowStep.back}초 전 자리(그림자)가 보임. 그림자를 밟으면 그 도망자는 ${AUGS.shadowStep.stop}초 동안 멈춰야 하고, 움직이면 체력 -${AUGS.shadowStep.dmg} (도망자마다 한 번)` },
     timeBomb:     { name: '시한폭탄', grade: 'B', role: 'all', cd: 5, v: 60, r: 10, dmg: 30, max: 3, d: v => `내가 폭탄을 들고 시작. ${AUGS.timeBomb.r}m 안에 사람이 오면 가장 가까운 사람에게 자동으로 넘어감 (팀원도 · 방금 준 사람에겐 못 줌). 넘길 때마다 ${v}초 다시, ${AUGS.timeBomb.max}번째로 받은 사람은 바로 폭발. 시간이 다 되면 들고 있는 사람 체력 -${AUGS.timeBomb.dmg}` },
+    teamChat:     { name: '팀 대화방', grade: 'B', role: 'all', cd: 5, v: 180, len: 30, d: v => `${v / 60}분 동안 우리 팀 대화방이 열림 (팀원 모두 글 최대 ${AUGS.teamChat.len}자 + 빠른 문장). 상대가 도청을 가지고 있으면 엿볼 수 있음` },
     // ---- 마피아 모드 직업 능력 (게임 시작·저격총 줍기로만 얻음) ----
     mfCheck:      { name: '조사', grade: 'A', role: 'job', cd: 3, v: 0, d: () => '1명을 골라 마피아인지 시민인지 확인 (나만 봄)' },
     mfRifle:      { name: '저격총', grade: 'S', role: 'job', cd: 5, v: 40, aim: 10, d: v => `폰을 겨눠(±10°, 가까우면 GPS 오차만큼 최대 ±35°) ${v}m 안 사람을 쏨. 마피아면 그 마피아만 탈락, 아니면 맞은 사람과 나 둘 다 탈락 (빗나가도 쿨타임). 내가 죽으면 그 자리에 떨어져 시민이 주우면 새 경찰` },
@@ -737,10 +748,12 @@ const Logic = (() => {
   // 마피아 모드에서 나오는 증강: 누가 써도 팀(정체)이 드러나지 않는 공통 증강만
   // (빠짐: 통찰·덫·자폭·영역전개·도청·위조 핑·가짜 보물·시간 도둑·먹물·소매치기·복제·침묵·안개·탐지기·분신·현상금)
   const MF_AUGS = ['heal', 'stRefill', 'recoverBoost', 'ironman', 'lastStand', 'lightShoes', 'megaphone', 'breather', 'luck', 'magnet', 'runnersHigh', 'booster', 'comeback', 'supply', 'gamble', 'reroll', 'alchemy'];
-  // 정밀 추적·고속 스캔은 방장이 정한 기본 주기에 비례 (기본값 45초·20초 기준 수치)
+  // 정밀 추적·고속 스캔은 방장이 정한 기본 주기에 비례 (기본값 40초·20초 기준 수치)
   const augArrowSec = v => Math.max(15, Math.round(v * RULES.ARROW_EVERY_SEC / RULE_DEFAULTS.ARROW_EVERY_SEC));
   // 육감 거리는 구역 반경에 비례 (300m 기준 수치), 15~200m
   const augAlarmM = v => Math.min(200, Math.max(15, Math.round(v * RULES.AREA_R / RULE_DEFAULTS.AREA_R)));
+  // 영역전개 반경도 구역 반경에 비례 (300m 기준 수치), 15~150m
+  const augDomainM = v => Math.min(150, Math.max(15, Math.round(v * RULES.AREA_R / RULE_DEFAULTS.AREA_R)));
   const augIntelSec = v => Math.max(3, Math.round(v * RULES.MAP_EVERY_SEC / RULE_DEFAULTS.MAP_EVERY_SEC));
   const fmtSec = sec => { sec = Math.round(sec); const m = Math.floor(sec / 60), r = sec % 60; return m ? `${m}분${r ? ` ${r}초` : ''}` : `${r}초`; };
   const augCdMs = id => (AUGS[id].cd ? AUGS[id].cd * 60000 * RULES.GAME_SEC / RULE_DEFAULTS.GAME_SEC : 0);
@@ -880,13 +893,14 @@ const Logic = (() => {
   function recommend(r, n, chasers) {
     const c = Math.max(1, chasers), runners = Math.max(1, n - c);
     const gameMin = Math.min(60, Math.max(15, roundTo(interp([[100, 20], [300, 30], [600, 40], [1000, 50]], r) * Math.sqrt(runners / c), 5)));
-    const arrow = roundTo(interp([[100, 75], [300, 45], [600, 35], [1000, 25]], r), 5);
+    // 도망자 미니맵 갱신은 반경에 따라, 추격자 화살표는 그 2배 (300m: 20초·40초)
+    const map = Math.max(10, roundTo(interp([[100, 35], [300, 20], [600, 15], [1000, 10]], r), 5)), arrow = map * 2;
     return {
       HIDE_SEC: roundTo(interp([[100, 120], [300, 300], [600, 480], [1000, 600]], r), 30),
       GAME_SEC: gameMin * 60,
       ARROW_UNLOCK_SEC: RULE_DEFAULTS.ARROW_UNLOCK_SEC,
       ARROW_EVERY_SEC: arrow,
-      MAP_EVERY_SEC: Math.max(10, roundTo(arrow * 0.45, 5)),
+      MAP_EVERY_SEC: map,
       CATCH_DMG: RULE_DEFAULTS.CATCH_DMG,
       CATCH_COOLDOWN_SEC: RULE_DEFAULTS.CATCH_COOLDOWN_SEC,
       WAIT_MOVE_DMG: RULE_DEFAULTS.WAIT_MOVE_DMG,
@@ -901,12 +915,13 @@ const Logic = (() => {
     };
   }
   // 추천값에 방장이 직접 바꾼 칸을 덮어쓴 최종 설정.
-  // 미니맵 갱신(화살표 주기 연동)과 보상 간격(게임 시간 ÷ 3)은 직접 안 바꿨다면 '최종' 화살표 주기·게임 시간을 따라감
+  // 화살표 주기 ≈ 미니맵 갱신 × 2: 한쪽만 직접 바꾸면 다른 쪽이 따라감. 보상 간격(게임 시간 ÷ 3)도 직접 안 바꿨다면 최종 게임 시간을 따라감
   function mergeSettings(rec, cur, custom) {
     cur = cur || {}; custom = custom || {};
     const out = {};
     for (const k of Object.keys(rec)) out[k] = custom[k] && cur[k] != null ? cur[k] : rec[k];
-    if (!custom.MAP_EVERY_SEC) out.MAP_EVERY_SEC = Math.max(10, roundTo(out.ARROW_EVERY_SEC * 0.45, 5));
+    if (custom.ARROW_EVERY_SEC && !custom.MAP_EVERY_SEC) out.MAP_EVERY_SEC = Math.max(10, roundTo(out.ARROW_EVERY_SEC / 2, 5));
+    if (custom.MAP_EVERY_SEC && !custom.ARROW_EVERY_SEC) out.ARROW_EVERY_SEC = Math.min(180, Math.max(15, out.MAP_EVERY_SEC * 2));
     if (!custom.AUG_EVERY_SEC) out.AUG_EVERY_SEC = out.GAME_SEC / 3;
     return out;
   }
@@ -942,7 +957,7 @@ const Logic = (() => {
   return { beatGap, aimAt, rpsWinner, MF_AUGS, aimTarget, assignJobs, voteRound, voteResult, movingPos, segCross, clampLen, shownAlt, altLabel, edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec, spotStale, spotStaleMs, moveSpot,
     MODES, MODE_RULES, setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
-    interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM };
+    interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM, augDomainM };
 })();
 // LOGIC END
 </script>
@@ -1592,6 +1607,10 @@ function onEvent(e) {
     sfx('mugung'); if (me0.role === 'runner') vibrate(MUG_VIB);
     return;
   }
+  if (e.type === 'chatOpen') {
+    if (e.by !== S.pid && me0.role === e.role) { toast(`💬 ${who(e.by)}가 팀 대화방을 열었어요! 위의 💬 버튼`, true); vibrate([60, 40, 60]); }
+    return;
+  }
   if (e.type === 'shadow') {
     if (e.target === S.pid) { toast(`👣 ${who(e.by)}가 내 그림자를 밟았어요! 곧 ${Logic.AUGS.shadowStep.stop}초 동안 멈춰야 해요`, true); flash('rgba(167,139,250,.95)'); vibrate([200, 80, 200, 80, 200]); sfx('wanted'); }
     return;
@@ -2020,7 +2039,7 @@ $('#btnStart').onclick = safe(async () => {
   const game = mergedSettings(room).out, mafia = modeOf(room) === 'mafia'; // 모든 폰이 같은 설정으로 시작
   const jobs = mafia ? Logic.assignJobs(roles, game.MF_POLICE || 0, game.MF_DOCTOR || 0) : {};
   Logic.applySettings(gameRules({ settings: { ...room.settings, game } }));
-  const u = { status: 'playing', startAt: Math.round(now()) + RULES.START_DELAY_SEC * 1000, result: null, hits: null, events: null, traps: null, zones: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null, nets: null, blocks: null, radioJam: null, fog: null, votes: null, rifle: null, rps: null, bombs: null, spots: {}, 'settings/game': game };
+  const u = { status: 'playing', startAt: Math.round(now()) + RULES.START_DELAY_SEC * 1000, result: null, hits: null, events: null, traps: null, zones: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null, nets: null, blocks: null, radioJam: null, fog: null, votes: null, rifle: null, rps: null, bombs: null, chats: null, chatOpen: null, spots: {}, 'settings/game': game };
   if (RULES.AUG_ON) for (let i = 0; i < game.SPOT_COUNT; i++) u.spots['s' + i] = { ...Logic.randomSpot(room.settings.area), at: 0 };
   for (const id of ids) {
     u[`players/${id}/role`] = roles[id];
@@ -2049,7 +2068,7 @@ function enterGame() {
     S.gameKey = key;
     Object.assign(S, {
       augs: me.augs || {}, augBarHtml: null, offerSent: false, lastSnapIdx: null, spotBusy: false, trapBusy: false, fakeBusy: false, trapReveals: [], alarmAt: 0,
-      detects: [], shake: null, mugHit: null, pickCb: null, hist: {}, rhDist: 0, camIn: {}, mfChecked: {}, rifleDropped: false, rifleBusy: false, voteShownK: 0, voteResolving: 0, hurtOut: false, mfSnapIdx: null, blockHit: {}, blockPrev: null, myTrail: [], netWas: false, hound: null, hbNext: 0, shadowHit: {}, shadowDmgAt: null, bombGone: {}, blockPick: null, pingFake: false, trackSnap: {}, supBusy: false,
+      detects: [], shake: null, mugHit: null, pickCb: null, hist: {}, rhDist: 0, camIn: {}, mfChecked: {}, rifleDropped: false, rifleBusy: false, voteShownK: 0, voteResolving: 0, hurtOut: false, mfSnapIdx: null, blockHit: {}, blockPrev: null, myTrail: [], netWas: false, hound: null, chatLastAt: now(), chatUnread: 0, chatHtml: '', hbNext: 0, shadowHit: {}, shadowDmgAt: null, bombGone: {}, blockPick: null, pingFake: false, trackSnap: {}, supBusy: false,
       supSeen: Object.fromEntries(Object.entries(room.supplies || {}).filter(([, b]) => now() >= b.pubAt).map(([id]) => [id, 1])), reviveAt: (me.revive && me.revive.at) || null,
       stats: { dist: 0, vmax: 0, skills: 0, catches: 0, ...(me.stats || {}) }, statPos: null, seenPings: new Set(Object.keys(room.pings || {})),
       pingAt: 0, warnWas: false, specOn: false, resultKey: null,
@@ -2182,6 +2201,7 @@ const ICONS = {
   hound: '<path d="M4 20v-6l-1-4 3-2 2 2h6l3-4 2 1v4l-2 3v6"/><path d="M8 20v-4M15 20v-4"/>',
   heartbeat: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.1 4.1 0 0 1 12 7.4a4.1 4.1 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/><path d="M6.5 12.5h3l1.3-2.2 2.2 4.4 1.3-2.2h3.2"/>',
   shadowStep: '<ellipse cx="12" cy="19.5" rx="8.5" ry="2.3"/><path d="M8.6 15.2c-1.6 0-2.3-2-2.1-4.2.2-2.1 1.3-3.6 2.6-3.4 1.4.2 1.8 2 1.5 4-.3 2-.6 3.6-2 3.6zM15.6 12.2c-1.3 0-1.8-1.7-1.6-3.4.2-1.8 1-3 2.1-2.9 1.1.1 1.5 1.6 1.3 3.3-.2 1.7-.6 3-1.8 3z"/>',
+  teamChat: '<path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
   timeBomb: '<circle cx="11" cy="14" r="7"/><path d="M11 10.5V14l2.5 1.8M15.5 8.5l2-2M18.5 2.5v2M22 6h-2M21 3.5l-1.4 1.4"/>',
   blockade: '<path d="M2 9h20v6H2z"/><path d="M6 9l-3 6M12 9l-3 6M18 9l-3 6M5 15v5M19 15v5"/>',
   net: '<path d="M3 3l18 18M21 3L3 21M3 12h18M12 3v18"/><circle cx="12" cy="12" r="9"/>',
@@ -2441,9 +2461,9 @@ function useAug(id) {
     push(roomRef('events'), { type: 'blast', by: S.pid, targets, at: serverTimestamp() });
     setCooldown(id); toast(`자폭! 내 체력 절반, 상대 ${targets.length}명에게 -${a.v}`, true); sfx('boom'); flash('rgba(255,122,69,1)');
   } else if (id === 'domain') {
-    const a = Logic.AUGS.domain;
-    push(roomRef('zones'), { by: S.pid, role: me.role, ...here, r: v, until: t + a.sec * 1000 });
-    setCooldown(id, { until: t + a.sec * 1000 }); toast(`영역전개! 반경 ${v}m, ${a.sec}초`, true);
+    const a = Logic.AUGS.domain, r = Logic.augDomainM(v);
+    push(roomRef('zones'), { by: S.pid, role: me.role, ...here, r, until: t + a.sec * 1000 });
+    setCooldown(id, { until: t + a.sec * 1000 }); toast(`영역전개! 반경 ${r}m, ${a.sec}초`, true);
     flash('rainbow');
   } else if (id === 'mugung') {
     // 2초 예고 → 10초 판정. 판정은 각 도망자 폰이 자기 속도로 함
@@ -2451,6 +2471,11 @@ function useAug(id) {
     update(roomRef(), { mugung: { by: S.pid, from, to: from + v * 1000 } });
     push(roomRef('events'), { type: 'mugung', by: S.pid, at: serverTimestamp() });
     setCooldown(id, { until: from + v * 1000 }); toast('🌸 무궁화 꽃이 피었습니다!', true);
+  } else if (id === 'teamChat') {
+    const co = room.chatOpen && room.chatOpen[me.role], until = Math.max((co && co.until) || 0, t + v * 1000);
+    update(roomRef('chatOpen/' + me.role), { by: S.pid, until });
+    push(roomRef('events'), { type: 'chatOpen', by: S.pid, role: me.role, at: serverTimestamp() });
+    setCooldown(id, { until }); openChat(); // 대화방이 바로 열림 (닫아도 위의 💬 버튼으로 다시)
   } else if (id === 'heartbeat') {
     S.hbNext = 0; setCooldown(id, { until: t + v * 1000 });
     toast(`💓 심장박동 ${v}초! 도망자가 ${Logic.AUGS.heartbeat.r}m 안이면 폰이 뛰고, 가까울수록 빨라져요`, true);
@@ -3138,6 +3163,53 @@ function checkSupplies(me, t) {
     return;
   }
 }
+// 팀 대화방: 우리 팀 대화방이 열려 있는 동안(살아 있을 때만) 💬 버튼. 도청이 있으면 상대 팀 글도 보임
+const chatOpenOf = (room, me, t) => { const co = room && me && me.role && room.chatOpen && room.chatOpen[me.role]; return co && (co.until || 0) > t ? co : null; };
+function chatMsgs(room, me) {
+  const ear = !!av('eavesdrop');
+  return Object.entries(room.chats || {}).map(([id, m]) => ({ id, ...m })).filter(m => m.role === me.role || (ear && m.role)).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-40);
+}
+function chatLoop(inGame, room, me, t) {
+  const ov = $('#ov-chat'), btn = $('#btnChat');
+  const alive = inGame && me.role && Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid]);
+  const co = alive && chatOpenOf(room, me, t);
+  btn.style.display = co ? '' : 'none';
+  if (!co && ov.classList.contains('on')) { ov.classList.remove('on'); toast('💬 팀 대화방이 닫혔어요'); }
+  if (!alive) return;
+  const msgs = chatMsgs(room, me), P = room.players, name = id => esc((P[id] || {}).name || '?');
+  for (const m of msgs) {
+    if ((m.at || 0) <= S.chatLastAt) continue;
+    S.chatLastAt = m.at; if (m.by === S.pid) continue;
+    if (m.role !== me.role) { toast(`🎧 [상대 팀] ${(P[m.by] || {}).name || '?'}: ${m.text}`); vibrate(40); }
+    else if (!ov.classList.contains('on')) { S.chatUnread++; toast(`💬 ${(P[m.by] || {}).name || '?'}: ${m.text}`); vibrate([60, 40, 60]); }
+  }
+  $('#chatBadge').textContent = S.chatUnread ? String(Math.min(S.chatUnread, 9)) : '';
+  if (!ov.classList.contains('on')) return;
+  S.chatUnread = 0;
+  $('#chatLeft').textContent = co ? `${fmt(co.until - t)} 남음` : '';
+  const html = msgs.map(m => `<div class="cmsg ${m.by === S.pid ? 'mine' : m.role !== me.role ? 'enemy' : ''}"><b>${m.role !== me.role ? '🎧 상대 팀 · ' : ''}${name(m.by)}</b>${esc(m.text)}</div>`).join('');
+  if (html !== S.chatHtml) { S.chatHtml = html; const L = $('#chatList'); L.innerHTML = html; L.scrollTop = L.scrollHeight; }
+}
+function openChat() {
+  const room = S.room, enemy = roleName(((room.players[S.pid] || {}).role === 'chaser' ? 'runner' : 'chaser'), room);
+  const q = ['📍 모여!', '💨 흩어져!', '🆘 도와줘!', `⚠️ ${enemy} 근처!`, `👀 ${enemy} 봤어!`, '✦ 증강 지점 있어', '✋ 기다려', '👍 알겠어'];
+  $('#chatQuick').innerHTML = q.map(x => `<button data-chatq="${esc(x)}">${esc(x)}</button>`).join('');
+  S.chatHtml = ''; S.chatUnread = 0; $('#ov-chat').classList.add('on');
+}
+function sendChat(text) {
+  const room = S.room, me = room && room.players[S.pid], t = now();
+  text = String(text || '').trim().slice(0, Logic.AUGS.teamChat.len);
+  if (!text || !me) return;
+  if (!chatOpenOf(room, me, t)) return toast('💬 팀 대화방이 닫혔어요');
+  if (Date.now() - (S.chatSentAt || 0) < 800) return; // 연타 방지
+  S.chatSentAt = Date.now();
+  push(roomRef('chats'), { role: me.role, by: S.pid, text, at: t });
+}
+$('#btnChat').onclick = openChat;
+$('#btnChatClose').onclick = () => $('#ov-chat').classList.remove('on');
+$('#chatQuick').onclick = e => { const b = e.target.closest('[data-chatq]'); if (b) sendChat(b.dataset.chatq); };
+$('#btnChatSend').onclick = () => { sendChat($('#chatIn').value); $('#chatIn').value = ''; };
+$('#chatIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnChatSend').click(); } });
 // 그림자 밟기: 내(추격자) 30m 안에 있는 도망자들의 20초 전 자리 (투명화 중이던 자리·이미 밟은 도망자·전파 방해 중엔 없음)
 function shadowPts(room, t) {
   const a = Logic.AUGS.shadowStep, x = S.augs && S.augs.shadowStep, me = room.players[S.pid], hits = room.hits || {};
@@ -3963,6 +4035,7 @@ function overlayLoop() {
     if (bEl.innerHTML !== html) bEl.innerHTML = html;
     bEl.classList.add('on'); bEl.classList.toggle('hot', left <= 10);
   } else bEl.classList.remove('on');
+  chatLoop(inGame, room, me, t);
   // 팁
   tipLoop();
   const waitPh = inGame && room.startAt ? Logic.phaseAt(t, room.startAt, room.timeShift).phase : '';
@@ -4251,7 +4324,7 @@ function renderResult() {
 // 한 판 더 (방장): 같은 방 로비로, 지난 게임 기록 정리
 $('#btnAgain').onclick = safe(async () => {
   const room = S.room; if (!room || room.hostId !== S.pid) return;
-  const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null, nets: null, blocks: null, radioJam: null, fog: null, votes: null, rifle: null, rps: null, bombs: null };
+  const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null, nets: null, blocks: null, radioJam: null, fog: null, votes: null, rifle: null, rps: null, bombs: null, chats: null, chatOpen: null };
   for (const id of Object.keys(room.players)) {
     for (const k of ['role', 'selfDmg', 'st', 'frozenUntil', 'anchor', 'qr', 'augs', 'augPicks', 'offer', 'stealthUntil', 'decoy', 'forfeit', 'stats',
       'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag', 'out', 'job', 'guard', 'shadowStop']) u[`players/${id}/${k}`] = null;
