@@ -325,7 +325,7 @@ button.primary{background:#ffd400;color:#111}
   <div class="row between"><h1>방 <span id="l-code" class="code"></span></h1><span id="l-count" class="dim"></span></div>
   <p class="dim">친구에게 방 코드를 알려주세요. 역할은 시작할 때 랜덤으로 정해져요.</p>
   <p id="l-tip" class="tipline"></p>
-  <div class="row"><button id="btnInvite">📨 친구 초대 (QR)</button><button id="btnTut2" style="width:auto;padding:15px 16px">📖</button><button class="btnSet" style="width:auto;padding:15px 16px" title="설정">⚙</button></div>
+  <div class="row"><button id="btnInvite">📨 친구 초대 (QR)</button><button id="btnTut2" style="width:auto;padding:15px 16px">📖</button><button id="btnSndTest" style="width:auto;padding:15px 16px" title="소리·진동 테스트">🔊</button><button class="btnSet" style="width:auto;padding:15px 16px" title="설정">⚙</button></div>
   <ul id="l-list" class="plist"></ul>
   <button id="btnReady" class="primary">센서 켜기 (GPS·나침반)</button>
   <div class="card">
@@ -424,6 +424,9 @@ button.primary{background:#ffd400;color:#111}
   </div>
   <button id="btnConsentOk" class="primary" disabled>동의하고 계속</button><button id="btnConsentNo" class="linkbtn">동의하지 않음</button></div>
 <div id="ov-set" class="ov"><h2>⚙ 설정</h2><div class="card setlist"><div class="row between"><span>🎵 배경음악</span><button id="setBgm" class="sw"></button></div><div class="row between"><span>🔊 효과음</span><button id="setSfx" class="sw"></button></div><div class="row between"><span>📍 위치정보 동의</span><button id="setConsent" class="sw"></button></div><div class="row between"><span>⛶ 전체화면</span><button id="setFs" class="sw"></button></div></div><button id="btnFb">💬 피드백·버그 제보</button><button id="btnSetClose">닫기</button></div>
+<div id="ov-snd" class="ov"><h2>🔊 소리·진동 체크</h2><p id="sndQ" class="dim" style="max-width:360px">사이렌·호루라기 같은 소리랑 진동으로 알려 주는 게 많아요.<br>한 번 울려 볼게요.</p>
+<div id="sndTips" class="card" style="display:none;max-width:380px;text-align:left;line-height:1.7"><b>이렇게 해 봐요</b><br>1. 폰 <b>무음·진동 모드</b> 풀기<br>2. 볼륨 버튼을 눌러 <b>미디어 볼륨</b> 올리기<br>3. 블루투스 이어폰이 연결돼 있으면 끄기<br>4. ⚙ 설정에서 <b>🔊 효과음</b>이 켜져 있는지 확인</div>
+<button id="btnSndPlay" class="primary">🔊 울려 보기</button><div id="sndAns" class="row" style="display:none;gap:8px;width:100%;max-width:380px"><button id="btnSndYes" class="primary">들렸어</button><button id="btnSndNo">안 들렸어</button></div><button id="btnSndClose">나중에</button></div>
 <div id="ov-fb" class="ov"><h2>💬 피드백·버그 제보</h2><div class="card" style="width:100%;max-width:420px"><div id="fbType" class="modes" style="margin:0"><button data-k="bug" class="on">🐞 버그</button><button data-k="idea">💡 의견</button><button data-k="etc">기타</button></div><textarea id="fbText" maxlength="500" rows="6" placeholder="언제, 어떤 화면에서, 무슨 일이 있었는지 적어 줘요"></textarea><div class="row between small dim" style="margin-top:4px"><span>방 코드·폰 종류·게임 버전이 같이 가요</span><span id="fbCount">0/500</span></div><input id="fbContact" maxlength="60" placeholder="연락처 (선택) · 답장 받을 인스타·이메일"></div><button id="btnFbSend" class="primary">보내기</button><button id="btnFbClose">닫기</button></div>
 <div id="ov-chat" class="ov"><div class="chatbox"><h2>💬 팀 대화방 <small id="chatLeft"></small></h2><div id="chatList" class="chatlist"></div><div id="chatQuick" class="chatquick"></div>
   <div class="chatin"><input id="chatIn" maxlength="30" placeholder="최대 30자" autocomplete="off"><button id="btnChatSend" class="primary">보내기</button></div><button id="btnChatClose" class="linkbtn">닫기</button></div></div>
@@ -1291,7 +1294,10 @@ function flash(color) {
 let actx = null, muted = false;
 try { muted = localStorage.getItem('gtag_mute') === '1'; } catch (e) {}
 function audio() {
-  if (!actx) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; actx = new C(); }
+  if (!actx) {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {} // 아이폰 무음 스위치를 켜도 게임 소리가 나게
+    const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; actx = new C();
+  }
   if (actx.state !== 'running' && actx.state !== 'closed') actx.resume().catch(() => {}); // 아이폰은 앱을 내렸다 올리면 'interrupted'
   return actx;
 }
@@ -1446,6 +1452,24 @@ function openFb() {
   $('#fbCount').textContent = `${$('#fbText').value.length}/500`;
 }
 $('#btnFb').onclick = openFb;
+// 소리·진동 체크: 웹에선 무음·진동 모드를 알 수 없어서 직접 울려 보고 물어봄 (처음 방에 들어왔을 때 한 번 + 로비 🔊 버튼)
+function openSndCheck() {
+  $('#sndQ').innerHTML = '사이렌·호루라기 같은 소리랑 진동으로 알려 주는 게 많아요.<br>한 번 울려 볼게요.';
+  $('#sndTips').style.display = 'none'; $('#sndAns').style.display = 'none'; $('#btnSndPlay').textContent = '🔊 울려 보기';
+  $('#ov-snd').classList.add('on');
+}
+function sndCheckOnce() { let done = false; try { done = localStorage.getItem('sndChecked') === '1'; } catch (e) {} if (!done) openSndCheck(); }
+const sndDone = () => { try { localStorage.setItem('sndChecked', '1'); } catch (e) {} $('#ov-snd').classList.remove('on'); };
+$('#btnSndTest').onclick = openSndCheck;
+$('#btnSndPlay').onclick = () => {
+  const wasMuted = muted; if (wasMuted) setMute(false); // 효과음을 꺼 뒀으면 켜고 울림
+  audio(); setTimeout(() => { sfx('whistle'); vibrate([200, 100, 200]); }, 120);
+  $('#sndQ').innerHTML = (wasMuted ? '⚙ 설정에서 꺼져 있던 효과음을 켰어요.<br>' : '') + '삐익— 소리랑 진동 왔어요?';
+  $('#sndAns').style.display = 'flex'; $('#btnSndPlay').textContent = '🔊 다시 울리기';
+};
+$('#btnSndYes').onclick = () => { sndDone(); toast('좋아요! 소리 준비 끝'); };
+$('#btnSndNo').onclick = () => { $('#sndTips').style.display = ''; $('#sndQ').innerHTML = '웹사이트는 폰이 무음인지 알 수가 없어서, 직접 바꿔 줘야 해요.'; };
+$('#btnSndClose').onclick = sndDone;
 document.querySelectorAll('.btnFb2').forEach(b => { b.onclick = openFb; });
 $('#btnFbClose').onclick = () => $('#ov-fb').classList.remove('on');
 $('#fbType').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; $('#fbType').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
@@ -1893,6 +1917,7 @@ $('#btnJoin').onclick = safe(async () => {
 
 function enterRoom(code, pid, name) {
   S.code = code; S.pid = pid; S.name = name; S.areaSent = false;
+  setTimeout(sndCheckOnce, 800);
   saveLocal({ code, pid, name }); roomSeen(code, pid);
   if (S.unsub) S.unsub();
   if (S.evUnsub) S.evUnsub();
