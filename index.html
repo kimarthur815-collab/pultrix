@@ -447,6 +447,8 @@ button.primary{background:#ffd400;color:#111}
 
 <script>
 /* ▼▼▼ Firebase 콘솔 → 프로젝트 설정 → 내 앱(웹)에서 복사한 값을 붙여넣으세요 ▼▼▼ */
+// App Check(우리 사이트에서 온 요청만 받기): reCAPTCHA v3 '사이트 키'를 넣으면 켜짐. 비워 두면 꺼짐
+const APP_CHECK_SITE_KEY = '';
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCgZhJaJVDDUXujjKkqDiqGhpKU6607UqU",
   authDomain: "pultrix-49254.firebaseapp.com",
@@ -1126,6 +1128,7 @@ const Logic = (() => {
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
 import { getDatabase, ref, get, set, update, push, remove, onValue, onChildAdded, query, limitToLast, runTransaction, serverTimestamp, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const $ = s => document.querySelector(s);
@@ -1159,6 +1162,7 @@ const cfgOk = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
 let db = null, authReady = Promise.resolve(null);
 if (cfgOk) {
   const app = initializeApp(FIREBASE_CONFIG);
+  if (APP_CHECK_SITE_KEY) try { initializeAppCheck(app, { provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.error(e); }
   db = getDatabase(app);
   // 익명 로그인: 플레이어 아이디 = 로그인 아이디 → 보안 규칙이 '방에 들어온 사람만 읽기·쓰기'를 확인할 수 있게
   // (콘솔에서 익명 로그인을 아직 안 켰으면 실패하고, 예전처럼 임의 아이디로 진행)
@@ -1458,6 +1462,24 @@ function showRoleReveal(role) {
 }
 $('#btnRoleOk').onclick = () => { $('#ov-role').classList.remove('on'); if (!fsOn() && fsCan() && !appMode()) enterFs(); maybeModeTut(); };
 function saveLocal(v) { try { localStorage.setItem('gtag', JSON.stringify(v)); } catch (e) {} }
+const ROOM_STALE_MS = 6 * 3600000;
+function roomSeen(code, pid) { // 이 폰이 들어간 방 기록 (마지막으로 본 시각)
+  try {
+    const L = JSON.parse(localStorage.getItem('gtag_rooms') || '[]').filter(x => !(x.code === code && x.pid === pid));
+    L.push({ code, pid, at: Date.now() }); localStorage.setItem('gtag_rooms', JSON.stringify(L.slice(-30)));
+  } catch (e) {}
+}
+async function roomCleanup() { // 6시간 넘은 방: 내 자리 지움 → 남은 사람이 없으면 방도 지움 (보안 규칙이 그때만 허락)
+  let L = []; try { L = JSON.parse(localStorage.getItem('gtag_rooms') || '[]'); } catch (e) { return []; }
+  const stale = L.filter(x => Date.now() - x.at > ROOM_STALE_MS), keep = L.filter(x => Date.now() - x.at <= ROOM_STALE_MS);
+  try { localStorage.setItem('gtag_rooms', JSON.stringify(keep)); } catch (e) {}
+  for (const x of stale) {
+    try { await remove(ref(db, `rooms/${x.code}/players/${x.pid}`)); } catch (e) {}
+    let left = null; try { left = (await get(ref(db, `rooms/${x.code}/players`))).val(); } catch (e) {} // 나간 뒤엔 보통 못 읽음(보안 규칙) → 규칙이 판단
+    if (!left || !Object.keys(left).length) try { await remove(ref(db, `rooms/${x.code}`)); } catch (e) {} // 남은 사람이 있으면 규칙이 거절 (정상)
+  }
+  return stale.map(x => x.code);
+}
 
 /* ---------- 센서 ---------- */
 async function startSensors() {
@@ -1783,7 +1805,7 @@ $('#btnJoin').onclick = safe(async () => {
 
 function enterRoom(code, pid, name) {
   S.code = code; S.pid = pid; S.name = name; S.areaSent = false;
-  saveLocal({ code, pid, name });
+  saveLocal({ code, pid, name }); roomSeen(code, pid);
   if (S.unsub) S.unsub();
   if (S.evUnsub) S.evUnsub();
   S.unsub = onValue(roomRef(), snap => {
@@ -1801,6 +1823,7 @@ function enterRoom(code, pid, name) {
 function onRoom() {
   const room = S.room, me = room && room.players && room.players[S.pid];
   if (!me) return leaveLocal('방에서 나왔어요');
+  if (Date.now() - (S.seenAt || 0) > 60000) { S.seenAt = Date.now(); roomSeen(S.code, S.pid); }
   Logic.applySettings(gameRules(room)); // 방장이 정한 설정을 이 폰의 규칙에 적용
   RULES.AREA_R = (room.settings && room.settings.area && room.settings.area.r) || RULE_DEFAULTS.AREA_R;
   if (room.result || room.status === 'ended') return renderResult();
@@ -1862,7 +1885,8 @@ function onEvent(e) {
     return;
   }
   if (e.type === 'bombBoom') {
-    if (e.target !== S.pid) toast(`💥 ${who(e.target)}가 들고 있던 시한폭탄이 터졌어요`);
+    if (e.target === S.pid && e.remote) { hurtBy('시한폭탄', e.by); toast(`💥 앱이 꺼져 있는 동안 폭탄이 터졌어요! 체력 -${Logic.AUGS.timeBomb.dmg}`, true); }
+    else if (e.target !== S.pid) toast(`💥 ${who(e.target)}가 들고 있던 시한폭탄이 터졌어요`);
     return;
   }
   if (e.type === 'mugHit') {
@@ -3595,21 +3619,38 @@ function shadowPts(room, t) {
 // 시한폭탄: 내가 들고 있으면 10m 안 가장 가까운 사람에게 넘김 (방금 준 사람 빼고, 팀 상관없음)
 // 시간이 다 되거나 3번째로 받았으면 내 폰에서 터짐 (체력 -30)
 function bombTick(room, me, t, meAlive) {
-  const a = Logic.AUGS.timeBomb, hits = room.hits || {};
+  const a = Logic.AUGS.timeBomb, hits = room.hits || {}, ON = 30000; // 위치가 30초 넘게 안 바뀌었으면 앱이 꺼진 걸로 봄
   for (const [bid, b] of Object.entries(room.bombs || {})) {
-    if (!b || b.holder !== S.pid || S.bombGone[bid]) continue;
+    if (!b || S.bombGone[bid]) continue;
+    const boomAt = (b.passes || 0) >= a.max ? (b.until || 0) - a.v * 1000 : (b.until || 0); // 3번째로 받으면 바로
+    if (b.holder !== S.pid) {
+      // 들고 있는 사람 앱이 꺼져 있어도 터지게: 터질 때를 5초 넘기면 아무 폰이나 대신 터뜨림 (한 대만, 체력은 hits에)
+      if (t < boomAt + 5000 || S.bombBusy) continue;
+      S.bombBusy = true;
+      runTransaction(roomRef('bombs/' + bid), cur => (cur && cur.holder === b.holder && cur.until === b.until ? null : undefined)).then(r => {
+        if (!r.committed) return;
+        const hp = room.players[b.holder], alive = hp && Logic.alive(hp, hits[b.holder]);
+        if (!alive) return; // 이미 탈락했으면 폭탄만 사라짐
+        runTransaction(roomRef('hits/' + b.holder), cur => ({ ...(cur || {}), ext: ((cur && cur.ext) || 0) + a.dmg }));
+        push(roomRef('events'), { type: 'bombBoom', by: b.by, target: b.holder, remote: 1, at: serverTimestamp() });
+      }).catch(e => console.error(e)).finally(() => { S.bombBusy = false; });
+      continue;
+    }
     if (!meAlive) { S.bombGone[bid] = true; remove(roomRef('bombs/' + bid)); continue; } // 탈락하면 폭탄도 사라짐
-    if (t >= (b.until || 0) || (b.passes || 0) >= a.max) {
-      S.bombGone[bid] = true; remove(roomRef('bombs/' + bid));
-      S.selfDmg += a.dmg; S.lastWrite = 0; hurtBy('시한폭탄', b.by);
-      push(roomRef('events'), { type: 'bombBoom', by: b.by, target: S.pid, at: serverTimestamp() });
-      toast(`💥 ${(b.passes || 0) >= a.max ? `${a.max}번째로 받아서 바로 ` : ''}폭탄이 터졌어요! 체력 -${a.dmg}`, true); sfx('boom'); flash('rgba(255,122,69,1)'); vibrate([400, 80, 400]);
+    if (t >= boomAt) {
+      S.bombGone[bid] = true;
+      runTransaction(roomRef('bombs/' + bid), cur => (cur && cur.holder === S.pid ? null : undefined)).then(r => {
+        if (!r.committed) return; // 다른 폰이 이미 대신 터뜨림
+        S.selfDmg += a.dmg; S.lastWrite = 0; hurtBy('시한폭탄', b.by);
+        push(roomRef('events'), { type: 'bombBoom', by: b.by, target: S.pid, at: serverTimestamp() });
+        toast(`💥 ${(b.passes || 0) >= a.max ? `${a.max}번째로 받아서 바로 ` : ''}폭탄이 터졌어요! 체력 -${a.dmg}`, true); sfx('boom'); flash('rgba(255,122,69,1)'); vibrate([400, 80, 400]);
+      }).catch(e => console.error(e));
       continue;
     }
     if (!S.fix || S.fix.rawAcc > RULES.GPS_BAD_ACC || S.bombBusy) continue;
     let best = null;
     for (const [id, p] of Object.entries(room.players)) {
-      if (id === S.pid || id === b.prev || !p.role || p.lat == null || !Logic.alive(p, hits[id])) continue;
+      if (id === S.pid || id === b.prev || !p.role || p.lat == null || !Logic.alive(p, hits[id]) || t - (p.posAt || 0) > ON) continue; // 앱 꺼진 사람에겐 안 넘김
       const d = Logic.dist(S.fix, p); if (d <= a.r && (!best || d < best.d)) best = { id, d };
     }
     if (!best) continue;
@@ -4154,7 +4195,7 @@ function tick() {
   }
   checkWin();
   // 탈락해도 위치는 계속 보냄 (피의 서약 부활 거리 판정용)
-  if (!meAlive && S.fix && real - S.lastWrite >= 2000) { S.lastWrite = real; update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc) }); }
+  if (!meAlive && S.fix && real - S.lastWrite >= 2000) { S.lastWrite = real; update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), posAt: Math.round(t) }); }
   if (!meAlive || ph.phase === 'over' || ph.phase === 'pre' || !S.fix) return renderGame();
   // 통계: 뛴 거리(1초에 60m 넘게 튄 건 제외, GPS가 부정확할 때는 안 셈), 최고 속도 / 러너스 하이
   const distOk = S.fix.rawAcc <= RULES.GPS_BAD_ACC;
@@ -4385,7 +4426,7 @@ function tick() {
   S.warnWas = warn.length > 0;
   if (dead || real - S.lastWrite >= 2000) {
     S.lastWrite = real;
-    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), alt: S.alt == null ? null : Math.round(S.alt * 10) / 10, lag: (me.lagUntil || 0) > t ? lagPos(t) : null, selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
+    update(meRef(), { lat: S.fix.lat, lng: S.fix.lng, posAt: Math.round(t), acc: Math.round(S.fix.acc), racc: Math.round(S.fix.rawAcc), alt: S.alt == null ? null : Math.round(S.alt * 10) / 10, lag: (me.lagUntil || 0) > t ? lagPos(t) : null, selfDmg: Math.round(S.selfDmg * 10) / 10, st: Math.round(S.st * 10) / 10,
       stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
   }
   renderGame();
@@ -4778,6 +4819,12 @@ function renderResult() {
   show('s-result');
   const room = S.room, r = room.result || {}, me = room.players[S.pid], hits = room.hits || {};
   if (room.replayId) rpFlush(room.replayId); // 아직 안 올린 마지막 동선
+  if (S.posClearedFor !== room.startAt && me && me.role) { // 끝나면 방에 남은 내 위치를 바로 지움 (위치정보는 필요한 동안만)
+    S.posClearedFor = room.startAt;
+    const u = {}; for (const k of ['lat', 'lng', 'acc', 'racc', 'alt', 'lag', 'posAt', 'anchor', 'decoy', 'drone', 'revTrail', 'tracked']) u[k] = null;
+    if (me.jailed) u.jailed = null; if (me.iceSelf) u['iceSelf/lat'] = u['iceSelf/lng'] = null;
+    update(meRef(), u).catch(e => console.error(e));
+  }
   $('#btnReplay').style.display = room.replayId ? '' : 'none';
   $('#r-title').textContent = r.winner ? `${roleName(r.winner, room)} 승리!` : '게임 종료';
   $('#r-sub').textContent = [r.reason, me.role ? (me.role === r.winner ? '이겼어요 🎉' : '졌어요') : ''].filter(Boolean).join(' · ');
@@ -5235,8 +5282,10 @@ $('#btnRpImg').onclick = safe(async () => {
   const rpq = new URLSearchParams(location.search).get('replay') || ''; // 리플레이 공유 링크(?replay=…)
   if (/^[A-Za-z0-9]{12}$/.test(rpq)) setTimeout(() => openReplay(rpq), 300);
   if (invited) { $('#in-code').value = invited; toast(`방 ${invited}에 초대됐어요 · 닉네임 넣고 참가`, true); }
+  const cleaned = authReady.then(() => roomCleanup()).catch(() => []);
   if (saved && saved.code && saved.pid && (!invited || invited === saved.code)) {
-    authReady.then(uid => {
+    cleaned.then(gone => {
+      if (gone.includes(saved.code)) return saveLocal({ name: saved.name }); // 6시간 넘어 정리된 방엔 다시 안 들어감
       return get(ref(db, `rooms/${saved.code}/players/${saved.pid}`))
         .then(s => { if (s.exists()) enterRoom(saved.code, saved.pid, saved.name); else saveLocal({ name: saved.name }); });
     }).catch(e => { console.error(e); saveLocal({ name: saved.name }); });
