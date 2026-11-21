@@ -246,6 +246,12 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 @keyframes inkin{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
 #mugung,#shStop{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:1990;width:min(92vw,420px);display:none;text-align:center;pointer-events:none;background:rgba(17,20,24,.95);border:3px solid #ff7ad9;border-radius:18px;padding:16px 14px;box-shadow:0 0 40px rgba(255,122,217,.55)}
 #mugung.on,#shStop.on{display:block}#mugung b,#shStop b{display:block;font-size:30px;line-height:1.25;word-break:keep-all;color:#ffb3ec}
+#mugung{top:44%;padding:4px 14px 16px}#mugOwl{display:block;width:100%;height:250px}
+#mugTxt .ly{display:block;font-size:36px;font-weight:900;line-height:1.3;letter-spacing:1px;word-break:keep-all}
+#mugTxt .ly i{font-style:normal;display:inline-block;color:transparent;-webkit-background-clip:text;background-clip:text;background-image:linear-gradient(90deg,#ffb3ec var(--p,0%),#3d4452 var(--p,0%))}
+#mugung.hit{animation:mugHit .38s ease-out}
+@keyframes mugHit{0%{transform:translate(-50%,-50%) scale(1.08)}25%{transform:translate(calc(-50% + 8px),calc(-50% - 5px)) scale(1.04)}50%{transform:translate(calc(-50% - 6px),calc(-50% + 4px))}75%{transform:translate(calc(-50% + 3px),-50%)}100%{transform:translate(-50%,-50%)}}
+#mugFx{position:fixed;inset:0;pointer-events:none;z-index:1984;opacity:0;box-shadow:inset 0 0 46px 4px rgba(255,40,40,.85)}
 #shStop{top:58%;border-color:#a78bfa;box-shadow:0 0 40px rgba(167,139,250,.55)}#shStop b{color:#ddd6fe}
 #mugung.judge,#shStop.judge{border-color:var(--chaser);box-shadow:0 0 40px rgba(255,77,79,.55)}#mugung.judge b,#shStop.judge b{color:#fff}#mugung small,#shStop small{display:block;color:var(--dim);font-size:14px;margin-top:6px}
 #hbFx{position:fixed;inset:0;pointer-events:none;z-index:1985;opacity:0;box-shadow:inset 0 0 60px 18px rgba(255,77,79,.85)}
@@ -458,7 +464,7 @@ button.primary{background:#ffd400;color:#111}
 <div id="netBan" class="ban">📡 연결 끊김 · 다시 연결 중…</div>
 <div id="sndBan" class="ban">🔇 화면을 한 번 눌러 소리 켜기</div>
 <div id="deathBan" class="ban"></div>
-<div id="mugung"></div><div id="shStop"></div><div id="hbFx"></div><div id="bombBar"></div>
+<div id="mugung"><canvas id="mugOwl"></canvas><div id="mugTxt"></div></div><div id="mugFx"></div><div id="shStop"></div><div id="hbFx"></div><div id="bombBar"></div>
 <div id="ov-rps" class="ov"><h2 id="rpsTitle">✊ 가위바위보</h2><p id="rpsLast" class="big"></p><p id="rpsSub" class="dim"></p><div id="rpsBtns" class="rpsbtns"><button data-rps="r">✊<small>바위</small></button><button data-rps="s">✌️<small>가위</small></button><button data-rps="p">✋<small>보</small></button></div></div>
 <div id="ov-shake" class="ov"><h2>📳 폰을 세게 흔드세요!</h2><p class="dim">3번 흔들면 50% 확률로 탈출</p><div id="shakeDots" class="shakedots"></div><p id="shakeLeft" class="big"></p></div>
 <div id="ov-snipe" class="ov"><video id="snipeVideo" playsinline muted></video><div class="scope"><i></i></div>
@@ -870,7 +876,7 @@ const Logic = (() => {
     footsteps:    { name: '발자국', grade: 'C', role: 'runner', v: 5, d: () => '미니맵에 추격자 이동 방향도 같이 표시' },
     selfDestruct: { name: '자폭', grade: 'C', role: 'all', cd: 5, v: 30, r: 15, d: v => `내 체력이 절반이 되고, 반경 15m 안 상대 전원 체력 -${v} (무적인 도망자는 제외)` },
     domain:       { name: '영역전개', grade: 'SS', role: 'all', cd: 6, v: 40, sec: 30, walk: 3, mult: 5, d: v => `쓴 자리에 반경 ${augDomainM(v)}m 영역 30초 (구역 300m 기준 40m, 구역 크기에 비례). 안에 들어온 상대는 걷기만 해도 초당 3, 뛰면 5배로 스태미나 소모` },
-    mugung:       { name: '무궁화 꽃이 피었습니다', grade: 'S', role: 'chaser', cd: 6, v: 10, warn: 2, ms: 1, reveal: 20, d: v => `도망자에게 2초 예고 후 ${v}초 판정. 그동안 초속 1m 넘게 움직인 도망자는 스태미나 0 + 20초 동안 추격자 전원에게 위치 공개` },
+    mugung:       { name: '무궁화 꽃이 피었습니다', grade: 'S', role: 'chaser', cd: 6, v: 10, warn: 4.3, ms: 1, reveal: 20, d: v => `도망자에게 노래로 약 4초 예고 후 ${v}초 판정. 그동안 초속 1m 넘게 움직인 도망자는 스태미나 0 + 20초 동안 추격자 전원에게 위치 공개` },
     shake:        { name: '흔들어 탈출', grade: 'B', role: 'runner', cd: 3, auto: true, v: 50, win: 3, n: 3, inv: 10, d: v => `잡힌 뒤 3초 안에 폰을 세게 3번 흔들면 ${v}% 확률로 잡기 취소 + 10초 무적 (흔들면 쿨타임 시작)` },
     jam:          { name: '나침반 교란', grade: 'A', role: 'runner', cd: 4, v: 30, d: v => `${v}초 동안 모든 추격자 화살표가 엉뚱한 방향을 가리킴` },
     counterIntel: { name: '역탐지', grade: 'B', role: 'runner', v: 5, d: v => `추격자가 화살표·순간 포착으로 나를 보면 알림 + 그 추격자 위치 ${v}초 표시` },
@@ -1317,8 +1323,13 @@ function audio() {
 }
 // 소리를 낼 수 있을 때만 (화면을 눌러 소리가 켜지기 전엔 null). 잠긴 채로 예약하면 처음 누르는 순간에 늦게 울려서
 const audioOn = () => { const a = audio(); return a && a.state === 'running' ? a : null; };
-document.addEventListener('pointerdown', () => audio(), { passive: true }); // 폰은 화면을 한 번 눌러야 소리가 켜짐
+document.addEventListener('pointerdown', () => { audio(); loadMug(); }, { passive: true }); // 폰은 화면을 한 번 눌러야 소리가 켜짐
 // [주파수, 길이(초), 파형, 볼륨, 시작 지연(초)]
+// 무궁화 노래 박자 (노래 시작부터 초): 무 / 궁 / 화 길게, 꽃이 보통, 피었습니다 빠르게. mugung.mp3와 같은 박자
+// 가락은 새로 지은 단조 (미 레 시 도 시 라 시 라 솔 미). 3.98초에 부엉이가 돌기 시작해 4.3초(= warn)에 판정 시작
+const MUG_SYL = [[0.05, .85], [1.00, .72], [1.88, .60], [2.53, .33], [2.90, .35], [3.30, .10], [3.41, .10], [3.52, .10], [3.63, .10], [3.74, .20]];
+const MUG_NOTES = [659, 587, 494, 523, 494, 440, 494, 440, 392, 330];
+const MUG_TURN = 3.98;
 const SFX = {
   tick: [[880, .12, 'square', .12]],
   go: [[660, .1, 'square', .14], [990, .3, 'square', .14, .1]],
@@ -1339,8 +1350,8 @@ const SFX = {
   boom: [[90, .5, 'sawtooth', .2], [60, .55, 'square', .14, .05]],
   win: [[523, .12, 'square', .12], [659, .12, 'square', .12, .12], [784, .12, 'square', .12, .24], [1047, .45, 'square', .12, .36]],
   lose: [[392, .2, 'triangle', .13], [330, .2, 'triangle', .13, .2], [262, .5, 'triangle', .13, .4]],
-  // 무-궁-화-꽃-이-피-었-습-니-다: 한 글자에 한 음 (0.16초 간격, 마지막 '다'는 길게). 도망자 진동(MUG_VIB)도 같은 박자
-  mugung: [784, 784, 659, 659, 784, 880, 784, 659, 587, 523].map((f, i) => [f, i < 9 ? .15 : .4, 'triangle', i < 9 ? .13 : .14, i * .16]),
+  // 무궁화 대체음: mugung.mp3를 아직 못 불러왔을 때만 (같은 가락·박자, 한 글자에 한 음)
+  mugung: MUG_SYL.map(([st, d], i) => [MUG_NOTES[i], Math.max(.12, d), 'triangle', .13, st]),
   escape: [[440, .08, 'square', .12], [660, .08, 'square', .12, .08], [880, .08, 'square', .12, .16], [1320, .3, 'triangle', .13, .24]],
   detect: [[1800, .05, 'sine', .15], [1800, .05, 'sine', .15, .12], [2400, .08, 'sine', .13, .24]],
   wanted: [[700, .18, 'square', .1], [950, .18, 'square', .1, .2], [700, .18, 'square', .1, .4], [950, .18, 'square', .1, .6]],
@@ -1353,7 +1364,14 @@ const SFX = {
   steal: [[1200, .05, 'square', .1], [800, .05, 'square', .1, .06], [500, .15, 'triangle', .12, .12]],
   cam: [[1000, .06, 'square', .1], [1000, .06, 'square', .1, .12], [1500, .12, 'square', .1, .24]]
 };
-const MUG_VIB = [...Array(9).fill([100, 60]).flat(), 400]; // 아홉 글자는 짧게(0.1초 울리고 0.06초 쉼), '다'는 0.4초
+// 도망자 진동: 노래와 같은 박자 (긴 글자는 길게, 최대 0.38초) + 판정 시작 순간 0.35초. off = 노래 시작부터 지난 초 (늦게 받으면 지난 부분은 건너뜀)
+function mugVib(off = 0) {
+  const segs = MUG_SYL.map(([st, d]) => [st, Math.min(.38, Math.max(.05, d * .55))]).concat([[Logic.AUGS.mugung.warn, .35]]);
+  const p = []; let at = Math.max(0, off);
+  for (const [st, d] of segs) { if (st < off) continue; p.push(Math.round((st - at) * 1000), Math.round(d * 1000)); at = st + d; }
+  if (p.length && p[0] < 60) p.shift(); else if (p.length) p.unshift(0); // 진동 패턴은 '울림'부터 시작
+  return p;
+}
 function sfx(name) {
   if (muted) return;
   const a = audioOn(), seq = SFX[name]; if (!a || !seq) return;
@@ -1364,6 +1382,23 @@ function sfx(name) {
     g.gain.setValueAtTime(vol, st); g.gain.exponentialRampToValueAtTime(.0001, st + d);
     o.connect(g); g.connect(a.destination); o.start(st); o.stop(st + d + .02);
   }
+}
+// 무궁화 노래 (mugung.mp3: 직접 만든 노래 + 고개 도는 소리. 0초 = 노래 시작, 4.3초 = 판정 시작)
+let mugBuf = null, mugLoad = null;
+function loadMug() {
+  if (mugLoad || mugBuf) return; const a = audio(); if (!a) return;
+  mugLoad = fetch('mugung.mp3').then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(b => new Promise((res, rej) => a.decodeAudioData(b, res, rej))).then(buf => { mugBuf = buf; })
+    .catch(e => { console.warn('무궁화 소리 불러오기 실패', e); setTimeout(() => { mugLoad = null; }, 30000); });
+}
+function mugSound(off) { // off: 노래 시작부터 지난 초 (늦게 받으면 그만큼 건너뛰고 이어서)
+  if (muted) return;
+  const a = audioOn(); if (!a) return;
+  if (!mugBuf) { if (off < .3) sfx('mugung'); loadMug(); return; }
+  if (off >= mugBuf.duration) return;
+  const src = a.createBufferSource(), g = a.createGain(); g.gain.value = .6;
+  src.buffer = mugBuf; src.connect(g); g.connect(a.destination);
+  if (off < 0) src.start(a.currentTime - off); else src.start(a.currentTime + .01, off);
 }
 // 호루라기: 심판 호루라기처럼 '삐— 삐이이—' 두 번, 떨리는 소리로 크게
 function whistleSound() {
@@ -2051,8 +2086,10 @@ function onEvent(e) {
     return;
   }
   const me0 = P0[S.pid] || {};
-  if (e.type === 'mugung') { // 무궁화: 모두에게 노래, 도망자는 진동
-    sfx('mugung'); if (me0.role === 'runner') vibrate(MUG_VIB);
+  if (e.type === 'mugung') { // 무궁화: 모두에게 노래, 도망자는 같은 박자 진동 (늦게 받으면 지난 부분은 건너뜀)
+    const mg = (S.room || {}).mugung, W = Logic.AUGS.mugung.warn;
+    const off = (now() - (mg && mg.by === e.by ? mg.from - W * 1000 : (e.at || now()))) / 1000;
+    if (off < W + 1) { mugSound(off); if (me0.role === 'runner') { const p = mugVib(off); if (p.length) vibrate(p); } }
     return;
   }
   if (e.type === 'chatOpen') {
@@ -3092,7 +3129,7 @@ function useAug(id) {
     setCooldown(id, { until: t + a.sec * 1000 }); toast(`영역전개! 반경 ${r}m, ${a.sec}초`, true);
     flash('rainbow');
   } else if (id === 'mugung') {
-    // 2초 예고 → 10초 판정. 판정은 각 도망자 폰이 자기 속도로 함
+    // 노래 4.3초(부엉이가 고개 다 돌릴 때까지) → 10초 판정. 판정은 각 도망자 폰이 자기 속도로 함
     const a = Logic.AUGS.mugung, from = t + a.warn * 1000;
     update(roomRef(), { mugung: { by: S.pid, from, to: from + v * 1000 } });
     push(roomRef('events'), { type: 'mugung', by: S.pid, at: serverTimestamp() });
@@ -4931,14 +4968,10 @@ function overlayLoop() {
     if ($('#ov-vote').classList.contains('on')) { if (vr.open && alive) renderVote(); else $('#ov-vote').classList.remove('on'); }
   }
   // 무궁화 배너
+  // 무궁화: 부엉이 술래 + 가사 (매 프레임 그리는 건 mugAnim)
   const mg = inGame && room.mugung, mEl = $('#mugung');
-  if (mg && me.role && t < mg.to) {
-    const warnP = t < mg.from, sec = Math.ceil((mg.to - t) / 1000);
-    const html = warnP ? '<b>🌸 무궁화 꽃이<br>피었습니다!</b>'
-      : me.role === 'runner' ? `<b>멈춰! ${sec}</b><small>지금 움직이면 걸려요</small>` : `<b>🌸 판정 중 ${sec}</b><small>움직이는 도망자를 찾는 중</small>`;
-    if (mEl.innerHTML !== html) mEl.innerHTML = html;
-    mEl.classList.add('on'); mEl.classList.toggle('judge', !warnP);
-  } else mEl.classList.remove('on');
+  if (mg && me.role && t < mg.to) { if (!mEl.classList.contains('on')) { mEl.classList.add('on'); S.mugKey = null; requestAnimationFrame(mugAnim); } }
+  else if (mEl.classList.contains('on')) { mEl.classList.remove('on', 'judge', 'hit'); $('#mugFx').style.opacity = 0; }
   // 심장박동 (추격자): 가장 가까운 도망자가 80m 안이면 가까울수록 빨리 진동 + 화면 테두리
   const hb = inGame && me.role === 'chaser' && S.augs && S.augs.heartbeat;
   if (hb && (hb.until || 0) > t && S.fix && !radioJammed(t)) {
@@ -4977,6 +5010,134 @@ function overlayLoop() {
   const ink = inGame && (me.inkUntil || 0) > t;
   $('#ink').classList.toggle('on', !!ink);
   if (ink) $('#inkTxt').textContent = `🦑 먹물! ${Math.ceil((me.inkUntil - t) / 1000)}초`;
+}
+// ---------- 무궁화: 부엉이 술래 (노래 동안 등 돌리고 있다가 끝나면 고개만 홱) ----------
+const MUG_SPECK = Array.from({ length: 46 }, (_, i) => [((i * 2.399) % (2 * Math.PI)) - Math.PI, ((i * 0.618) % 1) * 1.6 - 0.8]);
+const mClamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x)), mProg = (t, a, b) => mClamp((t - a) / (b - a));
+const mOutCubic = p => 1 - Math.pow(1 - p, 3), mOutBack = (p, s = 2.2) => 1 + (s + 1) * Math.pow(p - 1, 3) + s * Math.pow(p - 1, 2);
+function mugOwlBody(ctx, a, bob, glow) { // 부엉이 좌표: 몸통 가운데 = (0, 0)
+  const PI = Math.PI;
+  ctx.fillStyle = '#45352a'; ctx.beginPath(); // 꼬리
+  ctx.moveTo(-62, 190); ctx.lineTo(62, 190); ctx.lineTo(48, 318); ctx.quadraticCurveTo(0, 340, -48, 318); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,96,74,.7)'; ctx.lineWidth = 8;
+  for (const y of [240, 280]) { ctx.beginPath(); ctx.moveTo(-55, y); ctx.lineTo(55, y); ctx.stroke(); }
+  const bodyY = 20 + bob * 0.3; // 몸통 (등)
+  let g = ctx.createLinearGradient(0, -210, 0, 250); g.addColorStop(0, '#6c5442'); g.addColorStop(1, '#4b3a2d');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, bodyY, 190, 228, 0, 0, PI * 2); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(0, bodyY, 190, 228, 0, 0, PI * 2); ctx.clip();
+  ctx.strokeStyle = 'rgba(140,112,88,.5)'; ctx.lineWidth = 4;
+  for (let r = 0, y = -160; y < 250; y += 36, r++) for (let x = -230 + (r % 2) * 23; x < 230; x += 46) { ctx.beginPath(); ctx.arc(x, y + bodyY - 20, 15, 0.15, PI - 0.15); ctx.stroke(); }
+  ctx.restore();
+  for (const sd of [-1, 1]) { // 접은 날개
+    ctx.save(); ctx.scale(sd, 1);
+    ctx.beginPath(); ctx.moveTo(-150, -120 + bodyY - 20); ctx.bezierCurveTo(-225, -20, -200, 160, -70, 262); ctx.bezierCurveTo(-55, 150, -60, 20, -105, -110 + bodyY - 20); ctx.closePath();
+    ctx.fillStyle = '#4a3829'; ctx.fill(); ctx.save(); ctx.clip();
+    ctx.lineWidth = 9; ctx.strokeStyle = 'rgba(122,98,72,.55)';
+    for (let y = -60; y < 280; y += 44) { ctx.beginPath(); ctx.moveTo(-240, y + 20); ctx.lineTo(-40, y - 14); ctx.stroke(); }
+    ctx.restore(); ctx.restore();
+  }
+  ctx.strokeStyle = '#33251b'; ctx.lineWidth = 36; ctx.lineCap = 'round'; // 나뭇가지
+  ctx.beginPath(); ctx.moveTo(-560, 262); ctx.quadraticCurveTo(0, 222, 560, 250); ctx.stroke();
+  ctx.strokeStyle = '#4b3829'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(-540, 250); ctx.quadraticCurveTo(0, 212, 540, 238); ctx.stroke();
+  ctx.strokeStyle = '#33251b'; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(330, 238); ctx.quadraticCurveTo(400, 180, 470, 150); ctx.stroke();
+  ctx.fillStyle = '#b48a46'; // 발
+  for (const fx of [-48, 48]) for (const d of [-22, 0, 22]) { ctx.beginPath(); ctx.ellipse(fx + d, 239, 8, 17, 0, 0, PI * 2); ctx.fill(); }
+  ctx.lineCap = 'butt';
+  const hx = 0, hy = -255 + bob, rx = 186, ry = 166; // 머리
+  for (const ph of [-0.72, 0.72]) { // 귀깃
+    const x = rx * 0.78 * Math.sin(ph + a);
+    ctx.fillStyle = '#4a3829'; ctx.beginPath();
+    ctx.moveTo(hx + x - 40, hy - ry * 0.62); ctx.lineTo(hx + x * 1.18, hy - ry - 62); ctx.lineTo(hx + x + 34, hy - ry * 0.55); ctx.closePath(); ctx.fill();
+  }
+  g = ctx.createRadialGradient(hx - 50, hy - 70, 10, hx, hy, 210); g.addColorStop(0, '#7f6550'); g.addColorStop(1, '#513e2f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(hx, hy, rx, ry, 0, 0, PI * 2); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(hx, hy, rx, ry, 0, 0, PI * 2); ctx.clip();
+  for (const [lon, lat] of MUG_SPECK) { // 반점: 고개와 같이 돌아서 입체감
+    const al = lon + a, cz = Math.cos(al); if (cz <= 0) continue;
+    const w = Math.sqrt(1 - Math.min(.95, lat * lat));
+    ctx.fillStyle = `rgba(165,138,110,${0.55 * cz})`; ctx.beginPath();
+    ctx.ellipse(hx + rx * 0.97 * w * Math.sin(al), hy + lat * ry * 0.95, 7 * cz + 1, 6, 0, 0, PI * 2); ctx.fill();
+  }
+  const cb = Math.cos(PI + a); // 뒤통수 줄무늬
+  if (cb > 0) {
+    const bx = hx + rx * 0.55 * Math.sin(PI + a);
+    ctx.strokeStyle = `rgba(58,44,33,${0.7 * cb})`; ctx.lineWidth = 9;
+    for (const k of [-2, -1, 0, 1, 2]) { ctx.beginPath(); ctx.moveTo(bx + k * 34 * cb, hy - ry + 20); ctx.quadraticCurveTo(bx + k * 40 * cb, hy, bx + k * 30 * cb, hy + ry); ctx.stroke(); }
+  }
+  const sc = Math.cos(a), fx = hx + rx * 0.6 * Math.sin(a), fy = hy + 12, eyes = []; // 얼굴: 돌면 옆으로 밀리고 좁아짐
+  if (sc > 0.02) {
+    ctx.save(); ctx.translate(fx, fy); ctx.scale(sc, 1);
+    ctx.fillStyle = '#cdb593'; ctx.strokeStyle = '#2e231a'; ctx.lineWidth = 8;
+    for (const ex of [-66, 66]) { ctx.beginPath(); ctx.arc(ex, 0, 96, 0, PI * 2); ctx.stroke(); }
+    for (const ex of [-66, 66]) { ctx.beginPath(); ctx.arc(ex, 0, 92, 0, PI * 2); ctx.fill(); }
+    const pr = 20 + 9 * glow;
+    for (const ex of [-66, 66]) {
+      ctx.fillStyle = '#1a1410'; ctx.beginPath(); ctx.arc(ex, 0, 56, 0, PI * 2); ctx.fill();
+      const ig = ctx.createRadialGradient(ex, 0, 4, ex, 0, 47);
+      ig.addColorStop(0, glow > 0 ? '#fff1a8' : '#ffe27a'); ig.addColorStop(1, glow > 0 ? '#ff5a1f' : '#f09a24');
+      ctx.fillStyle = ig; ctx.beginPath(); ctx.arc(ex, 0, 47, 0, PI * 2); ctx.fill();
+      ctx.fillStyle = '#0b0806'; ctx.beginPath(); ctx.arc(ex, 0, pr, 0, PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.arc(ex - 15, -15, 8, 0, PI * 2); ctx.fill();
+      eyes.push([fx + ex * sc, fy, sc]);
+    }
+    ctx.strokeStyle = '#efe3c9'; ctx.lineWidth = 15; ctx.lineCap = 'round'; // V 눈썹
+    ctx.beginPath(); ctx.moveTo(-140, -70); ctx.lineTo(-12, -30); ctx.moveTo(140, -70); ctx.lineTo(12, -30); ctx.stroke(); ctx.lineCap = 'butt';
+    ctx.fillStyle = '#3a2e25'; ctx.beginPath(); ctx.moveTo(-18, -8); ctx.lineTo(18, -8); ctx.lineTo(0, 46); ctx.closePath(); ctx.fill(); // 부리
+    ctx.restore();
+  }
+  ctx.restore();
+  return eyes;
+}
+// rel: 노래 시작부터 지난 초, warn: 판정 시작(= 고개 다 돌린 순간)
+function drawMugOwl(cv, rel, warn) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const PI = Math.PI, peek = 0.2 * mOutCubic(mProg(rel, 3.30, 3.90)) * (1 - mProg(rel, MUG_TURN - 0.12, MUG_TURN));
+  const a = rel >= MUG_TURN ? PI * (1 - mOutBack(mProg(rel, MUG_TURN, warn))) : PI - peek;
+  let bob = 0;
+  for (const [st] of MUG_SYL) { const p = mProg(rel, st, st + 0.16); if (p > 0 && p < 1) bob = -10 * Math.sin(PI * p); }
+  const glow = rel >= warn - 0.05 ? mClamp(mProg(rel, warn - 0.05, warn + 0.15) * (0.85 + 0.15 * Math.sin(rel * 31))) : 0;
+  const k = Math.min(H / 880, W / 1160) * (0.72 + 0.28 * mOutBack(mProg(rel, 0, 0.5), 1.6)), ox = W / 2, oy = H - 345 * Math.min(H / 880, W / 1160) - 2;
+  ctx.save(); ctx.globalAlpha = mProg(rel, -0.05, 0.2); ctx.translate(ox, oy); ctx.scale(k, k);
+  const eyes = mugOwlBody(ctx, a, bob, glow);
+  ctx.restore();
+  if (glow > 0) { // 눈빛
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const [ex, ey, sc] of eyes) {
+      const X = ox + ex * k, Y = oy + ey * k, R = 100 * sc * k;
+      const gg = ctx.createRadialGradient(X, Y, 0, X, Y, R); gg.addColorStop(0, `rgba(255,110,40,${0.32 * glow})`); gg.addColorStop(1, 'rgba(255,60,20,0)');
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(X, Y, R, 0, PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+function mugAnim() {
+  const room = S.room, mEl = $('#mugung'), fx = $('#mugFx');
+  if (!mEl.classList.contains('on') || !room || !room.mugung) { fx.style.opacity = 0; return; }
+  try {
+    const mg = room.mugung, W = Logic.AUGS.mugung.warn, t = now(), me = (room.players || {})[S.pid] || {};
+    const rel = (t - (mg.from - W * 1000)) / 1000, judge = t >= mg.from, sec = Math.ceil((mg.to - t) / 1000);
+    drawMugOwl($('#mugOwl'), rel, W);
+    const key = judge ? (me.role === 'runner' ? 'r' : 'c') + sec : 'ly', tx = $('#mugTxt');
+    if (S.mugKey !== key) {
+      if (!judge) tx.innerHTML = '<span class="ly">' + ['무궁화 꽃이', '피었습니다'].map(l => [...l].map(ch => ch === ' ' ? ' ' : `<i>${ch}</i>`).join('')).join('<br>') + '</span>';
+      else {
+        tx.innerHTML = me.role === 'runner' ? `<b>멈춰! ${sec}</b><small>지금 움직이면 걸려요</small>` : `<b>🌸 판정 중 ${sec}</b><small>움직이는 도망자를 찾는 중</small>`;
+        if (!S.mugKey || S.mugKey === 'ly') { mEl.classList.remove('hit'); void mEl.offsetWidth; mEl.classList.add('hit'); }
+      }
+      mEl.classList.toggle('judge', judge); S.mugKey = key;
+    }
+    if (!judge) tx.querySelectorAll('.ly i').forEach((el, i) => { // 노래방처럼 글자마다 불이 들어옴
+      const [st, d] = MUG_SYL[i] || [99, 1], p = mProg(rel, st, st + Math.max(.1, d));
+      el.style.setProperty('--p', (p * 100).toFixed(1) + '%');
+      el.style.transform = p > 0 ? `scale(${(1 + .3 * (1 - mOutCubic(mProg(rel, st, st + .2)))).toFixed(3)})` : '';
+    });
+    let v = 0; // 판정 중 빨간 테두리: 시작할 때 번쩍, 그다음 1초마다
+    if (judge) { const j = (t - mg.from) / 1000; v = .25 + .5 * Math.exp(-j * 3) + (j >= 1 ? .3 * Math.exp(-(j % 1) * 4) : 0); }
+    fx.style.opacity = Math.min(1, v).toFixed(3);
+  } catch (e) { console.error(e); }
+  requestAnimationFrame(mugAnim);
 }
 setInterval(overlayLoop, 200);
 
