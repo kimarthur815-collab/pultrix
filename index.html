@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111418">
+<meta name="color-scheme" content="dark"><!-- 원래 어두운 화면이라고 알려서 폰 브라우저의 강제 다크 모드가 QR 색을 뒤집지 않게 -->
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,7 +16,7 @@
   ===== 설정 요약 =====
   1) Firebase 콘솔에서 프로젝트 만들기 → Realtime Database 만들기
   2) 데이터베이스 '규칙' 탭에 붙여넣기:
-     { "rules": { "rooms": { "$code": { ".read": true, ".write": true } } } }
+     저장소의 database.rules.json 내용 전체
   3) 프로젝트 설정 → 웹 앱 추가 → firebaseConfig 값을 아래 FIREBASE_CONFIG에 붙여넣기
   4) 이 파일을 HTTPS 주소(GitHub Pages 등)에 올리기 — GPS·카메라는 HTTPS에서만 동작해요
 -->
@@ -25,10 +26,11 @@
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <style>
-:root{--bg:#111418;--panel:#1b2027;--line:#2a313b;--txt:#e9edf2;--dim:#8b95a3;--chaser:#ff4d4f;--runner:#3ba3ff;--ok:#3ccf7a;--warn:#ffb020}
+:root{color-scheme:dark;--bg:#111418;--panel:#1b2027;--line:#2a313b;--txt:#e9edf2;--dim:#8b95a3;--chaser:#ff4d4f;--runner:#3ba3ff;--ok:#3ccf7a;--warn:#ffb020}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-tap-highlight-color:transparent}
-body{overscroll-behavior:none}
+body{overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none} /* 길게 누르면 글자가 선택되며 구글 검색이 뜨지 않게 (능력 설명 창이 손가락 아래에 뜨는 순간 등) */
+input,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .screen{display:none;min-height:100%;padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto}
 .screen.on{display:block}
 h1{font-size:26px;margin:8px 0 4px}h2{font-size:17px;margin:18px 0 6px}
@@ -83,7 +85,7 @@ textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line)
 .consent{width:min(92vw,400px);text-align:left;font-size:14px;max-height:58vh;overflow:auto}.consent p{margin:0 0 8px}.consent b{color:var(--warn)}
 .chk{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-weight:700;color:var(--txt)}.chk input{width:22px;height:22px;margin:0;flex:none}
 .ov.on{display:flex}.ov button{max-width:360px}
-.qrbox{width:min(80vw,360px);aspect-ratio:1;background:#fff;border-radius:12px;padding:8px}.qrbox svg{width:100%;height:100%;display:block}
+.qrbox{width:min(80vw,360px);aspect-ratio:1;background:#fff;border-radius:12px;padding:8px}.qrbox svg,.qrbox img{width:100%;height:100%;display:block;image-rendering:pixelated}
 #scanVideo{width:min(90vw,420px);aspect-ratio:1;object-fit:cover;border-radius:12px;background:#000}
 .toast{white-space:pre-line;position:fixed;left:50%;top:calc(170px + env(safe-area-inset-top));transform:translateX(-50%);z-index:3000;background:#000c;border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:15px;max-width:90vw;text-align:center;display:none}
 .toast.on{display:block}.toast.big{font-size:20px;font-weight:700;border-color:var(--warn)}
@@ -1368,7 +1370,7 @@ function toggleFs() {
   if (fsCan()) return enterFs();
   if (appMode()) return toast('이미 앱처럼 전체화면이에요');
   if (IS_IOS) return $('#ov-a2hs').classList.add('on');
-  toast('이 브라우저는 전체화면을 지원하지 않아요. 크롬에서 열어 보세요', true);
+  toast('전체화면이 안 되는 브라우저예요 (크롬 추천)', true);
 }
 function renderFs() {
   const on = fsOn() || appMode(), b = $('#setFs');
@@ -1423,7 +1425,7 @@ async function startSensors() {
     const DM = typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission;
     const pO = typeof DO === 'function' ? DeviceOrientationEvent.requestPermission().catch(() => 'denied') : null;
     const pM = typeof DM === 'function' ? DeviceMotionEvent.requestPermission().catch(() => 'denied') : null;
-    if (pO && (await pO) !== 'granted') toast('나침반 권한이 없어서 화살표가 북쪽 기준으로 보여요');
+    if (pO && (await pO) !== 'granted') toast('나침반이 없어서 북쪽 기준으로 보여요');
     if (pM) await pM;
   } catch (e) {}
   if (!S.orientBound) {
@@ -1528,7 +1530,7 @@ function bindRotate(mo) {
     if (!S.twoFinger || e.touches.length >= 2) return;
     S.twoFinger = false;
     if (angDiff(mo.map.getBearing(), S.gestBear) > 10) {
-      if (S.mapMode !== 'manual') toast('지도: 손으로 돌린 방향 유지 · 🧭 누르면 다시 내 방향');
+      if (S.mapMode !== 'manual') toast('지도 방향 고정 · 🧭로 되돌리기');
       S.mapMode = 'manual'; applyBearing();
     } else if (S.mapMode !== 'manual') applyBearing(true);
   };
@@ -1567,7 +1569,7 @@ function onFix(p) {
   drawMaps();
 }
 function onFixErr(e) {
-  if (e.code === 1) toast('위치 권한이 거부됐어요. 브라우저 설정에서 위치를 허용해 주세요', true);
+  if (e.code === 1) toast('위치 권한이 꺼져 있어요. 설정에서 허용해 주세요', true);
 }
 
 /* ---------- 지도 ---------- */
@@ -1675,6 +1677,8 @@ function drawSnap() {
 }
 
 /* ---------- 홈 / 방 ---------- */
+// QR: 그림 파일로(강제 다크 모드가 그림 색은 잘 안 뒤집음), 테두리 여백은 표준 4칸
+const qrImg = qr => `<img alt="QR" src="${qr.createDataURL(8, 4)}">`;
 function getName() {
   const n = $('#in-name').value.trim();
   if (!n) { toast('닉네임을 입력하세요'); return null; }
@@ -1795,11 +1799,11 @@ function onEvent(e) {
     return;
   }
   if (e.type === 'shadow') {
-    if (e.target === S.pid) { toast(`👣 ${who(e.by)}가 내 그림자를 밟았어요! 곧 ${Logic.AUGS.shadowStep.stop}초 동안 멈춰야 해요`, true); flash('rgba(167,139,250,.95)'); vibrate([200, 80, 200, 80, 200]); sfx('wanted'); }
+    if (e.target === S.pid) { toast(`👣 그림자를 밟혔어요! 곧 ${Logic.AUGS.shadowStep.stop}초 정지`, true); flash('rgba(167,139,250,.95)'); vibrate([200, 80, 200, 80, 200]); sfx('wanted'); }
     return;
   }
   if (e.type === 'bombPass') {
-    if (e.target === S.pid) { toast(`💣 ${who(e.by)}에게서 시한폭탄을 받았어요! ${Logic.AUGS.timeBomb.v}초 안에 넘기세요 (${who(e.by)}에겐 못 줘요)`, true); flash('rgba(255,122,69,.9)'); vibrate([200, 80, 200]); sfx('trap'); }
+    if (e.target === S.pid) { toast(`💣 ${who(e.by)}의 시한폭탄! ${Logic.AUGS.timeBomb.v}초 안에 다른 사람에게 넘기세요`, true); flash('rgba(255,122,69,.9)'); vibrate([200, 80, 200]); sfx('trap'); }
     else if (e.by === S.pid) toast(`💣 ${who(e.target)}에게 폭탄을 넘겼어요!`, true);
     return;
   }
@@ -1822,14 +1826,14 @@ function onEvent(e) {
     if (e.target === S.pid) {
       const sec = Logic.AUGS.counterIntel.v;
       S.detects = [...(S.detects || []).filter(d => d.id !== e.by), { id: e.by, until: now() + sec * 1000 }];
-      toast(`🛰 역탐지! ${who(e.by)}가 ${e.how === 'radar' ? '순간 포착으' : '화살표'}로 나를 봤어요 · ${sec}초 위치 표시`, true);
+      toast(`🛰 역탐지! ${who(e.by)}가 나를 봤어요 (${sec}초 표시)`, true);
       sfx('detect'); vibrate([60, 40, 60, 40, 60]); drawMaps();
     }
     return;
   }
   if (e.type === 'wanted') {
     const sec = Logic.AUGS.wanted.v;
-    if (e.target === S.pid) { toast(`🎯 현상수배됐어요! ${sec}초 동안 추격자 전원에게 내 위치가 보여요`, true); sfx('wanted'); vibrate([300, 100, 300]); flash('rgba(255,77,79,.9)'); }
+    if (e.target === S.pid) { toast(`🎯 현상수배! ${sec}초 동안 내 위치 공개`, true); sfx('wanted'); vibrate([300, 100, 300]); flash('rgba(255,77,79,.9)'); }
     else if (e.by !== S.pid) toast(`🎯 ${who(e.target)} 현상수배! ${sec}초 동안 위치 공개`);
     return;
   }
@@ -1844,7 +1848,7 @@ function onEvent(e) {
   if (e.type === 'infect') {
     if (e.target === S.pid) {
       $('#ov-qr').classList.remove('on'); S.snap = []; drawSnap();
-      toast(`🧟 ${who(e.by)}에게 감염됐어요! 이제 좀비예요. 도망자를 잡으세요`, true); flash('rgba(132,204,22,.95)'); vibrate([300, 100, 300]); sfx('caught');
+      toast('🧟 감염됐어요! 이제 좀비예요', true); flash('rgba(132,204,22,.95)'); vibrate([300, 100, 300]); sfx('caught');
     } else if (e.by !== S.pid) toast(`🧟 ${who(e.target)} 감염!`, true);
     return;
   }
@@ -1865,7 +1869,7 @@ function onEvent(e) {
     return;
   }
   if (e.type === 'blackout') {
-    if (me0.role === 'runner') { toast(`🌑 ${who(e.by)}의 블랙아웃! ${Logic.AUGS.blackout.v}초 동안 미니맵·증강 지점·핑이 꺼져요`, true); vibrate([200, 100, 200]); flash('rgba(0,0,0,.95)'); drawSnap(); drawMaps(); }
+    if (me0.role === 'runner') { toast(`🌑 ${who(e.by)}의 블랙아웃! ${Logic.AUGS.blackout.v}초 동안 미니맵이 꺼져요`, true); vibrate([200, 100, 200]); flash('rgba(0,0,0,.95)'); drawSnap(); drawMaps(); }
     return;
   }
   if (e.type === 'supplyGot') {
@@ -1890,7 +1894,7 @@ function onEvent(e) {
   if (e.type === 'steal') {
     if (e.target === S.pid) {
       const nx = { ...(S.augs || {}) }; delete nx[e.aug]; S.augs = nx;
-      toast(`🫳 ${who(e.by)}에게 [${(Logic.AUGS[e.aug] || {}).name || '?'}] 증강을 소매치기 당했어요!`, true); sfx('steal'); vibrate([200, 80, 200]); flash('rgba(255,176,32,.9)'); renderGame();
+      toast(`🫳 ${who(e.by)}가 [${(Logic.AUGS[e.aug] || {}).name || '?'}] 증강을 훔쳐 갔어요`, true); sfx('steal'); vibrate([200, 80, 200]); flash('rgba(255,176,32,.9)'); renderGame();
     }
     return;
   }
@@ -1918,15 +1922,15 @@ function onEvent(e) {
   if (e.type === 'mfOut') { // 마피아 모드 탈락 (누가 잡았는지는 잡힌 사람만)
     const msg = { mafia: '☠️', shot: '🔫 총소리!', misfire: '🔫' }[e.why] || '☠️';
     if (e.target === S.pid) {
-      if (e.why === 'mafia') toast(`🔪 ${who(e.by)}에게 잡혀 탈락했어요 · 탈락하면 말하면 안 돼요`, true);
-      else if (e.why === 'shot') toast('🔫 경찰의 저격총에 맞아 탈락했어요 · 탈락하면 말하면 안 돼요', true);
+      if (e.why === 'mafia') toast('🔪 잡혀서 탈락 · 이제 말하면 안 돼요', true);
+      else if (e.why === 'shot') toast('🔫 저격당해 탈락 · 이제 말하면 안 돼요', true);
       flash('rgba(255,77,79,.9)'); vibrate([300, 100, 300]); sfx('caught');
     } else if (!(e.why === 'misfire' && e.by === S.pid)) toast(`${msg} ${who(e.target)} 탈락!`, true);
     return;
   }
   if (e.type === 'gunshot') { if (e.by !== S.pid) toast('🔫 어디선가 총소리가…'); return; }
   if (e.type === 'guarded') {
-    if (e.target === S.pid) { toast(`🩺 의사의 보호로 살았어요! (${who(e.by)}가 잡으려 했어요)`, true); flash('rgba(59,163,255,.9)'); vibrate([100, 50, 100]); sfx('shield'); }
+    if (e.target === S.pid) { toast(`🩺 의사 덕분에 살았어요 (${who(e.by)})`, true); flash('rgba(59,163,255,.9)'); vibrate([100, 50, 100]); sfx('shield'); }
     else if (e.doc === S.pid) toast('🩺 내가 지킨 사람이 마피아의 공격을 막았어요!', true);
     return;
   }
@@ -1936,10 +1940,10 @@ function onEvent(e) {
     $('#ov-vote').classList.remove('on');
     return;
   }
-  if (e.type === 'rifleDrop') { toast('🔫 경찰이 쓰러졌어요! 저격총이 떨어졌어요 (시민이 주우면 새 경찰)', true); vibrate([100, 50, 100]); drawMaps(); return; }
+  if (e.type === 'rifleDrop') { toast('🔫 경찰 탈락! 저격총을 주우면 새 경찰이에요', true); vibrate([100, 50, 100]); drawMaps(); return; }
   if (e.type === 'riflePick') { if (e.by !== S.pid) toast('🔫 누군가 저격총을 주웠어요', true); drawMaps(); return; }
   if (e.type === 'rpsWin') {
-    if (e.chaser === S.pid) { S.anchor = null; toast(`✌️ ${who(e.by)}에게 가위바위보로 졌어요! 잡기 취소 + ${Logic.AUGS.rps.freeze}초 정지`, true); vibrate(300); }
+    if (e.chaser === S.pid) { S.anchor = null; toast(`✌️ 가위바위보 패배! ${Logic.AUGS.rps.freeze}초 정지`, true); vibrate(300); }
     return;
   }
   if (e.type === 'blockade') {
@@ -1954,7 +1958,7 @@ function onEvent(e) {
     return;
   }
   if (e.type === 'hound') {
-    if (e.target === S.pid) { toast(`🐕 사냥개에게 들켰어요! ${Logic.AUGS.hound.show}초 동안 추격자에게 위치가 보여요`, true); flash('rgba(255,122,69,.9)'); vibrate([200, 80, 200]); }
+    if (e.target === S.pid) { toast(`🐕 사냥개에게 들켰어요! ${Logic.AUGS.hound.show}초 위치 공개`, true); flash('rgba(255,122,69,.9)'); vibrate([200, 80, 200]); }
     else if (me0.role === 'chaser') { toast(`🐕 사냥개가 ${who(e.target)}를 찾았어요! ${Logic.AUGS.hound.show}초 위치 표시`, true); vibrate([80, 40, 80]); }
     return;
   }
@@ -1967,11 +1971,11 @@ function onEvent(e) {
     return;
   }
   if (e.type === 'fog') {
-    if (me0.role && me0.role !== e.role) { toast(`🌫 ${who(e.by)}의 안개! ${Logic.AUGS.fog.v}초 동안 지도가 흐리고 ${me0.role === 'chaser' ? '화살표가' : '미니맵이'} 멈춰요`, true); vibrate([100, 50, 100]); }
+    if (me0.role && me0.role !== e.role) { toast(`🌫 안개 ${Logic.AUGS.fog.v}초! ${me0.role === 'chaser' ? '화살표가' : '미니맵이'} 멈춰요`, true); vibrate([100, 50, 100]); }
     return;
   }
   if (e.type === 'radioJam') {
-    if (me0.role === 'chaser') toast(`📡 ${who(e.by)}의 전파 방해! ${Logic.AUGS.radioJam.v}초 동안 탐지 증강이 안 먹혀요`, true);
+    if (me0.role === 'chaser') toast(`📡 전파 방해 ${Logic.AUGS.radioJam.v}초! 탐지 능력이 꺼져요`, true);
     return;
   }
   if (e.type === 'time') {
@@ -2167,7 +2171,7 @@ function renderLobby() {
         if (S.polyEdit.length >= Logic.POLY_MAX) return toast(`꼭짓점은 ${Logic.POLY_MAX}개까지예요`);
         S.polyEdit.push({ lat: e.latlng.lat, lng: e.latlng.lng }); renderPolyBox(); return drawMaps();
       }
-      if (a && a.poly) return toast('꼭짓점 구역이에요. 바꾸려면 🔷 꼭짓점을 다시 누르세요');
+      if (a && a.poly) return toast('꼭짓점 구역이에요 (🔷로 바꾸기)');
       await update(roomRef('settings'), { area: { lat: e.latlng.lat, lng: e.latlng.lng, r: a ? a.r : RULES.AREA_DEFAULT_M } });
     }));
     setTimeout(() => mo.map.invalidateSize(), 50);
@@ -2207,7 +2211,7 @@ const inviteUrl = () => location.origin + location.pathname + '?room=' + S.code;
 $('#btnInvite').onclick = () => {
   const url = inviteUrl(), qr = qrcode(0, 'M');
   qr.addData(url); qr.make();
-  $('#inviteQR').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  $('#inviteQR').innerHTML = qrImg(qr);
   $('#inviteCode').textContent = S.code;
   $('#inviteUrl').textContent = url;
   $('#ov-invite').classList.add('on');
@@ -2260,7 +2264,7 @@ $('#btnPolyDone').onclick = safe(async () => {
   const chk = Logic.polyCheck(pts);
   if (!chk.ok) return toast(chk.why, true);
   await set(roomRef('settings/area'), { lat: chk.lat, lng: chk.lng, r: chk.r, poly: pts.map(p => [p.lat, p.lng]) });
-  S.polyEdit = null; toast(`🔷 꼭짓점 ${pts.length}개 구역으로 정했어요 (넓이로 치면 반경 ${chk.r}m)`);
+  S.polyEdit = null; toast(`🔷 꼭짓점 ${pts.length}개 구역 완성 (반경 ${chk.r}m 크기)`);
   renderLobby(S.room); drawMaps();
 });
 $('#l-r').onchange = safe(async () => {
@@ -2273,7 +2277,7 @@ $('#l-r').onchange = safe(async () => {
 $('#btnStart').onclick = safe(async () => {
   const room = S.room, ids = Object.keys(room.players), n = ids.length;
   if (n < 2) return toast('2명 이상이어야 해요');
-  if (S.polyEdit) return toast('꼭짓점을 다 찍었으면 ✔ 완료, 아니면 취소를 먼저 눌러 주세요', true);
+  if (S.polyEdit) return toast('✔ 완료나 취소를 먼저 눌러 주세요', true);
   const roles = Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
   const game = mergedSettings(room).out, mafia = modeOf(room) === 'mafia'; // 모든 폰이 같은 설정으로 시작
   const jobs = mafia ? Logic.assignJobs(roles, game.MF_POLICE || 0, game.MF_DOCTOR || 0) : {};
@@ -2542,7 +2546,7 @@ function mafiaTick(room, me, t, meAlive) {
       S.augs = { ...S.augs, mfCheck: { got: 1 }, mfRifle: { got: 1 } };
       update(meRef(), { job: 'police', 'augs/mfCheck': { got: 1 }, 'augs/mfRifle': { got: 1 } });
       push(roomRef('events'), { type: 'riflePick', by: S.pid, at: serverTimestamp() });
-      toast('🔫 저격총을 주웠어요! 이제 당신이 경찰이에요 (조사·저격총)', true); flash('rgba(59,163,255,.9)'); vibrate([100, 50, 100]); sfx('augS'); renderGame();
+      toast('🔫 저격총을 주웠어요! 이제 경찰이에요', true); flash('rgba(59,163,255,.9)'); vibrate([100, 50, 100]); sfx('augS'); renderGame();
     }).catch(e => console.error(e)).finally(() => { S.rifleBusy = false; });
   }
   const vr = Logic.voteRound(t, room.startAt, room.timeShift), k = vr.lastEnded;
@@ -2661,7 +2665,7 @@ function useAug(id) {
   if (id === 'reroll') return openReroll();
   if (id === 'alchemy') return openAlchemy();
   if (id === 'doppel') return openDoppel();
-  if (id === 'fakePing') { S.pingFake = true; toast('🎭 지도를 꾹 눌러서 가짜 핑을 찍을 위치를 고르세요', true); return; }
+  if (id === 'fakePing') { S.pingFake = true; toast('🎭 가짜 핑 찍을 곳을 꾹 누르세요', true); return; }
   if (['trap', 'decoy', 'domain', 'selfDestruct', 'whistle', 'fakeTreasure', 'magnet', 'ink', 'cctv', 'trail', 'steal', 'silence', 'smoke', 'hideout', 'tracker', 'drone', 'hound', 'net', 'spyCam', 'cheer'].includes(id) && !here) return toast('GPS 신호를 기다리는 중…');
   // 진짜 위치 기준 가장 가까운 살아 있는 상대 (max 이내)
   const nearestFoe = (max = Infinity) => {
@@ -2692,7 +2696,7 @@ function useAug(id) {
     setCooldown(id); toast('덫을 설치했어요 (5분)', true);
   } else if (id === 'decoy') {
     update(meRef(), { decoy: { ...here, at: t, brg: 0, ms: 0, maxD: 0, until: t + v * 1000, joy: 1 } }); S.joyKey = 'decoy';
-    setCooldown(id, { until: t + v * 1000 }); toast(`분신! ${v}초 동안 왼쪽 아래 조이스틱으로 조종하세요 · 상대에겐 분신이 내 위치로 보여요`, true);
+    setCooldown(id, { until: t + v * 1000 }); toast(`분신 ${v}초! 왼쪽 아래 조이스틱으로 조종하세요`, true);
   } else if (id === 'whistle') {
     // 가장 가까운(진짜 위치) 살아 있는 도망자 폰을 진동시킴
     let best = null;
@@ -2728,7 +2732,7 @@ function useAug(id) {
     if (left <= 0) return toast('이번 판에는 다 썼어요');
     update(meRef(), { mapHideUntil: t + v * 1000 });
     setCooldown(id, { until: t + v * 1000, left: left - 1 });
-    toast(`🫥 ${v}초 동안 도망자 미니맵에서 숨었어요 (남은 횟수 ${left - 1}회)`, true);
+    toast(`🫥 ${v}초 동안 미니맵에서 숨어요 (남은 ${left - 1}회)`, true);
   } else if (id === 'teamChat') {
     const co = room.chatOpen && room.chatOpen[me.role], until = Math.max((co && co.until) || 0, t + v * 1000);
     update(roomRef('chatOpen/' + me.role), { by: S.pid, until });
@@ -2736,21 +2740,21 @@ function useAug(id) {
     setCooldown(id, { until }); openChat(); // 대화방이 바로 열림 (닫아도 위의 💬 버튼으로 다시)
   } else if (id === 'heartbeat') {
     S.hbNext = 0; setCooldown(id, { until: t + v * 1000 });
-    toast(`💓 심장박동 ${v}초! 도망자가 ${Logic.AUGS.heartbeat.r}m 안이면 폰이 뛰고, 가까울수록 빨라져요`, true);
+    toast(`💓 심장박동 ${v}초! 가까울수록 빨리 뛰어요`, true);
   } else if (id === 'shadowStep') {
     const a = Logic.AUGS.shadowStep;
     S.shadowHit = {}; setCooldown(id, { until: t + v * 1000 });
-    toast(`👣 그림자 밟기 ${v}초! ${a.r}m 안 도망자의 ${a.back}초 전 자리가 보여요. 밟으면 그 도망자는 ${a.stop}초 동안 멈춰야 해요`, true);
+    toast(`👣 그림자 밟기 ${v}초! 도망자의 ${a.back}초 전 자리를 밟으세요`, true);
   } else if (id === 'timeBomb') {
     const a = Logic.AUGS.timeBomb;
     push(roomRef('bombs'), { by: S.pid, holder: S.pid, prev: null, passes: 0, until: t + v * 1000 });
-    setCooldown(id); toast(`💣 시한폭탄! ${v}초 안에 넘기세요 · ${a.r}m 안에 사람이 오면 자동으로 넘어가요`, true); vibrate([100, 60, 100]);
+    setCooldown(id); toast(`💣 시한폭탄! ${v}초 안에 ${a.r}m 안으로 가서 넘기세요`, true); vibrate([100, 60, 100]);
   } else if (id === 'jam') {
     update(meRef(), { jamUntil: t + v * 1000 });
-    setCooldown(id, { until: t + v * 1000 }); toast(`📡 나침반 교란 ${v}초! 추격자 화살표가 엉뚱한 곳을 가리켜요`, true);
+    setCooldown(id, { until: t + v * 1000 }); toast(`📡 나침반 교란 ${v}초!`, true);
   } else if (id === 'fakeTreasure') {
     push(roomRef('fakes'), { by: S.pid, role: me.role, ...here, until: t + v * 1000 });
-    setCooldown(id); toast('가짜 보물을 놓았어요 (5분 · 상대에게만 보여요)', true);
+    setCooldown(id); toast('가짜 보물을 놓았어요 (5분)', true);
   } else if (id === 'magnet') {
     // 가장 가까운 증강 지점(내 눈에 보이는 것: 진짜 지점 + 상대가 놓은 가짜 보물)을 v미터 끌어옴
     let best = null;
@@ -2780,14 +2784,14 @@ function useAug(id) {
     S.selfDmg -= Math.min(20, RULES.HP_MAX - hp); S.st = stMaxOf(me.role); S.lastWrite = 0;
     update(meRef(), { tauntUntil: t + v * 1000 });
     push(roomRef('events'), { type: 'taunt', by: S.pid, at: serverTimestamp() });
-    setCooldown(id, { until: t + v * 1000 }); toast(`🤪 도발! ${v}초 동안 위치 공개 · 스태미나 가득 · 체력 +20`, true);
+    setCooldown(id, { until: t + v * 1000 }); toast(`🤪 도발! ${v}초 위치 공개 · 체력 +20`, true);
   } else if (id === 'storm') {
     update(roomRef(), { storm: { by: S.pid, at: t, until: t + v * 1000 } });
     push(roomRef('events'), { type: 'storm', by: S.pid, at: serverTimestamp() });
     setCooldown(id, { until: t + v * 1000 }); toast('🌀 자기장! 구역이 줄어들기 시작해요', true); flash('rainbow');
   } else if (id === 'siren') {
     push(roomRef('events'), { type: 'siren', by: S.pid, at: serverTimestamp() });
-    setCooldown(id); toast('🚨 사이렌! 모든 도망자 폰이 울려요. 귀를 기울이세요', true);
+    setCooldown(id); toast('🚨 사이렌! 도망자 폰이 울려요', true);
   } else if (id === 'cctv') {
     push(roomRef('cams'), { by: S.pid, role: me.role, ...here, until: t + Logic.AUGS.cctv.life * 1000 });
     setCooldown(id); toast(`📹 CCTV 설치 (5분 · 반경 ${v}m)`, true); sfx('cam');
@@ -2826,7 +2830,7 @@ function useAug(id) {
     const area = room.settings && room.settings.area, a = Logic.AUGS.supply;
     if (!area) return toast('구역 정보가 없어요');
     push(roomRef('supplies'), { by: S.pid, ...Logic.randomSpot(area), dropAt: t + a.v * 1000, pubAt: t + (a.v + a.pub) * 1000 });
-    setCooldown(id); toast(`📦 보급 상자 요청! ${a.v / 60}분 뒤 떨어져요. 자리는 지금 나만 보여요`, true);
+    setCooldown(id); toast(`📦 보급 상자 ${a.v / 60}분 뒤 도착 (자리는 나만 알아요)`, true);
   } else if (id === 'gamble') {
     setCooldown(id);
     if (Math.random() < v / 100) { toast('🎲 도박 성공!', true); gainRandom('🎲 도박'); }
@@ -2838,7 +2842,7 @@ function useAug(id) {
   } else if (id === 'smoke') {
     const a = Logic.AUGS.smoke;
     push(roomRef('smokes'), { by: S.pid, role: me.role, ...here, until: t + a.sec * 1000 });
-    setCooldown(id, { until: t + a.sec * 1000 }); toast(`💨 연막탄! 반경 ${v}m 안에서는 화살표·순간 포착에 안 잡혀요 (${a.sec}초)`, true);
+    setCooldown(id, { until: t + a.sec * 1000 }); toast(`💨 연막탄 ${a.sec}초! 연기 안에선 안 잡혀요`, true);
   } else if (id === 'exit') {
     setCooldown(id, { until: t + v * 1000 }); toast(`🚪 비상구 ${v}초! 구역 밖에 나가도 괜찮아요`, true);
   } else if (id === 'disguise') {
@@ -2846,10 +2850,10 @@ function useAug(id) {
     setCooldown(id, { until: t + v * 1000 }); toast(`🎭 위장 ${v}초! 상대 지도에서 추격자처럼 보여요`, true);
   } else if (id === 'hideout') {
     const a = Logic.AUGS.hideout;
-    setCooldown(id, { until: t + a.sec * 1000, lat: here.lat, lng: here.lng }); toast(`🏠 은신처! 1분 동안 반경 ${v}m 안에서 가만히 있으면 회복`, true);
+    setCooldown(id, { until: t + a.sec * 1000, lat: here.lat, lng: here.lng }); toast('🏠 은신처! 1분 동안 가만히 있으면 회복', true);
   } else if (id === 'drone') {
     update(meRef(), { drone: { ...here, at: t, brg: 0, ms: 0, maxD: 0, until: t + v * 1000 } }); S.joyKey = 'drone';
-    setCooldown(id, { until: t + v * 1000 }); toast(`🛸 드론 ${v}초! 왼쪽 아래 조이스틱으로 조종 · 드론 ${Logic.AUGS.drone.r}m 안 도망자가 보여요`, true);
+    setCooldown(id, { until: t + v * 1000 }); toast(`🛸 드론 ${v}초! 왼쪽 아래 조이스틱으로 조종하세요`, true);
   } else if (id === 'hound') {
     const tg = Logic.nearestRunner(here, room.players, hits, t, room.smokes);
     if (!tg) return toast('쫓을 도망자가 없어요');
@@ -2859,28 +2863,28 @@ function useAug(id) {
   } else if (id === 'blockade') {
     if (S.blockPick) { S.blockPick = null; drawMaps(); return toast('봉쇄선 취소'); }
     S.blockPick = { pts: [] }; drawMaps();
-    return toast(`🚧 지도에서 두 점을 찍으세요 (최대 ${Logic.AUGS.blockade.len}m) · 다시 누르면 취소`, true);
+    return toast(`🚧 지도에 두 점을 찍으세요 (최대 ${Logic.AUGS.blockade.len}m)`, true);
   } else if (id === 'net') {
     push(roomRef('nets'), { by: S.pid, role: me.role, ...here, until: t + Logic.AUGS.net.life * 1000 });
-    setCooldown(id); toast(`🕸 그물 설치 (3분 · 반경 ${v}m, 상대에겐 안 보여요)`, true);
+    setCooldown(id); toast('🕸 그물 설치 (3분)', true);
   } else if (id === 'altScan') {
     setCooldown(id, { until: t + v * 1000 }); toast(`📡 고도 탐지기 ${v}초!`, true);
   } else if (id === 'afterimage') {
     update(meRef(), { lagUntil: t + v * 1000 }); S.lastWrite = 0;
-    setCooldown(id, { until: t + v * 1000 }); toast(`👻 잔상 ${v}초! 상대에겐 내 위치가 ${Logic.AUGS.afterimage.lag}초 늦게 보여요`, true);
+    setCooldown(id, { until: t + v * 1000 }); toast(`👻 잔상 ${v}초! 내 위치가 ${Logic.AUGS.afterimage.lag}초 늦게 보여요`, true);
   } else if (id === 'spyCam') {
     push(roomRef('cams'), { by: S.pid, role: me.role, ...here, r: v, spy: 1, until: t + Logic.AUGS.spyCam.life * 1000 });
     setCooldown(id); toast(`📷 감시 카메라 설치 (5분 · 반경 ${v}m)`, true); sfx('cam');
   } else if (id === 'radioJam') {
     update(roomRef(), { radioJam: { by: S.pid, until: t + v * 1000 } });
     push(roomRef('events'), { type: 'radioJam', by: S.pid, at: serverTimestamp() });
-    setCooldown(id, { until: t + v * 1000 }); toast(`📡 전파 방해 ${v}초! 추격자 탐지 증강이 안 먹혀요`, true);
+    setCooldown(id, { until: t + v * 1000 }); toast(`📡 전파 방해 ${v}초!`, true);
   } else if (id === 'cheer') {
     push(roomRef('events'), { type: 'cheer', by: S.pid, ...here, at: serverTimestamp() });
     setCooldown(id); toast(`📣 응원! ${Logic.AUGS.cheer.r}m 안 팀원 체력 +${v}`, true);
   } else if (id === 'altFake') {
     update(meRef(), { altFakeUntil: t + v * 1000 });
-    setCooldown(id, { until: t + v * 1000 }); toast(`🔃 높이 위장 ${v}초! 추격자에겐 내 높이가 반대로 보여요`, true);
+    setCooldown(id, { until: t + v * 1000 }); toast(`🔃 높이 위장 ${v}초!`, true);
   } else if (id === 'fog') {
     update(roomRef(), { fog: { by: S.pid, role: me.role, until: t + v * 1000 } });
     push(roomRef('events'), { type: 'fog', by: S.pid, role: me.role, at: serverTimestamp() });
@@ -2895,11 +2899,11 @@ function useAug(id) {
     const a = Logic.AUGS.tracker;
     if (mirrored(best.pid, 'tracker')) { update(meRef(), { tracked: { by: best.pid, at: t, until: t + a.sec * 1000 } }); setCooldown(id); return renderGame(); }
     update(roomRef('players/' + best.pid), { tracked: { by: S.pid, at: t, until: t + a.sec * 1000 } });
-    setCooldown(id); toast(`📍 ${room.players[best.pid].name}에게 위치 추적기 부착! 2분 동안 20초마다 위치가 찍혀요`, true);
+    setCooldown(id); toast(`📍 ${room.players[best.pid].name}에게 추적기 부착! (2분)`, true);
   } else if (id === 'blackout') {
     update(roomRef(), { blackout: { by: S.pid, until: t + v * 1000 } });
     push(roomRef('events'), { type: 'blackout', by: S.pid, at: serverTimestamp() });
-    setCooldown(id, { until: t + v * 1000 }); toast(`🌑 블랙아웃 ${v}초! 도망자들의 미니맵·증강 지점·핑이 꺼져요`, true);
+    setCooldown(id, { until: t + v * 1000 }); toast(`🌑 블랙아웃 ${v}초!`, true);
   } else if (id === 'booster') {
     setCooldown(id, { until: t + v * 1000 }); toast(`🚀 부스터 ${v}초! 스태미나가 안 닳아요`, true);
   } else if (id === 'detector') {
@@ -3061,7 +3065,7 @@ async function modeCatch(mode, tid, t) {
     if (tp.guard && (tp.guard.until || 0) > t) {
       await update(roomRef(`players/${tid}`), { guard: null });
       push(roomRef('events'), { type: 'guarded', by: S.pid, target: tid, doc: tp.guard.by, at: serverTimestamp() });
-      toast(`🩺 ${tp.name}은(는) 의사에게 보호받고 있었어요! 잡기 실패`, true); vibrate(300); return renderGame();
+      toast(`🩺 ${tp.name}은(는) 의사 보호 중! 잡기 실패`, true); vibrate(300); return renderGame();
     }
     if (!(await mfOut(tid, 'mafia', S.pid))) return toast('이미 탈락한 사람이에요');
     toast(`🔪 ${tp.name} 탈락!`, true); flash('rgba(255,77,79,.9)'); vibrate(200); sfx('catch');
@@ -3105,7 +3109,7 @@ const handleRescue = safe(async text => {
   if (me.jailed) return toast('나도 갇혀 있어서 못 구해요', true);
   if (tp.lat == null || !S.fix) return toast('GPS 위치를 아직 못 받았어요', true);
   const d = Logic.dist(S.fix, tp), lim = Logic.nearLimit(S.fix, tp);
-  if (d > lim) return toast(`GPS상 ${Math.round(d)}m 떨어져 있어서 못 구해요 (지금 GPS로는 ${Math.round(lim)}m까지 인정)`, true);
+  if (d > lim) return toast(`${Math.round(d)}m 떨어져서 못 구해요 (${Math.round(lim)}m 안으로)`, true);
   const r = await runTransaction(roomRef(`players/${qr.pid}/jailed`), cur => (cur ? null : undefined));
   if (!r.committed) return toast('이미 풀려났어요');
   await update(roomRef('hits/' + qr.pid), { invUntil: t + Logic.MODE_RULES.RESCUE_INV_SEC * 1000 });
@@ -3124,7 +3128,7 @@ const handleRevive = safe(async text => {
   if (!S.augs.bloodOath || !Logic.augReady(S.augs.bloodOath, t)) return;
   if (tp.lat == null || !S.fix) return toast('GPS 위치를 아직 못 받았어요', true);
   const d = Logic.dist(S.fix, tp), lim = Logic.nearLimit(S.fix, tp, Logic.AUGS.bloodOath.v); // GPS가 부정확하면 오차만큼 넉넉하게
-  if (d > lim) return toast(`GPS상 ${Math.round(d)}m 떨어져 있어서 못 살려요 (지금 GPS로는 ${Math.round(lim)}m까지 인정)`, true);
+  if (d > lim) return toast(`${Math.round(d)}m 떨어져서 못 살려요 (${Math.round(lim)}m 안으로)`, true);
   const give = Logic.hpOf({ ...me, selfDmg: S.selfDmg, augs: S.augs }, hits[S.pid]) / 2;
   S.selfDmg += give; S.lastWrite = 0;
   const h = hits[qr.pid] || {}, theirSelf = RULES.HP_MAX - give - (h.catches || 0) * RULES.CATCH_DMG - (h.ext || 0);
@@ -3132,7 +3136,7 @@ const handleRevive = safe(async text => {
     [`players/${qr.pid}/stats/diedAt`]: null, [`players/${qr.pid}/stats/deathWhy`]: null, [`players/${qr.pid}/stats/deathBy`]: null, [`players/${qr.pid}/revive`]: { at: t, by: S.pid, hp: give } });
   setCooldown('bloodOath');
   push(roomRef('events'), { type: 'revive', by: S.pid, target: qr.pid, at: serverTimestamp() });
-  toast(`🩸 피의 서약! ${tp.name} 부활 (내 체력 절반 ${Math.ceil(give)}를 나눠 줌)`, true); flash('rgba(220,38,38,.95)'); vibrate([200, 80, 200]); sfx('augS');
+  toast(`🩸 ${tp.name} 부활! (체력 ${Math.ceil(give)} 나눔)`, true); flash('rgba(220,38,38,.95)'); vibrate([200, 80, 200]); sfx('augS');
   renderGame();
 });
 // 역탐지: 내가 화살표·순간 포착으로 본 도망자가 역탐지를 갖고 있으면 알려줌
@@ -3211,7 +3215,7 @@ const rpsApply = safe(async (tid, g) => {
     if (!r.committed) return;
     await update(roomRef('players/' + g.chaser), { frozenUntil: t + R.freeze * 1000 });
     push(roomRef('events'), { type: 'rpsWin', by: tid, chaser: g.chaser, at: serverTimestamp() });
-    toast(`✌️ 가위바위보 승리! 잡기 취소 + 추격자 ${R.freeze}초 정지`, true); flash('rgba(60,207,122,.9)'); sfx('escape'); vibrate([100, 50, 100, 50, 300]);
+    toast('✌️ 가위바위보 승리! 잡기 취소', true); flash('rgba(60,207,122,.9)'); sfx('escape'); vibrate([100, 50, 100, 50, 300]);
     bountyPay();
   } else {
     const sh = S.augs && S.augs.shake, shake = Logic.augReady(sh, t);
@@ -3366,7 +3370,7 @@ function markDead(me, t, inTick) {
     S.stats.deathWhy = me.forfeit ? '기권' : h ? h.why : '체력 0';
     S.stats.deathBy = me.forfeit || !h ? null : h.by;
   }
-  if (!me.forfeit) { toast(`체력 0 — 탈락했어요 (${deathLabel(S.stats, S.room.players)}). 관전 모드로 바뀌어요`, true); vibrate([300, 100, 300]); flash('rgba(255,77,79,1)'); sfx('lose'); }
+  if (!me.forfeit) { toast(`탈락! (${deathLabel(S.stats, S.room.players)}) 관전 모드로 바뀌어요`, true); vibrate([300, 100, 300]); flash('rgba(255,77,79,1)'); sfx('lose'); }
   if (!inTick) update(meRef(), { selfDmg: Math.round(S.selfDmg * 10) / 10, stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
 }
 // 러너스 하이: 움직인 거리 500m마다 체력 +10
@@ -3404,7 +3408,7 @@ function noticeSupplies(room, t) {
   for (const [id, b] of Object.entries(room.supplies || {})) {
     if (t < b.pubAt || S.supSeen[id]) continue;
     S.supSeen[id] = 1;
-    if (b.by !== S.pid) { toast('📦 보급 상자가 떨어졌어요! 먼저 줍는 사람이 SS 증강', true); vibrate([100, 50, 100]); sfx('augS'); }
+    if (b.by !== S.pid) { toast('📦 보급 상자 도착! 먼저 줍는 사람이 SS', true); vibrate([100, 50, 100]); sfx('augS'); }
   }
 }
 // 보급 상자 줍기: 떨어진 뒤 줍는 거리 안이면 SS (없으면 S → 아무거나)
@@ -3557,6 +3561,7 @@ $('#augBar').addEventListener('pointerdown', e => {
 $('#augBar').addEventListener('pointermove', e => { if (augDown && Math.hypot(e.clientX - augDown.x, e.clientY - augDown.y) > 12) clearTimeout(augHold); });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(n => $('#augBar').addEventListener(n, () => clearTimeout(augHold)));
 $('#augBar').addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('contextmenu', e => { if (!e.target.closest('input,textarea')) e.preventDefault(); }); // 게임 화면 어디서든 길게 누르기 메뉴 막기
 $('#augBar').onclick = e => {
   if (augLongAt) { augLongAt = 0; augDown = null; return; } // 꾹 누른 뒤엔 쓰지 않음
   const el = e.target.closest('[data-use],[data-info]');
@@ -3775,7 +3780,7 @@ $('#btnForfeitYes').onclick = safe(async () => {
   renderGame(); checkWin();
   // 연결이 끊긴 채면 내 화면에서만 기권이 되고 다른 폰엔 안 감 → 알려 주고, 연결되면 자동으로 전달됨
   let acked = false, slow = false;
-  const tm = setTimeout(() => { if (!acked) { slow = true; toast('📡 연결이 불안정해서 기권을 아직 못 보냈어요. 다시 연결되면 바로 전달돼요', true); reconnect(); } }, 3000);
+  const tm = setTimeout(() => { if (!acked) { slow = true; toast('📡 연결 끊김 · 연결되면 기권이 전달돼요', true); reconnect(); } }, 3000);
   await w; acked = true; clearTimeout(tm);
   if (slow) toast('✅ 기권이 전달됐어요', true);
 });
@@ -4087,7 +4092,7 @@ function tick() {
   if (jl && gpsOk) {
     const MR = Logic.MODE_RULES, jail = jailOf(room), jd = jail ? Logic.dist(S.fix, jail) : 0;
     if (S.jailAt !== jl.at) { S.jailAt = jl.at; S.jailIn = false; S.jailOut = 0; }
-    if (jd <= MR.JAIL_R) { S.jailIn = true; S.jailOut = 0; warn.push('🔒 감옥에 갇혀 있어요 · 팀원이 QR을 찍어 주면 탈옥'); }
+    if (jd <= MR.JAIL_R) { S.jailIn = true; S.jailOut = 0; warn.push('🔒 감옥 · 팀원이 QR을 찍으면 탈옥'); }
     else if (!S.jailIn && t - jl.at < MR.JAIL_GO_SEC * 1000) warn.push(`🔒 감옥으로 가세요! ${fmt(MR.JAIL_GO_SEC * 1000 - (t - jl.at))} 남음 (${Math.round(jd)}m)`);
     else {
       S.jailOut += dt; const left = RULES.RULE_WARN_SEC - S.jailOut;
@@ -4108,7 +4113,7 @@ function tick() {
   if (S.augs.booster && (S.augs.booster.until || 0) > t) cost = 0;              // 부스터
   // 그물: 상대 그물 안에선 뛰면 스태미나 대신 체력 (스태미나 0일 때와 같은 양, 5초 경고 뒤)
   const net = me.role === 'runner' && gpsOk ? Object.values(room.nets || {}).find(n => n.role !== me.role && (n.until || 0) > t && Logic.dist(S.fix, n) <= Logic.AUGS.net.v) : null;
-  if (net && !S.netWas) { toast('🕸 그물에 걸렸어요! 그물 안에서 뛰면 체력이 닳아요', true); vibrate([100, 50, 100]); }
+  if (net && !S.netWas) { toast('🕸 그물! 안에서 뛰면 체력이 닳아요', true); vibrate([100, 50, 100]); }
   S.netWas = !!net;
   if (net) warn.push('🕸 그물 안 · 뛰면 체력이 닳아요');
   const sp = net ? { st: S.st, hpLoss: cost * dt } : Logic.spendStamina(S.st, cost * dt), why = net ? '🕸 그물 안' : '스태미나 0';
@@ -4146,7 +4151,7 @@ function tick() {
     if (S.blockPrev) for (const [bid, bl] of Object.entries(room.blocks || {})) {
       if ((bl.until || 0) <= t || S.blockHit[bid] || !bl.a || !bl.b || !Logic.segCross(S.blockPrev, cur, bl.a, bl.b)) continue;
       S.blockHit[bid] = true; S.st = 0;
-      toast('🚧 봉쇄선을 넘었어요! 스태미나 0, 위치가 들켰어요', true); flash('rgba(255,77,79,.9)'); vibrate([200, 80, 200]); sfx('trap');
+      toast('🚧 봉쇄선을 넘었어요! 스태미나 0 · 위치 공개', true); flash('rgba(255,77,79,.9)'); vibrate([200, 80, 200]); sfx('trap');
       push(roomRef('events'), { type: 'block', by: bl.by, target: S.pid, ...cur, at: serverTimestamp() });
     }
     S.blockPrev = cur;
@@ -4198,7 +4203,7 @@ function tick() {
     S.mugHit = mg.from; S.st = 0;
     update(meRef(), { mugungUntil: t + ma.reveal * 1000 });
     push(roomRef('events'), { type: 'mugHit', by: S.pid, at: serverTimestamp() });
-    toast(`🌸 움직였어요! 스태미나 0, ${ma.reveal}초 동안 위치 공개`, true); flash('rgba(255,122,217,.95)'); vibrate([300, 100, 300]); sfx('trap');
+    toast(`🌸 움직였어요! ${ma.reveal}초 위치 공개`, true); flash('rgba(255,122,217,.95)'); vibrate([300, 100, 300]); sfx('trap');
   }
 
   // 그림자 밟기 (추격자): 보이는 그림자 5m 안에 들어가면 그 도망자는 2초 예고 뒤 5초 동안 멈춰야 함
@@ -4209,7 +4214,7 @@ function tick() {
     const from = t + 2000; // 알아채고 멈출 시간 + GPS 속도가 늦게 바뀌는 시간
     update(roomRef('players/' + sh.id), { shadowStop: { by: S.pid, from, to: from + sa.stop * 1000 } });
     push(roomRef('events'), { type: 'shadow', by: S.pid, target: sh.id, at: serverTimestamp() });
-    toast(`👣 ${room.players[sh.id].name}의 그림자를 밟았어요! ${sa.stop}초 동안 못 움직여요`, true); vibrate([80, 40, 80]); sfx('arrow');
+    toast(`👣 ${room.players[sh.id].name}의 그림자를 밟았어요!`, true); vibrate([80, 40, 80]); sfx('arrow');
   }
   // 그림자 밟기 (도망자): 멈춰야 하는 동안 초속 1m 넘게 움직이면 체력 -20 (한 번)
   const ss = me.shadowStop;
@@ -4525,7 +4530,7 @@ function drawArrow() {
 $('#btnShowQR').onclick = () => {
   const me = S.room.players[S.pid];
   const qr = qrcode(0, 'M'); qr.addData(`GTAG1|${S.code}|${S.pid}|${me.qr}`); qr.make();
-  $('#qrBox').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  $('#qrBox').innerHTML = qrImg(qr);
   $('#qrName').textContent = me.name;
   const qt = $('#btnShowQR').textContent;
   $('#ov-qr .dim').textContent = qt.includes('부활') ? '피의 서약을 가진 팀원이 찍으면 부활해요' : qt.includes('탈옥') ? '팀원이 이 QR을 찍으면 탈옥해요' : modeOf(S.room) === 'mafia' ? '마피아가 찍으면 탈락, 의사가 찍으면 보호돼요' : `${roleName('chaser', S.room)}가 이 QR을 찍으면 잡혀요`;
@@ -4549,7 +4554,7 @@ const openScanner = safe(async mode => {
     if (v.readyState >= 2 && v.videoWidth) {
       const w = 640, h = Math.round(v.videoHeight * w / v.videoWidth);
       c.width = w; c.height = h; ctx.drawImage(v, 0, 0, w, h);
-      const found = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+      const found = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: (S.scanN = (S.scanN || 0) + 1) % 2 ? 'dontInvert' : 'attemptBoth' }); // 다크 모드로 색이 뒤집힌 QR도 (한 프레임씩 번갈아. jsQR 1.4.0은 onlyInvert가 오류 나서 attemptBoth)
       if (found && found.data) { closeScanner(); ({ revive: handleRevive, rescue: handleRescue, guard: handleGuard }[S.scanMode] || handleScan)(found.data); return; }
     }
     requestAnimationFrame(loop);
@@ -4968,7 +4973,7 @@ $('#btnRpShare').onclick = async () => {
   if (!RP.id) return;
   const url = location.origin + location.pathname + '?replay=' + RP.id;
   try { if (navigator.share) { await navigator.share({ title: 'PULTRIX 리플레이', text: RP.title || '', url }); return; } } catch (e) { if (e.name === 'AbortError') return; }
-  try { await navigator.clipboard.writeText(url); toast('🔗 리플레이 링크를 복사했어요 (7일 동안 볼 수 있어요)', true); } catch (e) { toast(url, true); }
+  try { await navigator.clipboard.writeText(url); toast('🔗 링크를 복사했어요 (7일 보관)', true); } catch (e) { toast(url, true); }
 };
 // 동선 그림: 지도 그림(OpenStreetMap) 위에 모든 선 · 이름표. 지도 그림을 못 쓰면 어두운 배경에 선만
 const merc = (lat, lng, z) => { const s = 256 * 2 ** z, r = lat * Math.PI / 180; return { x: (lng + 180) / 360 * s, y: (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * s }; };
@@ -5057,7 +5062,7 @@ $('#btnRpImg').onclick = safe(async () => {
   rpCleanup();
   const rpq = new URLSearchParams(location.search).get('replay') || ''; // 리플레이 공유 링크(?replay=…)
   if (/^[A-Za-z0-9]{12}$/.test(rpq)) setTimeout(() => openReplay(rpq), 300);
-  if (invited) { $('#in-code').value = invited; toast(`방 ${invited}에 초대받았어요. 닉네임을 넣고 참가를 누르세요`, true); }
+  if (invited) { $('#in-code').value = invited; toast(`방 ${invited}에 초대됐어요 · 닉네임 넣고 참가`, true); }
   if (saved && saved.code && saved.pid && (!invited || invited === saved.code)) {
     get(ref(db, `rooms/${saved.code}/players/${saved.pid}`))
       .then(s => { if (s.exists()) enterRoom(saved.code, saved.pid, saved.name); else saveLocal({ name: saved.name }); })
