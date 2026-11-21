@@ -3,7 +3,7 @@
     "rooms": {
       "$code": {
         ".read": "$code.matches(/^[A-Z0-9]{5}$/)",
-        ".write": "$code.matches(/^[A-Z0-9]{5}$/) && (newData.exists() ? (data.exists() || newData.hasChildren(['hostId', 'players'])) : data.child('players').numChildren() <= 1)",
+        ".write": "$code.matches(/^[A-Z0-9]{5}$/) && (newData.exists() ? (data.exists() || newData.hasChildren(['hostId', 'players'])) : !data.child('players').exists())",
         "hostId": {
           ".validate": "newData.isString() && newData.val().length <= 20"
         },
