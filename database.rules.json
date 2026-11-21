@@ -62,6 +62,39 @@
           ".validate": false
         }
       }
+    },
+    "feedback": {
+      "$fid": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['type', 'text', 'uid', 'at'])",
+        "type": {
+          ".validate": "newData.isString() && newData.val().matches(/^(bug|idea|etc)$/)"
+        },
+        "text": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 500"
+        },
+        "contact": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "room": {
+          ".validate": "newData.isString() && newData.val().length <= 10"
+        },
+        "ua": {
+          ".validate": "newData.isString() && newData.val().length <= 300"
+        },
+        "ver": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "uid": {
+          ".validate": "newData.val() === auth.uid"
+        },
+        "at": {
+          ".validate": "newData.val() === now"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     }
   }
 }
