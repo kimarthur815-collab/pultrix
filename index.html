@@ -1191,7 +1191,7 @@ const S = {
 };
 
 const cfgOk = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
-let db = null, authReady = Promise.resolve(null);
+let db = null, authReady = Promise.resolve(null), AUTH = null;
 if (cfgOk) {
   const app = initializeApp(FIREBASE_CONFIG);
   if (APP_CHECK_SITE_KEY) try { initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.error(e); }
@@ -1199,19 +1199,30 @@ if (cfgOk) {
   // 익명 로그인: 플레이어 아이디 = 로그인 아이디 → 보안 규칙이 '방에 들어온 사람만 읽기·쓰기'를 확인할 수 있게
   // (콘솔에서 익명 로그인을 아직 안 켰으면 실패하고, 예전처럼 임의 아이디로 진행)
   try {
-    const auth = getAuth(app);
+    const auth = AUTH = getAuth(app);
     authReady = new Promise(res => {
       onAuthStateChanged(auth, u => { if (u) { S.uid = u.uid; res(u.uid); } });
-      signInAnonymously(auth).catch(e => { console.warn('익명 로그인 실패 (콘솔에서 켜야 해요):', e.code || e.message); res(null); });
+      signInAnonymously(auth).catch(e => { S.authErr = e.code || e.message; console.warn('익명 로그인 실패 (콘솔에서 켜야 해요):', S.authErr); res(null); });
       setTimeout(() => res(null), 8000);
     });
   } catch (e) { console.error(e); }
   onValue(ref(db, '.info/serverTimeOffset'), s => { S.offset = s.val() || 0; });
 }
 const now = () => Date.now() + S.offset;
+// 방 만들기·참가 전: 로그인이 아직이면 한 번 더 시도 (느린 데이터망), 그래도 안 되면 이유를 보여 줌
+async function ensureAuth() {
+  const u = await authReady; if (u) return u;
+  if (!AUTH) return null;
+  if (AUTH.currentUser) return (S.uid = AUTH.currentUser.uid);
+  toast('로그인 중… 잠깐만요');
+  try {
+    const c = await Promise.race([signInAnonymously(AUTH), new Promise((_, rej) => setTimeout(() => rej(new Error('시간 초과')), 15000))]);
+    S.uid = c.user.uid; authReady = Promise.resolve(c.user.uid); return c.user.uid;
+  } catch (e) { S.authErr = e.code || e.message; throw new Error(`로그인이 안 돼요 (${S.authErr}) · 인터넷 확인 후 새로고침`); }
+}
 const roomRef = p => ref(db, `rooms/${S.code}` + (p ? '/' + p : ''));
 const meRef = () => roomRef(`players/${S.pid}`);
-const safe = fn => async (...a) => { try { await fn(...a); } catch (e) { console.error(e); toast('연결 오류: ' + (e.message || e), true); } };
+const safe = fn => async (...a) => { try { await fn(...a); } catch (e) { console.error(e); const m = String(e.message || e); toast(/permission.denied/i.test(m) ? `서버가 거절했어요 (권한)${S.authErr ? ' · 로그인 실패: ' + S.authErr : ''} · 새로고침해 보세요` : '연결 오류: ' + m, true); } };
 
 let toastT;
 /* ---------- 팁: 대기 화면(로비·숨는 시간·잡은 뒤 정지)에선 돌아가며, 게임 중엔 상황마다 처음 한 번 ---------- */
@@ -1442,7 +1453,8 @@ $('#btnFbSend').onclick = safe(async () => {
   if (!text) return toast('내용을 적어 줘요');
   let last = 0; try { last = +localStorage.getItem('fbAt') || 0; } catch (e) {}
   if (Date.now() - last < 60000) return toast('1분 뒤에 다시 보낼 수 있어요');
-  const uid = await authReady; if (!uid) return toast('연결이 안 돼서 못 보냈어요. 잠시 뒤에 다시 해 줘요', true);
+  let uid = null; try { uid = await ensureAuth(); } catch (e) { return toast(e.message, true); }
+  if (!uid) return toast('연결이 안 돼서 못 보냈어요. 잠시 뒤에 다시 해 줘요', true);
   const btn = $('#btnFbSend'); btn.disabled = true;
   try {
     await push(ref(db, 'feedback'), { type, text: text.slice(0, 500), ...(contact ? { contact } : {}), room: (S.code || '').slice(0, 10), ua: navigator.userAgent.slice(0, 300), ver: APP_VER, uid, at: serverTimestamp() });
@@ -1835,7 +1847,7 @@ $('#btnConsentNo').onclick = () => {
 $('#btnCreate').onclick = safe(async () => {
   const name = getName(); if (!name) return;
   if (!(await askConsent())) return;
-  const pid = (await authReady) || rid(10, ALNUM);
+  const pid = (await ensureAuth()) || rid(10, ALNUM);
   let code = rid(5);
   for (let i = 0; i < 5 && (await get(ref(db, `rooms/${code}/status`))).exists(); i++) code = rid(5); // 방 안 내용은 들어온 사람만 읽을 수 있어서 상태만 봄
   await set(ref(db, `rooms/${code}`), {
@@ -1850,10 +1862,11 @@ $('#btnJoin').onclick = safe(async () => {
   if (!(await askConsent())) return;
   const code = $('#in-code').value.trim().toUpperCase();
   if (!code) return toast('방 코드를 입력하세요');
+  await ensureAuth();
   const st = await get(ref(db, `rooms/${code}/status`)); // 들어가기 전엔 방 상태만 볼 수 있음
   if (!st.exists()) return toast('없는 방이에요');
   if (st.val() !== 'lobby') return toast('이미 시작한 게임이에요');
-  const pid = (await authReady) || rid(10, ALNUM);
+  const pid = (await ensureAuth()) || rid(10, ALNUM);
   await set(ref(db, `rooms/${code}/players/${pid}`), { name, joinedAt: serverTimestamp() });
   // 인원 확인은 들어간 뒤에 (넘치면 바로 나옴)
   const ps = (await get(ref(db, `rooms/${code}/players`))).val() || {};
