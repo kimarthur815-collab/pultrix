@@ -424,6 +424,7 @@ const RULES = {
   ALT_DIFF_M: 6,             // 높이 차이가 이보다 클 때만 (약 2층, GPS 고도 오차 때문)          // 이 거리 안이면 화살표 대신 '근처에 있어요!'
   ARROW_RECOVER: 15,         // 화살표가 뜰 때 추격자 스태미나 회복
   MAP_EVERY_SEC: 20,         // 도망자 미니맵의 추격자 위치 갱신 간격
+  MAP_HIDE_USES: 2,          // 추격자 기본 스킬 '미니맵 숨기기' 판마다 횟수 (0이면 없음)
   MAP_RECOVER: 10,           // 갱신될 때 도망자 스태미나 회복
   MAX_PLAYERS: 10,
   START_DELAY_SEC: 6,        // 시작 버튼 → 역할 공개 → 3·2·1 → 숨는 시간 시작
@@ -816,6 +817,8 @@ const Logic = (() => {
     shadowStep:   { name: '그림자 밟기', grade: 'A', role: 'chaser', cd: 4, v: 60, back: 20, r: 30, hitR: 5, stop: 5, ms: 1, dmg: 20, d: v => `${v}초 동안 ${AUGS.shadowStep.r}m 안 도망자의 ${AUGS.shadowStep.back}초 전 자리(그림자)가 보임. 그림자를 밟으면 그 도망자는 ${AUGS.shadowStep.stop}초 동안 멈춰야 하고, 움직이면 체력 -${AUGS.shadowStep.dmg} (도망자마다 한 번)` },
     timeBomb:     { name: '시한폭탄', grade: 'B', role: 'all', cd: 5, v: 60, r: 10, dmg: 30, max: 3, d: v => `내가 폭탄을 들고 시작. ${AUGS.timeBomb.r}m 안에 사람이 오면 가장 가까운 사람에게 자동으로 넘어감 (팀원도 · 방금 준 사람에겐 못 줌). 넘길 때마다 ${v}초 다시, ${AUGS.timeBomb.max}번째로 받은 사람은 바로 폭발. 시간이 다 되면 들고 있는 사람 체력 -${AUGS.timeBomb.dmg}` },
     teamChat:     { name: '팀 대화방', grade: 'B', role: 'all', cd: 5, v: 180, len: 30, d: v => `${v / 60}분 동안 우리 팀 대화방이 열림 (팀원 모두 글 최대 ${AUGS.teamChat.len}자 + 빠른 문장). 상대가 도청을 가지고 있으면 엿볼 수 있음` },
+    // ---- 추격자 기본 스킬 (게임 시작 때 모든 추격자에게, 방장이 정한 횟수) ----
+    mapHide:      { name: '미니맵 숨기기', grade: 'B', role: 'base', cd: 3, v: 30, d: v => `${v}초 동안 도망자 미니맵에 내 위치가 안 보임 (판마다 ${RULES.MAP_HIDE_USES}회)` },
     // ---- 마피아 모드 직업 능력 (게임 시작·저격총 줍기로만 얻음) ----
     mfCheck:      { name: '조사', grade: 'A', role: 'job', cd: 3, v: 0, d: () => '1명을 골라 마피아인지 시민인지 확인 (나만 봄)' },
     mfRifle:      { name: '저격총', grade: 'S', role: 'job', cd: 5, v: 40, aim: 10, d: v => `폰을 겨눠(±10°, 가까우면 GPS 오차만큼 최대 ±35°) ${v}m 안 사람을 쏨. 마피아면 그 마피아만 탈락, 아니면 맞은 사람과 나 둘 다 탈락 (빗나가도 쿨타임). 내가 죽으면 그 자리에 떨어져 시민이 주우면 새 경찰` },
@@ -999,7 +1002,8 @@ const Logic = (() => {
       SPOT_COUNT: Math.min(6, Math.max(2, Math.ceil(n / 2)) + (r > 600 ? 1 : 0)),
       AUG_EVERY_SEC: gameMin * 60 / 3,
       MF_POLICE: n >= 4 ? 1 : 0,
-      MF_DOCTOR: n >= 5 ? 1 : 0
+      MF_DOCTOR: n >= 5 ? 1 : 0,
+      MAP_HIDE_USES: RULE_DEFAULTS.MAP_HIDE_USES
     };
   }
   // 추천값에 방장이 직접 바꾼 칸을 덮어쓴 최종 설정.
@@ -1014,7 +1018,7 @@ const Logic = (() => {
     return out;
   }
   // 방에 저장된 설정을 RULES에 적용 (없는 값은 기본값)
-  const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON', 'ST_PER_MS', 'MF_POLICE', 'MF_DOCTOR'];
+  const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON', 'ST_PER_MS', 'MF_POLICE', 'MF_DOCTOR', 'MAP_HIDE_USES'];
   function applySettings(g) {
     g = g || {};
     for (const k of SETTING_KEYS) RULES[k] = g[k] ?? RULE_DEFAULTS[k];
@@ -1606,7 +1610,7 @@ function takeSnapshot() {
   const hits = room.hits || {}, mf = modeOf(room) === 'mafia', meR = room.players[S.pid] || {};
   const prev = {}; (S.snap || []).forEach(c => { prev[c.id] = c; });
   S.snap = Object.entries(room.players || {})
-    .filter(([id, p]) => (mf ? id !== S.pid && p.role : p.role === 'chaser') && p.lat != null && Logic.alive(p, hits[id]))
+    .filter(([id, p]) => (mf ? id !== S.pid && p.role : p.role === 'chaser' && !((p.mapHideUntil || 0) > now())) && p.lat != null && Logic.alive(p, hits[id])) // 미니맵 숨기기 중인 추격자는 빠짐
     .map(([id, p]) => {
       const q = Logic.shownPos(p, now(), room.players), red = !mf || (meR.role === 'chaser' && p.role === 'chaser');
       return { id, name: p.name, lat: q.lat, lng: q.lng, prev: prev[id], col: red ? '#ff4d4f' : '#9ca3af', tip: red ? 'chaserTip' : 'trapTip' };
@@ -1992,6 +1996,7 @@ const SET_FIELDS = [
   { g: '추적', k: 'ARROW_UNLOCK_SEC', name: '화살표 열리는 시간', step: 30, min: 0, max: 600, f: fmtDur },
   { g: '추적', k: 'ARROW_EVERY_SEC', name: '화살표 주기', step: 5, min: 15, max: 180, f: fmtDur },
   { g: '추적', k: 'MAP_EVERY_SEC', name: '도망자 미니맵 갱신', step: 5, min: 5, max: 120, f: fmtDur },
+  { g: '추적', k: 'MAP_HIDE_USES', name: '추격자 미니맵 숨기기', step: 1, min: 0, max: 5, f: v => (v ? `판마다 ${v}회` : '없음') },
   { g: '체력·잡기', k: 'CATCH_DMG', name: '잡힐 때 데미지', step: 5, min: 10, max: 100, f: v => `-${v}` },
   { g: '체력·잡기', k: 'CATCH_COOLDOWN_SEC', name: '무적·정지 시간', step: 30, min: 30, max: 600, f: fmtDur },
   { g: '체력·잡기', k: 'WAIT_MOVE_DMG', name: '대기 중 이동 벌칙', step: 1, min: 0, max: 50, f: v => `초당 -${v}` },
@@ -2005,7 +2010,7 @@ const SET_FIELDS = [
   { g: '마피아', k: 'MF_DOCTOR', name: '의사 수', step: 1, min: 0, max: 2, f: v => `${v}명`, mf: true }
 ];
 // 마피아 모드에선 안 쓰는 설정 (숨는 시간·화살표·잡기 데미지 없음)
-const MF_SKIP = new Set(['HIDE_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG']);
+const MF_SKIP = new Set(['HIDE_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'MAP_HIDE_USES', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG']);
 const lobbyCounts = room => {
   const n = Object.keys(room.players || {}).length;
   return { n, ch: Math.min(Math.max(1, (room.settings && room.settings.chasers) || 1), Math.max(1, n - 1)) };
@@ -2237,14 +2242,15 @@ $('#btnStart').onclick = safe(async () => {
     u[`players/${id}/frozenUntil`] = 0;
     u[`players/${id}/anchor`] = null;
     u[`players/${id}/qr`] = roles[id] === 'runner' || mafia ? rid(12, ALNUM) : null; // 마피아 모드: 모두 QR (마피아도 숨어야 하니까)
-    u[`players/${id}/augs`] = jobs[id] === 'police' ? { mfCheck: { got: 1 }, mfRifle: { got: 1 } } : jobs[id] === 'doctor' ? { mfGuard: { got: 1 } } : null;
+    u[`players/${id}/augs`] = jobs[id] === 'police' ? { mfCheck: { got: 1 }, mfRifle: { got: 1 } } : jobs[id] === 'doctor' ? { mfGuard: { got: 1 } }
+      : !mafia && roles[id] === 'chaser' && RULES.MAP_HIDE_USES > 0 ? { mapHide: { got: 1, left: RULES.MAP_HIDE_USES } } : null; // 추격자 기본 스킬
     u[`players/${id}/augPicks`] = 0;
     u[`players/${id}/offer`] = null;
     u[`players/${id}/stealthUntil`] = 0;
     u[`players/${id}/decoy`] = null;
     u[`players/${id}/forfeit`] = null;
     u[`players/${id}/stats`] = null;
-    for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag', 'out', 'job', 'guard', 'shadowStop']) u[`players/${id}/${k}`] = null;
+    for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag', 'out', 'job', 'guard', 'shadowStop', 'mapHideUntil']) u[`players/${id}/${k}`] = null;
     if (jobs[id]) u[`players/${id}/job`] = jobs[id]; // 마피아 모드: 경찰·의사
   }
   await update(roomRef(), u);
@@ -2391,6 +2397,7 @@ const ICONS = {
   heartbeat: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.1 4.1 0 0 1 12 7.4a4.1 4.1 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/><path d="M6.5 12.5h3l1.3-2.2 2.2 4.4 1.3-2.2h3.2"/>',
   shadowStep: '<ellipse cx="12" cy="19.5" rx="8.5" ry="2.3"/><path d="M8.6 15.2c-1.6 0-2.3-2-2.1-4.2.2-2.1 1.3-3.6 2.6-3.4 1.4.2 1.8 2 1.5 4-.3 2-.6 3.6-2 3.6zM15.6 12.2c-1.3 0-1.8-1.7-1.6-3.4.2-1.8 1-3 2.1-2.9 1.1.1 1.5 1.6 1.3 3.3-.2 1.7-.6 3-1.8 3z"/>',
   teamChat: '<path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
+  mapHide: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/><path d="M4 4l16 16"/>',
   timeBomb: '<circle cx="11" cy="14" r="7"/><path d="M11 10.5V14l2.5 1.8M15.5 8.5l2-2M18.5 2.5v2M22 6h-2M21 3.5l-1.4 1.4"/>',
   blockade: '<path d="M2 9h20v6H2z"/><path d="M6 9l-3 6M12 9l-3 6M18 9l-3 6M5 15v5M19 15v5"/>',
   net: '<path d="M3 3l18 18M21 3L3 21M3 12h18M12 3v18"/><circle cx="12" cy="12" r="9"/>',
@@ -2660,6 +2667,12 @@ function useAug(id) {
     update(roomRef(), { mugung: { by: S.pid, from, to: from + v * 1000 } });
     push(roomRef('events'), { type: 'mugung', by: S.pid, at: serverTimestamp() });
     setCooldown(id, { until: from + v * 1000 }); toast('🌸 무궁화 꽃이 피었습니다!', true);
+  } else if (id === 'mapHide') {
+    const x = S.augs.mapHide || {}, left = x.left ?? RULES.MAP_HIDE_USES;
+    if (left <= 0) return toast('이번 판에는 다 썼어요');
+    update(meRef(), { mapHideUntil: t + v * 1000 });
+    setCooldown(id, { until: t + v * 1000, left: left - 1 });
+    toast(`🫥 ${v}초 동안 도망자 미니맵에서 숨었어요 (남은 횟수 ${left - 1}회)`, true);
   } else if (id === 'teamChat') {
     const co = room.chatOpen && room.chatOpen[me.role], until = Math.max((co && co.until) || 0, t + v * 1000);
     update(roomRef('chatOpen/' + me.role), { by: S.pid, until });
@@ -2762,7 +2775,7 @@ function useAug(id) {
     setCooldown(id);
     if (Math.random() < v / 100) { toast('🎲 도박 성공!', true); gainRandom('🎲 도박'); }
     else {
-      const mine = Object.keys(S.augs).filter(k => k !== 'gamble' && Logic.AUGS[k] && Logic.AUGS[k].role !== 'job'); // 마피아 직업 능력은 안 잃음
+      const mine = Object.keys(S.augs).filter(k => k !== 'gamble' && Logic.AUGS[k] && !['job', 'base'].includes(Logic.AUGS[k].role)); // 마피아 직업 능력은 안 잃음
       if (!mine.length) toast('🎲 도박 실패… 잃을 증강이 없어서 무사해요', true);
       else { const k = mine[Math.floor(Math.random() * mine.length)]; loseAug(k); toast(`🎲 도박 실패… [${Logic.AUGS[k].name}]을(를) 잃었어요`, true); vibrate(300); }
     }
@@ -2910,7 +2923,7 @@ function loseAug(k) {
 const augLabelOf = id => ({ name: `[${Logic.AUGS[id].grade}] ${Logic.AUGS[id].name}` });
 function openReroll() {
   const me = S.room.players[S.pid];
-  const ban = augBan(me.role), ids = Object.keys(S.augs).filter(k => k !== 'reroll' && Logic.AUGS[k] && Logic.AUGS[k].role !== 'job' && Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade, Math.random, ban));
+  const ban = augBan(me.role), ids = Object.keys(S.augs).filter(k => k !== 'reroll' && Logic.AUGS[k] && !['job', 'base'].includes(Logic.AUGS[k].role) && Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade, Math.random, ban));
   if (!ids.length) return toast('바꿀 수 있는 증강이 없어요');
   openPick('🔄 리롤', '바꿀 증강을 고르세요 (같은 등급의 다른 증강으로)', ids.map(k => [k, augLabelOf(k), Logic.augDesc(k)]), k => {
     const nx = Logic.rollGrade(me.role, S.augs, Logic.AUGS[k].grade, Math.random, ban);
@@ -2919,7 +2932,7 @@ function openReroll() {
   });
 }
 function openAlchemy() {
-  const me = S.room.players[S.pid], ids = Object.keys(S.augs).filter(k => k !== 'alchemy' && Logic.AUGS[k] && Logic.AUGS[k].role !== 'job');
+  const me = S.room.players[S.pid], ids = Object.keys(S.augs).filter(k => k !== 'alchemy' && Logic.AUGS[k] && !['job', 'base'].includes(Logic.AUGS[k].role));
   if (ids.length < 2) return toast('연금술에 쓸 증강이 2개 있어야 해요');
   openPick('⚗️ 연금술 (1/2)', '버릴 증강 첫 번째', ids.map(k => [k, augLabelOf(k), Logic.augDesc(k)]), a => {
     openPick('⚗️ 연금술 (2/2)', '버릴 증강 두 번째', ids.filter(k => k !== a).map(k => [k, augLabelOf(k), Logic.augDesc(k)]), b => {
@@ -3004,6 +3017,7 @@ async function modeCatch(mode, tid, t) {
     if (!r.committed) return toast('방금 다른 좀비가 감염시켰어요');
     const u = { [`players/${tid}/zombieAt`]: t, [`players/${tid}/frozenUntil`]: 0, [`players/${tid}/anchor`]: null };
     for (const k of Object.keys(tp.augs || {})) if (Logic.AUGS[k] && Logic.AUGS[k].role === 'runner') u[`players/${tid}/augs/${k}`] = null; // 도망자 전용 증강은 사라짐
+    if (RULES.MAP_HIDE_USES > 0 && !(tp.augs && tp.augs.mapHide)) u[`players/${tid}/augs/mapHide`] = { got: 1, left: RULES.MAP_HIDE_USES }; // 좀비도 추격자 기본 스킬
     await update(roomRef(), u);
     push(roomRef('events'), { type: 'infect', by: S.pid, target: tid, at: serverTimestamp() });
     toast(`🧟 ${tp.name} 감염! 같이 쫓아요`, true); flash('rgba(132,204,22,.9)'); vibrate(200); sfx('catch');
@@ -3455,10 +3469,11 @@ function renderAugBar(alive) {
     const a = Logic.AUGS[id]; if (!a) continue;
     const g = a.grade, base = `class="aug g${g}`, inner = `${icon(id)}<b class="g">${g}</b>${a.name}`;
     if ((x.until || 0) > t) parts.push(`<span ${base} on" data-info="${id}">${inner} ${fmt(x.until - t)}</span>`);
+    else if (x.left === 0) parts.push(`<span ${base} cd" data-info="${id}">${inner} 다 씀</span>`); // 횟수 정해진 스킬
     else if (a.cd && !Logic.augReady(x, t)) parts.push(`<span ${base} cd" data-info="${id}">${inner} ${fmt(x.readyAt - t)}</span>`);
     else if (a.auto) parts.push(`<span ${base}" data-info="${id}">${inner} 대기</span>`);
     else if (a.cd && silenced) parts.push(`<span ${base} silenced" data-info="${id}">${inner} 침묵 ${fmt(me.silenceUntil - t)}</span>`);
-    else if (a.cd) parts.push(`<button ${base} use" data-use="${id}">${inner}<span class="u">사용</span></button>`);
+    else if (a.cd) parts.push(`<button ${base} use" data-use="${id}">${inner}<span class="u">${x.left != null ? `${x.left}회` : '사용'}</span></button>`);
     else parts.push(`<span ${base}" data-info="${id}">${inner}</span>`);
   }
   const html = parts.join('');
@@ -4521,7 +4536,7 @@ $('#btnAgain').onclick = safe(async () => {
   const u = { status: 'lobby', result: null, startAt: null, hits: null, events: null, traps: null, zones: null, spots: null, pings: null, fakes: null, mugung: null, timeShift: null, storm: null, cams: null, supplies: null, smokes: null, blackout: null, nets: null, blocks: null, radioJam: null, fog: null, votes: null, rifle: null, rps: null, bombs: null, chats: null, chatOpen: null };
   for (const id of Object.keys(room.players)) {
     for (const k of ['role', 'selfDmg', 'st', 'frozenUntil', 'anchor', 'qr', 'augs', 'augPicks', 'offer', 'stealthUntil', 'decoy', 'forfeit', 'stats',
-      'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag', 'out', 'job', 'guard', 'shadowStop']) u[`players/${id}/${k}`] = null;
+      'jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag', 'out', 'job', 'guard', 'shadowStop', 'mapHideUntil']) u[`players/${id}/${k}`] = null;
   }
   await update(roomRef(), u);
 });
