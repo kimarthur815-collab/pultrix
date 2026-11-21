@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111418">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PULTRIX">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>PULTRIX · GPS 술래잡기</title>
 <!--
   ===== 설정 요약 =====
@@ -54,6 +60,7 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 .bottom{position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:8px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(17,20,24,.88)}
 .bottom .dim{text-align:center;font-size:15px;padding:4px 0}
 .fab{position:fixed;right:12px;bottom:calc(var(--bh, 178px) + 12px);z-index:1100;width:48px;height:48px;padding:0;border-radius:50%;font-size:22px;background:var(--panel)}
+#btnFs{top:calc(var(--hh, 112px) + 8px);bottom:auto;width:40px;height:40px;font-size:18px;display:flex;align-items:center;justify-content:center}
 #btnNorth{bottom:calc(var(--bh, 178px) + 68px);display:flex;align-items:center;justify-content:center}
 #btnNorth svg{width:30px;height:30px;transition:transform .1s linear}
 #btnNorth.on{box-shadow:0 0 0 2px #3ba3ff}
@@ -307,6 +314,7 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
   </div>
   <div id="arrowBox" class="arrowbox"><svg id="arrow" viewBox="0 0 100 100"><path d="M50 6 L84 74 L50 58 L16 74 Z"/></svg><div id="arrowTxt"></div></div>
   <button id="btnFollow" class="fab" title="내 위치">📍</button>
+  <button id="btnFs" class="fab" title="전체화면">⛶</button>
   <div id="joy" class="joy"><i></i><span></span></div>
   <button id="btnNorth" class="fab on" title="지도 방향: 내 방향 ↔ 북쪽 고정"><svg viewBox="0 0 40 40"><path d="M20 3 L27 20 L13 20 Z" fill="#ff4d4f"/><path d="M20 37 L13 20 L27 20 Z" fill="#cbd5e1"/></svg></button>
   <div class="bottom">
@@ -349,9 +357,10 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
     <label class="chk"><input type="checkbox" id="consentAge"> 만 14세 이상이에요 (14세 미만은 보호자의 동의가 필요해요)</label>
   </div>
   <button id="btnConsentOk" class="primary" disabled>동의하고 계속</button><button id="btnConsentNo" class="linkbtn">동의하지 않음</button></div>
-<div id="ov-set" class="ov"><h2>⚙ 설정</h2><div class="card setlist"><div class="row between"><span>🎵 배경음악</span><button id="setBgm" class="sw"></button></div><div class="row between"><span>🔊 효과음</span><button id="setSfx" class="sw"></button></div><div class="row between"><span>📍 위치정보 동의</span><button id="setConsent" class="sw"></button></div></div><button id="btnSetClose">닫기</button></div>
+<div id="ov-set" class="ov"><h2>⚙ 설정</h2><div class="card setlist"><div class="row between"><span>🎵 배경음악</span><button id="setBgm" class="sw"></button></div><div class="row between"><span>🔊 효과음</span><button id="setSfx" class="sw"></button></div><div class="row between"><span>📍 위치정보 동의</span><button id="setConsent" class="sw"></button></div><div class="row between"><span>⛶ 전체화면</span><button id="setFs" class="sw"></button></div></div><button id="btnSetClose">닫기</button></div>
 <div id="ov-chat" class="ov"><div class="chatbox"><h2>💬 팀 대화방 <small id="chatLeft"></small></h2><div id="chatList" class="chatlist"></div><div id="chatQuick" class="chatquick"></div>
   <div class="chatin"><input id="chatIn" maxlength="30" placeholder="최대 30자" autocomplete="off"><button id="btnChatSend" class="primary">보내기</button></div><button id="btnChatClose" class="linkbtn">닫기</button></div></div>
+<div id="ov-a2hs" class="ov"><h2>⛶ 전체화면</h2><div class="card" style="max-width:360px;text-align:left;line-height:1.6">아이폰은 브라우저에서 전체화면이 안 돼요.<br>대신 <b>홈 화면에 추가</b>하면 주소창 없이 앱처럼 열려요.<br><br>1. 사파리 아래의 <b>공유 버튼</b>(네모에 위 화살표)<br>2. <b>홈 화면에 추가</b><br>3. 홈 화면의 <b>PULTRIX</b> 아이콘으로 열기<br><br><span class="dim small">홈 화면 앱은 처음 한 번 위치 동의를 다시 물어봐요</span></div><button id="btnA2hsClose">알겠어요</button></div>
 <div id="ov-memo" class="ov"><h2>📝 방장 규칙 메모</h2><p id="memoTxt" class="memo card"></p><button id="btnMemoClose">닫기</button></div>
 <div id="ov-ping" class="ov"><h2>팀 핑</h2><p class="dim">같은 팀 지도에 20초 동안 보여요</p><div class="pingbtns" style="width:min(90vw,360px)"><button data-ping="seen">👀 여기 있었음</button><button data-ping="gather">📍 여기로 모여</button><button data-ping="danger">⚠️ 위험</button></div><button id="btnPingClose" class="linkbtn">취소</button></div>
 <div id="ov-forfeit" class="ov"><h2>기권할까요?</h2><p class="dim">바로 탈락하고 관전 모드로 바뀌어요</p><button id="btnForfeitYes" class="danger" style="max-width:360px">기권하기</button><button id="btnForfeitNo">계속하기</button></div>
@@ -1215,7 +1224,7 @@ function setBgm(on) {
   bgmOn = on; try { localStorage.setItem('gtag_bgm', on ? '1' : '0'); } catch (e) {}
   renderSet(); bgmLoop();
 }
-document.querySelectorAll('.btnSet').forEach(b => { b.onclick = () => { renderSet(); $('#ov-set').classList.add('on'); }; });
+document.querySelectorAll('.btnSet').forEach(b => { b.onclick = () => { renderSet(); renderFs(); $('#ov-set').classList.add('on'); }; });
 $('#setBgm').onclick = () => setBgm(!bgmOn);
 $('#setSfx').onclick = () => { setMute(!muted); if (!muted) sfx('ping'); };
 $('#btnSetClose').onclick = () => $('#ov-set').classList.remove('on');
@@ -1225,6 +1234,33 @@ $('#setConsent').onclick = () => {
   try { localStorage.removeItem(CONSENT_KEY); } catch (e) { S.consentMem = false; }
   renderSet(); toast(S.room ? '동의를 철회했어요. 방에서 나가기를 누르면 내 위치가 지워져요' : '동의를 철회했어요', true);
 };
+// 전체화면: 안드로이드·PC는 브라우저 전체화면, 아이폰은 지원이 없어서 '홈 화면에 추가' 안내 (홈 화면 앱은 주소창 없이 열림)
+const fsOn = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+const fsCan = () => !/iPhone|iPod/.test(navigator.userAgent) && !!(document.fullscreenEnabled || document.webkitFullscreenEnabled); // 아이폰은 영상만 전체화면 가능
+// 홈 화면 앱으로 연 경우 (브라우저 전체화면 중에도 display-mode가 fullscreen이 되므로 그건 빼고)
+const appMode = () => navigator.standalone === true || (!fsOn() && (matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches));
+function enterFs() {
+  const d = document.documentElement, f = d.requestFullscreen || d.webkitRequestFullscreen;
+  try { const r = f.call(d, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+}
+function toggleFs() {
+  if (fsOn()) { try { const r = (document.exitFullscreen || document.webkitExitFullscreen).call(document); if (r && r.catch) r.catch(() => {}); } catch (e) {} return; }
+  if (fsCan()) return enterFs();
+  if (appMode()) return toast('이미 앱처럼 전체화면이에요');
+  if (IS_IOS) return $('#ov-a2hs').classList.add('on');
+  toast('이 브라우저는 전체화면을 지원하지 않아요. 크롬에서 열어 보세요', true);
+}
+function renderFs() {
+  const on = fsOn() || appMode(), b = $('#setFs');
+  b.textContent = on ? '켜짐' : '꺼짐'; b.classList.toggle('on', on);
+  $('#btnFs').textContent = fsOn() ? '✕' : '⛶'; $('#btnFs').title = fsOn() ? '전체화면 끄기' : '전체화면';
+  $('#btnFs').style.display = appMode() ? 'none' : '';
+}
+$('#setFs').onclick = () => { if (!fsOn() && !fsCan() && IS_IOS && !appMode()) $('#ov-set').classList.remove('on'); toggleFs(); };
+$('#btnFs').onclick = toggleFs;
+$('#btnA2hsClose').onclick = () => $('#ov-a2hs').classList.remove('on');
+['fullscreenchange', 'webkitfullscreenchange'].forEach(n => document.addEventListener(n, renderFs));
+renderFs();
 renderSet();
 const ROLE_NAME = { chaser: '추격자', runner: '도망자' };
 // 모드별 역할 이름 (마피아 모드는 경찰·의사 직업 이름)
@@ -1256,7 +1292,7 @@ function showRoleReveal(role) {
     flash(ROLE_RGBA[role]); vibrate(role === 'chaser' ? [200, 80, 200] : 200);
   }, 2700);
 }
-$('#btnRoleOk').onclick = () => { $('#ov-role').classList.remove('on'); maybeModeTut(); };
+$('#btnRoleOk').onclick = () => { $('#ov-role').classList.remove('on'); if (!fsOn() && fsCan() && !appMode()) enterFs(); maybeModeTut(); };
 function saveLocal(v) { try { localStorage.setItem('gtag', JSON.stringify(v)); } catch (e) {} }
 
 /* ---------- 센서 ---------- */
@@ -4135,6 +4171,8 @@ function renderGame() {
   // 아래 패널 높이(증강이 많으면 여러 줄)만큼 📍·🧭·조이스틱을 위로
   const bh = $('#s-game .bottom').offsetHeight;
   if (bh && bh !== S.bottomH) { S.bottomH = bh; document.documentElement.style.setProperty('--bh', bh + 'px'); }
+  const hh = $('#s-game .hud').offsetHeight;
+  if (hh && hh !== S.hudH) { S.hudH = hh; document.documentElement.style.setProperty('--hh', hh + 'px'); }
   $('#btnForfeit').style.display = alive && ph.phase !== 'pre' ? '' : 'none';
   // 관전 모드: 전원 목록
   $('#specList').style.display = alive ? 'none' : 'block';
