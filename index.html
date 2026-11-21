@@ -157,7 +157,9 @@ button.augcard.gSS,.augcard.gSS{background:linear-gradient(var(--panel),var(--pa
 @keyframes cdpop{0%{transform:scale(1.8);opacity:0}30%{transform:scale(1);opacity:1}100%{transform:scale(.9);opacity:.85}}
 #mega{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:2550;width:min(92vw,420px);display:none;text-align:center;background:rgba(17,20,24,.94);border:3px solid var(--warn);border-radius:18px;padding:16px 14px;pointer-events:none;box-shadow:0 0 40px rgba(255,176,32,.5)}
 #mega.on{display:block;animation:cdpop .5s ease-out}#mega small{display:block;color:var(--dim);font-size:14px;margin-bottom:6px}#mega b{font-size:30px;line-height:1.25;word-break:keep-all}
-.hudbtn{width:auto;margin:0 0 0 8px;padding:4px 9px;font-size:15px;background:#2d3540;border-radius:10px}
+.hudbtn{width:auto;margin:0;padding:4px 9px;font-size:15px;background:#2d3540;border-radius:10px;flex:none}
+#g-phase{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+@media (max-width:380px){.hud .time{font-size:19px}.hudbtn{padding:4px 7px}}
 .spec{max-height:30vh;overflow:auto;margin-bottom:6px}.spec li{padding:7px 10px;margin:4px 0;font-size:14px}
 .stat{display:block;color:var(--dim);font-size:13px;margin-top:4px;line-height:1.5}
 .plist li.col{flex-direction:column;align-items:stretch}.plist li .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -1566,7 +1568,7 @@ function onRoom() {
   if (room.status === 'lobby') {
     if (S.gameKey) { // 한 판 더: 지난 게임 상태 정리
       S.gameKey = null; S.resultKey = null;
-      ['#ov-qr', '#ov-role', '#ov-aug', '#ov-insight', '#ov-mega', '#ov-ping', '#ov-forfeit', '#ov-pick', '#ov-shake', '#ov-snipe'].forEach(x => $(x).classList.remove('on'));
+      ['#ov-qr', '#ov-role', '#ov-aug', '#ov-insight', '#ov-mega', '#ov-ping', '#ov-forfeit', '#ov-pick', '#ov-shake', '#ov-snipe', '#ov-vote', '#ov-rps', '#ov-chat', '#ov-augInfo'].forEach(x => $(x).classList.remove('on'));
       closeSnipe();
       S.shake = null;
       closeScanner();
@@ -1834,7 +1836,8 @@ function leaveLocal(msg) {
   if (S.evUnsub) S.evUnsub();
   S.unsub = S.evUnsub = null; S.code = S.pid = S.room = S.gameKey = null;
   Logic.applySettings(null); RULES.AREA_R = RULE_DEFAULTS.AREA_R;
-  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake', '#ov-snipe'].forEach(s => $(s).classList.remove('on'));
+  // 게임 중에 떠 있던 창은 모두 닫음 (투표·가위바위보·대화방은 게임 화면에서만 스스로 닫혀서, 끝나는 순간 떠 있으면 결과를 가림)
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake', '#ov-snipe', '#ov-vote', '#ov-rps', '#ov-chat', '#ov-mega', '#ov-ping', '#ov-forfeit', '#ov-augInfo', '#ov-memo'].forEach(s => $(s).classList.remove('on'));
   closeSnipe();
   S.shake = null;
   saveLocal({ name: S.name });
@@ -4295,7 +4298,8 @@ const handleScan = safe(async text => {
 
 /* ---------- 결과 ---------- */
 function renderResult() {
-  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake', '#ov-snipe'].forEach(s => $(s).classList.remove('on'));
+  // 게임 중에 떠 있던 창은 모두 닫음 (투표·가위바위보·대화방은 게임 화면에서만 스스로 닫혀서, 끝나는 순간 떠 있으면 결과를 가림)
+  closeScanner(); ['#ov-qr', '#ov-resume', '#ov-role', '#ov-invite', '#ov-aug', '#ov-insight', '#ov-pick', '#ov-shake', '#ov-snipe', '#ov-vote', '#ov-rps', '#ov-chat', '#ov-mega', '#ov-ping', '#ov-forfeit', '#ov-augInfo', '#ov-memo'].forEach(s => $(s).classList.remove('on'));
   closeSnipe();
   S.shake = null;
   $('#arrowBox').className = 'arrowbox';
