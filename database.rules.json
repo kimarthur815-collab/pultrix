@@ -2,17 +2,21 @@
   "rules": {
     "rooms": {
       "$code": {
-        ".read": "$code.matches(/^[A-Z0-9]{5}$/)",
-        ".write": "$code.matches(/^[A-Z0-9]{5}$/) && (newData.exists() ? (data.exists() || newData.hasChildren(['hostId', 'players'])) : !data.child('players').exists())",
+        ".read": "auth != null && $code.matches(/^[A-Z0-9]{5}$/) && data.child('players').child(auth.uid).exists()",
+        ".write": "auth != null && $code.matches(/^[A-Z0-9]{5}$/) && (data.exists() ? (newData.exists() ? data.child('players').child(auth.uid).exists() : !data.child('players').exists()) : (newData.child('hostId').val() === auth.uid && newData.child('players').child(auth.uid).exists()))",
+        "status": {
+          ".read": "auth != null"
+        },
         "hostId": {
-          ".validate": "newData.isString() && newData.val().length <= 20"
+          ".validate": "newData.isString() && newData.val().length <= 40"
         },
         "players": {
           "$pid": {
-            ".validate": "$pid.matches(/^[A-Za-z0-9]{6,20}$/)",
+            ".validate": "$pid.matches(/^[A-Za-z0-9]{6,40}$/)",
             "name": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 10"
-            }
+            },
+            ".write": "auth != null && $pid === auth.uid && (data.exists() || root.child('rooms').child($code).child('status').val() === 'lobby')"
           }
         },
         "settings": {
@@ -39,7 +43,7 @@
     "replays": {
       "$rid": {
         ".read": "$rid.matches(/^[A-Za-z0-9]{12}$/) && data.child('exp').val() > now",
-        ".write": "$rid.matches(/^[A-Za-z0-9]{12}$/) && (newData.exists() ? (!data.exists() || data.child('exp').val() > now) : data.child('exp').val() < now)",
+        ".write": "auth != null && $rid.matches(/^[A-Za-z0-9]{12}$/) && (newData.exists() ? (!data.exists() || data.child('exp').val() > now) : data.child('exp').val() < now)",
         "exp": {
           ".validate": "newData.isNumber() && newData.val() < now + 864000000"
         },
@@ -48,7 +52,7 @@
         },
         "trails": {
           "$pid": {
-            ".validate": "$pid.matches(/^[A-Za-z0-9]{6,20}$/)",
+            ".validate": "$pid.matches(/^[A-Za-z0-9]{6,40}$/)",
             "$cid": {
               ".validate": "newData.isString() && newData.val().length <= 4000"
             }

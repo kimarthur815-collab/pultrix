@@ -203,6 +203,8 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 .runnerTip{background:var(--runner);color:#fff;border:0;font-weight:700}
 /* 새 능력: 먹물 · 무궁화 · 흔들어 탈출 · 도청 */
 #ink{position:fixed;inset:0;z-index:1040;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 28% 34%,#020305 0 20%,transparent 21%),radial-gradient(circle at 72% 58%,#020305 0 26%,transparent 27%),radial-gradient(circle at 44% 78%,#020305 0 17%,transparent 18%),rgba(4,6,9,.97)}
+/* 사분면 탐지 */
+.quadTip{background:#ffd400;color:#111;border:0;font:16px 'Black Han Sans',sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.5)}.quadTip:before{display:none}
 /* 사람 배지 */
 .pbw{background:none;border:0}
 .pb{position:relative;width:34px;height:34px;border-radius:50%;background:#141414;border:3px solid var(--c);box-sizing:border-box;box-shadow:0 2px 6px rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;color:#fff;font:16px 'Black Han Sans',sans-serif;transition:opacity .6s}
@@ -799,6 +801,7 @@ const Logic = (() => {
   const AUGS = {
     arrowBoost:   { name: '정밀 추적', grade: 'A', role: 'chaser', v: 27, d: v => `화살표 주기 ${augArrowSec(v)}초 (기본 ${RULES.ARROW_EVERY_SEC}초)` },
     distance:     { name: '공간 지각', grade: 'B', role: 'chaser', v: 10, d: v => `화살표에 도망자까지 거리 표시 (${v}m 단위)` },
+    quadrant:     { name: '사분면 탐지', grade: 'B', role: 'chaser', cd: 3, v: 15, d: v => `구역을 4조각(북동·북서·남동·남서)으로 나눠 한 조각을 고르면 그 안의 도망자 수를 알려 줌 · 지도에 ${v}초 표시` },
     radar:        { name: '순간 포착', grade: 'S', role: 'chaser', cd: 5, v: 10, d: v => `${v}초 동안 모든 도망자 위치 표시` },
     chaserSt:     { name: '질주 본능', grade: 'B', role: 'chaser', v: 50, d: v => `스태미나 최대치 +${v}, 즉시 가득` },
     stealth:      { name: '투명화', grade: 'S', role: 'runner', cd: 4, v: 60, d: v => `${v}초 동안 추격자 화살표에 안 잡힘` },
@@ -1122,6 +1125,7 @@ const Logic = (() => {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, get, set, update, push, remove, onValue, onChildAdded, query, limitToLast, runTransaction, serverTimestamp, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const $ = s => document.querySelector(s);
@@ -1152,9 +1156,20 @@ const S = {
 };
 
 const cfgOk = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
-let db = null;
+let db = null, authReady = Promise.resolve(null);
 if (cfgOk) {
-  db = getDatabase(initializeApp(FIREBASE_CONFIG));
+  const app = initializeApp(FIREBASE_CONFIG);
+  db = getDatabase(app);
+  // 익명 로그인: 플레이어 아이디 = 로그인 아이디 → 보안 규칙이 '방에 들어온 사람만 읽기·쓰기'를 확인할 수 있게
+  // (콘솔에서 익명 로그인을 아직 안 켰으면 실패하고, 예전처럼 임의 아이디로 진행)
+  try {
+    const auth = getAuth(app);
+    authReady = new Promise(res => {
+      onAuthStateChanged(auth, u => { if (u) { S.uid = u.uid; res(u.uid); } });
+      signInAnonymously(auth).catch(e => { console.warn('익명 로그인 실패 (콘솔에서 켜야 해요):', e.code || e.message); res(null); });
+      setTimeout(() => res(null), 8000);
+    });
+  } catch (e) { console.error(e); }
   onValue(ref(db, '.info/serverTimeOffset'), s => { S.offset = s.val() || 0; });
 }
 const now = () => Date.now() + S.offset;
@@ -1739,9 +1754,9 @@ $('#btnConsentNo').onclick = () => {
 $('#btnCreate').onclick = safe(async () => {
   const name = getName(); if (!name) return;
   if (!(await askConsent())) return;
-  const pid = rid(10, ALNUM);
+  const pid = (await authReady) || rid(10, ALNUM);
   let code = rid(5);
-  for (let i = 0; i < 5 && (await get(ref(db, `rooms/${code}`))).exists(); i++) code = rid(5);
+  for (let i = 0; i < 5 && (await get(ref(db, `rooms/${code}/status`))).exists(); i++) code = rid(5); // 방 안 내용은 들어온 사람만 읽을 수 있어서 상태만 봄
   await set(ref(db, `rooms/${code}`), {
     hostId: pid, status: 'lobby', createdAt: serverTimestamp(),
     settings: { chasers: 1 },
@@ -1754,13 +1769,15 @@ $('#btnJoin').onclick = safe(async () => {
   if (!(await askConsent())) return;
   const code = $('#in-code').value.trim().toUpperCase();
   if (!code) return toast('방 코드를 입력하세요');
-  const snap = await get(ref(db, `rooms/${code}`));
-  if (!snap.exists()) return toast('없는 방이에요');
-  const room = snap.val();
-  if (room.status !== 'lobby') return toast('이미 시작한 게임이에요');
-  if (Object.keys(room.players || {}).length >= RULES.MAX_PLAYERS) return toast(`최대 ${RULES.MAX_PLAYERS}명까지예요`);
-  const pid = rid(10, ALNUM);
+  const st = await get(ref(db, `rooms/${code}/status`)); // 들어가기 전엔 방 상태만 볼 수 있음
+  if (!st.exists()) return toast('없는 방이에요');
+  if (st.val() !== 'lobby') return toast('이미 시작한 게임이에요');
+  const pid = (await authReady) || rid(10, ALNUM);
   await set(ref(db, `rooms/${code}/players/${pid}`), { name, joinedAt: serverTimestamp() });
+  // 인원 확인은 들어간 뒤에 (넘치면 바로 나옴)
+  const ps = (await get(ref(db, `rooms/${code}/players`))).val() || {};
+  const order = Object.entries(ps).sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0)).map(([id]) => id);
+  if (order.indexOf(pid) >= RULES.MAX_PLAYERS) { await remove(ref(db, `rooms/${code}/players/${pid}`)); return toast(`최대 ${RULES.MAX_PLAYERS}명까지예요`); }
   enterRoom(code, pid, name);
 });
 
@@ -2382,7 +2399,7 @@ function enterGame() {
       selfDmg: me.selfDmg || 0, anchor: me.anchor || null,
       waitOut: 0, ruleSec: 0, lastMapIdx: null, lastArrowKey: null, snap: [], dead: {}, warn: [],
       lastTick: 0, lastWrite: 0, winSent: false, minuteWarned: false, arrowPopKey: null,
-      rpBuf: [], rpAt: 0, rpSent: Date.now()
+      rpBuf: [], rpAt: 0, rpSent: Date.now(), quadShow: null
     });
     if (room.replayId) rpRemember(room.replayId, room.replayExp);
     S.st = me.st ?? stMaxOf(me.role);
@@ -2511,6 +2528,7 @@ const ICONS = {
   heartbeat: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.1 4.1 0 0 1 12 7.4a4.1 4.1 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/><path d="M6.5 12.5h3l1.3-2.2 2.2 4.4 1.3-2.2h3.2"/>',
   shadowStep: '<ellipse cx="12" cy="19.5" rx="8.5" ry="2.3"/><path d="M8.6 15.2c-1.6 0-2.3-2-2.1-4.2.2-2.1 1.3-3.6 2.6-3.4 1.4.2 1.8 2 1.5 4-.3 2-.6 3.6-2 3.6zM15.6 12.2c-1.3 0-1.8-1.7-1.6-3.4.2-1.8 1-3 2.1-2.9 1.1.1 1.5 1.6 1.3 3.3-.2 1.7-.6 3-1.8 3z"/>',
   teamChat: '<path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
+  quadrant: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4z"/><path d="M13 13h7v7h-7z" fill="currentColor"/>',
   mapHide: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/><path d="M4 4l16 16"/>',
   timeBomb: '<circle cx="11" cy="14" r="7"/><path d="M11 10.5V14l2.5 1.8M15.5 8.5l2-2M18.5 2.5v2M22 6h-2M21 3.5l-1.4 1.4"/>',
   blockade: '<path d="M2 9h20v6H2z"/><path d="M6 9l-3 6M12 9l-3 6M18 9l-3 6M5 15v5M19 15v5"/>',
@@ -2696,6 +2714,7 @@ function useAug(id) {
   const v = av(id), here = S.fix ? { lat: S.fix.lat, lng: S.fix.lng } : null, hits = room.hits || {};
   if (id === 'insight') return openInsight();
   if (id === 'wanted') return openWanted();
+  if (id === 'quadrant') return openQuadrant();
   if (id === 'swap') return openSwap();
   if (id === 'copy') return openCopy();
   if (id === 'snipe') { S.snipeKind = 'snipe'; return openSnipe(); }
@@ -2995,6 +3014,27 @@ $('#pickList').onclick = e => {
 };
 $('#btnPickClose').onclick = () => { $('#ov-pick').classList.remove('on'); S.pickCb = null; };
 const livingOf = role => Object.entries(S.room.players).filter(([id, p]) => p.role === role && Logic.alive(p, (S.room.hits || {})[id]));
+// 사분면 탐지: 구역(원은 반경, 꼭짓점은 감싸는 네모)을 가운데에서 4조각으로 나눔
+function quadOf(area) {
+  if (area.poly && area.poly.length) { const la = area.poly.map(q => q[0]), lo = area.poly.map(q => q[1]), s = Math.min(...la), n = Math.max(...la), w = Math.min(...lo), e = Math.max(...lo); return { lat: (s + n) / 2, lng: (w + e) / 2, s, n, w, e }; }
+  const dl = (area.r || RULES.AREA_R) / 111195, dg = (area.r || RULES.AREA_R) / (111195 * Math.cos(area.lat * Math.PI / 180));
+  return { lat: area.lat, lng: area.lng, s: area.lat - dl, n: area.lat + dl, w: area.lng - dg, e: area.lng + dg };
+}
+const QUAD = { nw: '↖ 북서쪽', ne: '↗ 북동쪽', sw: '↙ 남서쪽', se: '↘ 남동쪽' };
+function openQuadrant() {
+  const room = S.room, area = room.settings && room.settings.area;
+  if (!area) return toast('구역이 없어요');
+  if (radioJammed(now())) return toast('📡 전파 방해 중이라 탐지가 안 돼요');
+  openPick('🧭 사분면 탐지', '어느 조각을 볼까요? 그 안의 도망자 수를 알려 줘요', Object.entries(QUAD).map(([k, n]) => [k, { name: n }, '']), q => {
+    const t = now(); if (!Logic.augReady(S.augs.quadrant, t)) return;
+    const b = quadOf(area), hits = room.hits || {};
+    // 상대 화면에 보이는 위치 기준(분신·자리 바꾸기 등 반영), 투명화 중인 도망자는 안 잡힘
+    const n = Object.entries(room.players).filter(([id, p]) => p.role === 'runner' && p.lat != null && Logic.alive(p, hits[id]) && !((p.stealthUntil || 0) > t))
+      .filter(([, p]) => { const sp = Logic.shownPos(p, t, room.players); return (sp.lat >= b.lat ? 'n' : 's') + (sp.lng >= b.lng ? 'e' : 'w') === q; }).length;
+    S.quadShow = { q, n, b, until: t + av('quadrant') * 1000 };
+    setCooldown('quadrant'); toast(`🧭 ${QUAD[q]}: 도망자 ${n}명`, true); vibrate(80); sfx('ping'); renderGame();
+  });
+}
 function openWanted() {
   const list = livingOf('runner');
   if (!list.length) return toast('현상수배할 도망자가 없어요');
@@ -3953,6 +3993,11 @@ function drawSkills(mo) {
   if (ho && (ho.until || 0) > t && ho.lat != null) items.push({ key: 'ho' + ho.until, make: () => L.circle([ho.lat, ho.lng], { radius: Logic.AUGS.hideout.v, color: '#3ccf7a', weight: 3, fillColor: '#3ccf7a', fillOpacity: .15, interactive: false })
     .bindTooltip('🏠 은신처', { permanent: true, direction: 'center', className: 'trapTip' }) });
   // 역탐지: 나를 본 추격자 위치 5초 (실시간)
+  if (S.quadShow && S.quadShow.until > t) { // 사분면 탐지 결과
+    const { q, n, b, until } = S.quadShow, la = q[0] === 'n' ? [b.lat, b.n] : [b.s, b.lat], lo = q[1] === 'e' ? [b.lng, b.e] : [b.w, b.lng];
+    items.push({ key: 'quad' + q + until, make: () => L.rectangle([[la[0], lo[0]], [la[1], lo[1]]], { color: '#ffd400', weight: 3, dashArray: '8 6', fillColor: '#ffd400', fillOpacity: .12, interactive: false })
+      .bindTooltip(`도망자 ${n}명`, { permanent: true, direction: 'center', className: 'quadTip' }) });
+  }
   if (modeOf(room) === 'ice' && me.role === 'runner') for (const [id, p] of Object.entries(room.players)) {
     if (id === S.pid || p.role !== 'runner' || !Logic.alive(p, (room.hits || {})[id])) continue;
     const fz = p.jailed || (p.iceSelf && (p.iceSelf.until || 0) > t ? p.iceSelf : null); if (!fz || fz.lat == null) continue;
@@ -5191,9 +5236,10 @@ $('#btnRpImg').onclick = safe(async () => {
   if (/^[A-Za-z0-9]{12}$/.test(rpq)) setTimeout(() => openReplay(rpq), 300);
   if (invited) { $('#in-code').value = invited; toast(`방 ${invited}에 초대됐어요 · 닉네임 넣고 참가`, true); }
   if (saved && saved.code && saved.pid && (!invited || invited === saved.code)) {
-    get(ref(db, `rooms/${saved.code}/players/${saved.pid}`))
-      .then(s => { if (s.exists()) enterRoom(saved.code, saved.pid, saved.name); else saveLocal({ name: saved.name }); })
-      .catch(e => console.error(e));
+    authReady.then(uid => {
+      return get(ref(db, `rooms/${saved.code}/players/${saved.pid}`))
+        .then(s => { if (s.exists()) enterRoom(saved.code, saved.pid, saved.name); else saveLocal({ name: saved.name }); });
+    }).catch(e => { console.error(e); saveLocal({ name: saved.name }); });
   }
 })();
 </script>
