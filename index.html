@@ -447,8 +447,9 @@ button.primary{background:#ffd400;color:#111}
 
 <script>
 /* ▼▼▼ Firebase 콘솔 → 프로젝트 설정 → 내 앱(웹)에서 복사한 값을 붙여넣으세요 ▼▼▼ */
-// App Check(우리 사이트에서 온 요청만 받기): reCAPTCHA v3 '사이트 키'를 넣으면 켜짐. 비워 두면 꺼짐
-const APP_CHECK_SITE_KEY = '6LeVTSsuAAAAALNbWkuiZUUerE5oEa2lWJQ04XfG';
+// App Check(우리 사이트에서 온 요청만 받기): Google Cloud 'Fraud Defense(reCAPTCHA Enterprise)' 웹사이트 키 ID를 넣으면 켜짐. 비워 두면 꺼짐
+// (reCAPTCHA v3 클래식 키는 App Check에서 지원 종료라 못 씀)
+const APP_CHECK_SITE_KEY = '';
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCgZhJaJVDDUXujjKkqDiqGhpKU6607UqU",
   authDomain: "pultrix-49254.firebaseapp.com",
@@ -1128,7 +1129,7 @@ const Logic = (() => {
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
 import { getDatabase, ref, get, set, update, push, remove, onValue, onChildAdded, query, limitToLast, runTransaction, serverTimestamp, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const $ = s => document.querySelector(s);
@@ -1162,7 +1163,7 @@ const cfgOk = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
 let db = null, authReady = Promise.resolve(null);
 if (cfgOk) {
   const app = initializeApp(FIREBASE_CONFIG);
-  if (APP_CHECK_SITE_KEY) try { initializeAppCheck(app, { provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.error(e); }
+  if (APP_CHECK_SITE_KEY) try { initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true }); } catch (e) { console.error(e); }
   db = getDatabase(app);
   // 익명 로그인: 플레이어 아이디 = 로그인 아이디 → 보안 규칙이 '방에 들어온 사람만 읽기·쓰기'를 확인할 수 있게
   // (콘솔에서 익명 로그인을 아직 안 켰으면 실패하고, 예전처럼 임의 아이디로 진행)
