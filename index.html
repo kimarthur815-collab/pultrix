@@ -24,7 +24,6 @@
 -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <style>
@@ -50,7 +49,10 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 .lmap{height:260px;border-radius:12px;margin-top:10px;overflow:hidden}
 /* 게임 화면 */
 #s-game{padding:0;max-width:none}
-#gmap{position:fixed;inset:0;z-index:1}
+#gwrap{position:fixed;inset:0;z-index:1;overflow:hidden}
+#gmap{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:50% 50%}
+#gattr{position:absolute;right:4px;bottom:calc(var(--bh, 160px) + 4px);z-index:700;font-size:10px;color:#cbd5e1;background:rgba(0,0,0,.45);padding:1px 6px;border-radius:6px;pointer-events:auto}
+#gattr a{color:#cbd5e1}
 .hud{position:fixed;top:0;left:0;right:0;z-index:1100;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;background:rgba(17,20,24,.88)}
 .badge.mf{background:#475569}#voteList button{max-width:none;margin:4px 0}#voteList button.sel{background:var(--runner)}
 .badge{padding:4px 10px;border-radius:999px;font-weight:700;font-size:14px;white-space:nowrap}.badge.chaser{background:var(--chaser)}.badge.runner{background:var(--runner)}
@@ -68,15 +70,13 @@ button.primary{background:var(--runner)}button.danger{background:var(--chaser)}b
 #btnNorth{bottom:calc(var(--bh, 178px) + 68px);display:flex;align-items:center;justify-content:center}
 #btnNorth svg{width:30px;height:30px;transition:transform .1s linear}
 #btnNorth.on{box-shadow:0 0 0 2px #3ba3ff}
-#gmap.fogged .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6) blur(6px)}
-#gmap{transition:transform .6s}
-#gmap.flipped{transform:rotate(180deg)}
-#gmap.stopped .leaflet-tile-pane{filter:grayscale(1) brightness(.75)}
-#gmap.rainy::before,#gmap.golden::before{content:'';position:absolute;inset:0;z-index:680;pointer-events:none}
-#gmap.rainy::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cpath d='M12 0l-3 14M42 22l-3 14M27 44l-3 14' stroke='rgba(180,210,255,.6)' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");animation:rain .4s linear infinite}
-#gmap.golden::before{box-shadow:inset 0 0 0 5px #f5b800,inset 0 0 40px rgba(245,184,0,.45)}
+#gwrap.fogged .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6) blur(6px)}
+#gwrap.stopped .leaflet-tile-pane{filter:grayscale(1) brightness(.75)}
+#gwrap.rainy::before,#gwrap.golden::before{content:'';position:absolute;inset:0;z-index:680;pointer-events:none}
+#gwrap.rainy::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cpath d='M12 0l-3 14M42 22l-3 14M27 44l-3 14' stroke='rgba(180,210,255,.6)' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");animation:rain .4s linear infinite}
+#gwrap.golden::before{box-shadow:inset 0 0 0 5px #f5b800,inset 0 0 40px rgba(245,184,0,.45)}
 @keyframes rain{to{background-position:0 60px}}
-#gmap.fogged::after{content:'';position:absolute;inset:0;z-index:690;background:rgba(190,200,210,.5);pointer-events:none}
+#gwrap.fogged::after{content:'';position:absolute;inset:0;z-index:690;background:rgba(190,200,210,.5);pointer-events:none}
 .joy{position:fixed;left:16px;bottom:calc(var(--bh, 178px) + 30px);z-index:1100;width:116px;height:116px;border-radius:50%;background:rgba(17,20,24,.6);border:2px solid rgba(255,255,255,.35);display:none;touch-action:none;user-select:none;-webkit-user-select:none}
 .joy.on{display:block}.joy i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:rgba(255,255,255,.85);pointer-events:none}
 .joy span{position:absolute;left:0;right:0;top:-24px;text-align:center;font-size:13px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none}
@@ -257,6 +257,7 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 .pingTip.enemyPing{border-color:var(--chaser)}
 .modes{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.modes button{flex:1 1 40%;padding:10px 4px;font-size:14px;margin:0}
 #fbType button{flex:1 1 0}
+.oss a{color:var(--dim)}
 .modes button.on{background:var(--warn);color:#111;border-color:var(--warn)}
 .jailTip{background:#334155;color:#fff;border:0;font-weight:800}
 /* 저격 조준경 */
@@ -366,7 +367,7 @@ button.primary{background:#ffd400;color:#111}
 </section>
 
 <section id="s-game" class="screen">
-  <div id="gmap"></div>
+  <div id="gwrap"><div id="gmap"></div><div id="gattr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a></div></div>
   <div class="hud">
     <div class="row"><span id="g-role" class="badge"></span><span id="g-phase"></span><span id="g-time" class="time"></span><button id="btnVote" class="hudbtn" title="투표" style="display:none">🗳</button><button id="btnMemo" class="hudbtn" title="방장 규칙 메모" style="display:none">📝</button><button id="btnChat" class="hudbtn" title="팀 대화방" style="display:none">💬<i id="chatBadge"></i></button><button class="btnSet hudbtn" title="설정">⚙</button><button id="btnForfeit" class="hudbtn" title="기권">🏳</button></div>
     <div class="bar"><i id="g-hp"></i><span>체력 <b id="g-hpv"></b></span></div>
@@ -423,7 +424,13 @@ button.primary{background:#ffd400;color:#111}
     <label class="chk"><input type="checkbox" id="consentAge"> 만 14세 이상이에요 (14세 미만은 보호자의 동의가 필요해요)</label>
   </div>
   <button id="btnConsentOk" class="primary" disabled>동의하고 계속</button><button id="btnConsentNo" class="linkbtn">동의하지 않음</button></div>
-<div id="ov-set" class="ov"><h2>⚙ 설정</h2><div class="card setlist"><div class="row between"><span>🎵 배경음악</span><button id="setBgm" class="sw"></button></div><div class="row between"><span>🔊 효과음</span><button id="setSfx" class="sw"></button></div><div class="row between"><span>📍 위치정보 동의</span><button id="setConsent" class="sw"></button></div><div class="row between"><span>⛶ 전체화면</span><button id="setFs" class="sw"></button></div></div><button id="btnFb">💬 피드백·버그 제보</button><button id="btnSetClose">닫기</button></div>
+<div id="ov-set" class="ov"><h2>⚙ 설정</h2><div class="card setlist"><div class="row between"><span>🎵 배경음악</span><button id="setBgm" class="sw"></button></div><div class="row between"><span>🔊 효과음</span><button id="setSfx" class="sw"></button></div><div class="row between"><span>📍 위치정보 동의</span><button id="setConsent" class="sw"></button></div><div class="row between"><span>⛶ 전체화면</span><button id="setFs" class="sw"></button></div></div><button id="btnFb">💬 피드백·버그 제보</button><details class="card oss" style="width:100%;max-width:420px;text-align:left;font-size:13px;margin-top:6px"><summary>📄 오픈소스 라이선스</summary><p class="dim" style="margin:8px 0 0;line-height:1.7">© 2026 PULTRIX. All rights reserved.<br>
+<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a> — BSD-2-Clause, © Volodymyr Agafonkin, CloudMade<br>
+<a href="https://github.com/cozmo/jsQR" target="_blank" rel="noopener">jsQR</a> — Apache-2.0, © Cosmo Wolfe<br>
+<a href="https://github.com/kazuhikoarase/qrcode-generator" target="_blank" rel="noopener">qrcode-generator</a> — MIT, © Kazuhiko Arase<br>
+<a href="https://github.com/firebase/firebase-js-sdk" target="_blank" rel="noopener">Firebase JS SDK</a> — Apache-2.0, © Google LLC<br>
+<a href="https://fonts.google.com/specimen/Black+Han+Sans" target="_blank" rel="noopener">Black Han Sans</a> — SIL OFL 1.1, © Zess Type<br>
+지도 데이터 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL)</p></details><button id="btnSetClose">닫기</button></div>
 <div id="ov-snd" class="ov"><h2>🔊 소리·진동 체크</h2><p id="sndQ" class="dim" style="max-width:360px">사이렌·호루라기 같은 소리랑 진동으로 알려 주는 게 많아요.<br>한 번 울려 볼게요.</p>
 <div id="sndTips" class="card" style="display:none;max-width:380px;text-align:left;line-height:1.7"><b>이렇게 해 봐요</b><br>1. 폰 <b>무음·진동 모드</b> 풀기<br>2. 볼륨 버튼을 눌러 <b>미디어 볼륨</b> 올리기<br>3. 블루투스 이어폰이 연결돼 있으면 끄기<br>4. ⚙ 설정에서 <b>🔊 효과음</b>이 켜져 있는지 확인</div>
 <button id="btnSndPlay" class="primary">🔊 울려 보기</button><div id="sndAns" class="row" style="display:none;gap:8px;width:100%;max-width:380px"><button id="btnSndYes" class="primary">들렸어</button><button id="btnSndNo">안 들렸어</button></div><button id="btnSndClose">나중에</button></div>
@@ -1691,7 +1698,13 @@ function bindRotate(mo) {
     $('#btnNorth svg').style.transform = `rotate(${mo.map.getBearing()}deg)`; // 바늘(빨강)이 화면 속 북쪽을 가리킴
     if (joy.id != null) joySend(); // 조이스틱은 화면 기준 방향이라 지도가 돌면 분신 방향도 다시
   });
-  el.addEventListener('touchstart', e => { if (e.touches.length >= 2 && !S.twoFinger) { S.twoFinger = true; S.gestBear = mo.map.getBearing(); } }, { passive: true });
+  const ang = e => Math.atan2(e.touches[1].clientY - e.touches[0].clientY, e.touches[1].clientX - e.touches[0].clientX) * 180 / Math.PI;
+  el.addEventListener('touchstart', e => { if (e.touches.length >= 2 && !S.twoFinger) { S.twoFinger = true; S.gestBear = mo.map.getBearing(); S.gestAng = ang(e); } }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    if (!S.twoFinger || e.touches.length < 2) return;
+    let d = ang(e) - S.gestAng; d = ((d + 540) % 360) - 180;
+    if (Math.abs(d) > 4 || S.mapMode === 'manual') mo.map.setBearing(S.gestBear + d); // 살짝 비틀린 건 무시 (확대·축소만)
+  }, { passive: true });
   const end = e => {
     if (!S.twoFinger || e.touches.length >= 2) return;
     S.twoFinger = false;
@@ -1740,12 +1753,63 @@ function onFixErr(e) {
 
 /* ---------- 지도 ---------- */
 const maps = {};
+/* 지도 회전 (직접 구현): #gmap을 화면 대각선 크기 정사각형으로 만들어 CSS로 돌림 → 어느 각도에서도 빈 곳이 안 보임
+   돌린 만큼 ① 손가락 위치 → 지도 좌표 ② 끌기 방향을 되돌려 계산, ③ 사람 배지·글자는 반대로 돌려 똑바로 세움 */
+function sizeRotMap() {
+  const w = $('#gwrap'), el = $('#gmap'), W = w.clientWidth || innerWidth, H = w.clientHeight || innerHeight, D = Math.ceil(Math.hypot(W, H));
+  Object.assign(el.style, { width: D + 'px', height: D + 'px', left: (W - D) / 2 + 'px', top: (H - D) / 2 + 'px' });
+}
+function makeRotatable(map) {
+  const el = map.getContainer(); let b = 0;
+  map._rotDeg = 0;
+  map.getBearing = () => b;
+  map._rotApply = () => {
+    const d = b + ($('#gwrap').classList.contains('flipped') ? 180 : 0); map._rotDeg = d;
+    el.style.transform = d ? `rotate(${d}deg)` : ''; el.style.setProperty('--nb', -d + 'deg');
+  };
+  map.setBearing = d => { b = ((d % 360) + 360) % 360; map._rotApply(); map.fire('rotate'); };
+  addEventListener('resize', () => { sizeRotMap(); map.invalidateSize(); });
+}
+// 화면 좌표 → 돌기 전 지도 안 좌표
+function unrotate(map, x, y) {
+  const el = map._container, r = el.getBoundingClientRect(), a = (map._rotDeg || 0) * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+  const vx = x - (r.left + r.width / 2), vy = y - (r.top + r.height / 2);
+  return L.point(c * vx + sn * vy + el.offsetWidth / 2, -sn * vx + c * vy + el.offsetHeight / 2);
+}
+(() => {
+  const m2c = L.Map.prototype.mouseEventToContainerPoint;
+  L.Map.prototype.mouseEventToContainerPoint = function (e) { return this._rotDeg ? unrotate(this, e.clientX, e.clientY) : m2c.call(this, e); };
+  const mv = L.Draggable.prototype._onMove;
+  L.Draggable.prototype._onMove = function (e) {
+    const m = maps.gmap && maps.gmap.map;
+    if (!m || !m._rotDeg || this._element !== m._mapPane || (e.touches && e.touches.length > 1)) return mv.call(this, e);
+    const t = e.touches && e.touches.length === 1 ? e.touches[0] : e, a = m._rotDeg * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+    const dx = t.clientX - this._startPoint.x, dy = t.clientY - this._startPoint.y;
+    this._parentScale = { x: 1, y: 1 }; // 돌아간 상자 크기로 배율을 잘못 재지 않게
+    return mv.call(this, { clientX: this._startPoint.x + c * dx + sn * dy, clientY: this._startPoint.y - sn * dx + c * dy, target: e.target, srcElement: e.srcElement, type: e.type,
+      preventDefault: () => { if (e.cancelable !== false && e.preventDefault) e.preventDefault(); }, stopPropagation: () => e.stopPropagation && e.stopPropagation() });
+  };
+  // 배지·글자는 지도와 반대로 돌려서 항상 똑바로 (회전 중심 = 가리키는 점)
+  const up = el => { if (el) el.style.transform += ' rotate(var(--nb, 0deg))'; };
+  const sp = L.Marker.prototype._setPos;
+  L.Marker.prototype._setPos = function (pos) {
+    sp.call(this, pos);
+    if (this._icon && this._map && this._map._rotDeg != null) { const an = this.options.icon && this.options.icon.options.iconAnchor; if (an) this._icon.style.transformOrigin = `${an[0]}px ${an[1]}px`; up(this._icon); }
+  };
+  const tp = L.Tooltip.prototype._setPosition;
+  L.Tooltip.prototype._setPosition = function (pos) {
+    tp.call(this, pos);
+    if (this._map && this._map._rotDeg != null && this._container) { const q = L.DomUtil.getPosition(this._container); this._container.style.transformOrigin = `${pos.x - q.x}px ${pos.y - q.y}px`; up(this._container); }
+  };
+})();
 function getMap(id) {
   if (maps[id]) return maps[id];
   // 게임 지도만 회전 가능 (나침반 방향 + 두 손가락)
-  const rot = id === 'gmap' ? { rotate: true, touchRotate: true, shiftKeyRotate: false } : {};
-  const map = L.map(id, { zoomControl: false, rotateControl: false, ...rot }).setView([37.5665, 126.978], 16);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  const rot = id === 'gmap';
+  if (rot) sizeRotMap();
+  const map = L.map(id, { zoomControl: false, attributionControl: !rot }).setView([37.5665, 126.978], 16);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' }).addTo(map);
+  if (rot) makeRotatable(map);
   return (maps[id] = { map, self: null, acc: null, area: null, others: [], centered: false });
 }
 // 사람 표시: 선수 배지 (이름 첫 글자 + 팀 색 테두리 + 아래 기울어진 이름표). 나는 노란 테두리 '나'
@@ -4205,7 +4269,7 @@ function bindLongPress(mo) {
     start = { x: e.clientX, y: e.clientY }; cancel();
     timer = setTimeout(() => {
       timer = null; const r = el.getBoundingClientRect();
-      openPing(mo.map.containerPointToLatLng([start.x - r.left, start.y - r.top]));
+      openPing(mo.map.containerPointToLatLng(mo.map._rotDeg ? unrotate(mo.map, start.x, start.y) : [start.x - r.left, start.y - r.top]));
     }, 600);
   });
   el.addEventListener('pointermove', e => { if (timer && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 12) cancel(); });
@@ -4858,8 +4922,8 @@ function overlayLoop() {
   const room = S.room, inGame = !!room && room.status === 'playing' && !room.result && S.screen === 's-game';
   joyLoop(inGame);
   if (inGame) rpsLoop(room);
-  $('#gmap').classList.toggle('fogged', inGame && fogged(now()));
-  { const t0 = now(); const g = $('#gmap').classList; g.toggle('flipped', inGame && fxOn('flip', t0)); g.toggle('rainy', inGame && (fxOn('rain', t0) || fxOn('rain', t0, true))); g.toggle('stopped', inGame && fxOn('stop', t0)); g.toggle('golden', inGame && fxOn('gold', t0, true)); }
+  $('#gwrap').classList.toggle('fogged', inGame && fogged(now()));
+  { const t0 = now(); const g = $('#gwrap').classList; const fl = inGame && fxOn('flip', t0); if (g.contains('flipped') !== fl) { g.toggle('flipped', fl); if (maps.gmap && maps.gmap.map._rotApply) maps.gmap.map._rotApply(); } g.toggle('rainy', inGame && (fxOn('rain', t0) || fxOn('rain', t0, true))); g.toggle('stopped', inGame && fxOn('stop', t0)); g.toggle('golden', inGame && fxOn('gold', t0, true)); }
   const me = (inGame && room.players[S.pid]) || {}, t = now();
   if (inGame && modeOf(room) === 'mafia' && room.startAt) {
     const vr = Logic.voteRound(now(), room.startAt, room.timeShift), alive = Logic.alive({ ...me, selfDmg: S.selfDmg, augs: S.augs }, (room.hits || {})[S.pid]);
