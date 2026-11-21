@@ -203,6 +203,13 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 .runnerTip{background:var(--runner);color:#fff;border:0;font-weight:700}
 /* 새 능력: 먹물 · 무궁화 · 흔들어 탈출 · 도청 */
 #ink{position:fixed;inset:0;z-index:1040;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 28% 34%,#020305 0 20%,transparent 21%),radial-gradient(circle at 72% 58%,#020305 0 26%,transparent 27%),radial-gradient(circle at 44% 78%,#020305 0 17%,transparent 18%),rgba(4,6,9,.97)}
+/* 사람 배지 */
+.pbw{background:none;border:0}
+.pb{position:relative;width:34px;height:34px;border-radius:50%;background:#141414;border:3px solid var(--c);box-sizing:border-box;box-shadow:0 2px 6px rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;color:#fff;font:16px 'Black Han Sans',sans-serif;transition:opacity .6s}
+.pb.me{width:40px;height:40px;border-width:4px;font-size:18px;box-shadow:0 0 0 3px rgba(255,212,0,.25),0 2px 6px rgba(0,0,0,.65)}
+.pb b{font-weight:400;line-height:1}
+.pb i{position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%) skewX(-12deg);background:var(--c);color:#fff;font:12px 'Black Han Sans',sans-serif;font-style:normal;padding:1px 6px;white-space:nowrap}
+.pb em{position:absolute;left:calc(100% + 5px);top:50%;transform:translateY(-50%);background:rgba(0,0,0,.75);color:#fff;font:700 11px -apple-system,sans-serif;font-style:normal;padding:1px 5px;border-radius:3px;white-space:nowrap}
 /* 리플레이 */
 #ov-replay{position:fixed;inset:0;z-index:2450;background:var(--bg);display:none;flex-direction:column}
 #ov-replay.on{display:flex}
@@ -1598,14 +1605,24 @@ function getMap(id) {
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   return (maps[id] = { map, self: null, acc: null, area: null, others: [], centered: false });
 }
+// 사람 표시: 선수 배지 (이름 첫 글자 + 팀 색 테두리 + 아래 기울어진 이름표). 나는 노란 테두리 '나'
+// 미니맵처럼 한때 찍힌 위치는 '몇 초 전' 표시 + 오래될수록 흐려짐
+const ROLE_COL = { chaser: '#ff4d4f', runner: '#3ba3ff' };
+function badgeHtml(o) {
+  const nm = String(o.name ?? '?'), ini = o.ini || Array.from(nm.trim())[0] || '?';
+  return `<div class="pb${o.me ? ' me' : ''}" style="--c:${o.col}${o.op != null ? `;opacity:${o.op}` : ''}"><b>${esc(ini)}</b>${o.me ? '' : `<i>${o.pre ? o.pre + ' ' : ''}${esc(nm)}${o.sub != null ? ' ' + esc(o.sub) : ''}</i>`}${o.age != null ? `<em>${esc(o.age)}</em>` : ''}</div>`;
+}
+const badgeIcon = o => L.divIcon({ className: 'pbw', html: badgeHtml(o), iconSize: o.me ? [40, 40] : [34, 34], iconAnchor: o.me ? [20, 20] : [17, 17] });
+function badge(ll, o) { const m = L.marker(ll, { icon: badgeIcon(o), interactive: false, keyboard: false }); m._bh = badgeHtml(o); return m; }
+function badgeSet(m, ll, o) { if (ll) m.setLatLng(ll); const h = badgeHtml(o); if (h !== m._bh) { m._bh = h; m.setIcon(badgeIcon(o)); } }
 function drawSelf(mo, color) {
   if (!S.fix) return;
   const ll = [S.fix.lat, S.fix.lng], r = Math.min(S.fix.acc, 200);
   if (!mo.self) {
     mo.acc = L.circle(ll, { radius: r, stroke: false, fillColor: color, fillOpacity: .15, interactive: false }).addTo(mo.map);
-    mo.self = L.circleMarker(ll, { radius: 9, color: '#fff', weight: 3, fillColor: color, fillOpacity: 1, interactive: false }).addTo(mo.map);
+    mo.self = badge(ll, { me: true, ini: '나', col: '#ffd400' }).setZIndexOffset(1000).addTo(mo.map);
   } else {
-    mo.self.setLatLng(ll).setStyle({ fillColor: color });
+    mo.self.setLatLng(ll);
     mo.acc.setLatLng(ll).setRadius(r).setStyle({ fillColor: color });
   }
   if (!mo.centered) { mo.map.setView(ll, 17); mo.centered = true; }
@@ -1670,7 +1687,7 @@ function takeSnapshot() {
     .filter(([id, p]) => (mf ? id !== S.pid && p.role : p.role === 'chaser' && !((p.mapHideUntil || 0) > now())) && p.lat != null && Logic.alive(p, hits[id])) // 미니맵 숨기기 중인 추격자는 빠짐
     .map(([id, p]) => {
       const q = Logic.shownPos(p, now(), room.players), red = !mf || (meR.role === 'chaser' && p.role === 'chaser');
-      return { id, name: p.name, lat: q.lat, lng: q.lng, prev: prev[id], col: red ? '#ff4d4f' : '#9ca3af', tip: red ? 'chaserTip' : 'trapTip' };
+      return { id, name: p.name, lat: q.lat, lng: q.lng, prev: prev[id], col: red ? '#ff4d4f' : '#9ca3af', tip: red ? 'chaserTip' : 'trapTip', at: now() };
     });
   drawSnap();
 }
@@ -1687,8 +1704,8 @@ function drawSnap() {
       mo.others.push(L.marker([c.lat, c.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13],
         html: `<svg viewBox="0 0 24 24" width="26" height="26" style="transform:rotate(${b}deg) translateY(-16px)"><path d="M12 3l6 9h-12z" fill="#ff4d4f" stroke="#fff" stroke-width="1.5"/></svg>` }) }).addTo(mo.map));
     }
-    mo.others.push(L.circleMarker([c.lat, c.lng], { radius: 10, color: '#fff', weight: 2, fillColor: c.col || '#ff4d4f', fillOpacity: .9 })
-      .bindTooltip(esc(c.name), { permanent: true, direction: 'top', className: c.tip || 'chaserTip' }).addTo(mo.map));
+    const mk = badge([c.lat, c.lng], { name: c.name, col: c.col || '#ff4d4f', age: '방금' }).addTo(mo.map);
+    mk._snapAt = c.at || now(); mo.others.push(mk);
   }
 }
 
@@ -3724,8 +3741,7 @@ function drawRadar(mo) {
   for (const [id, p] of list) {
     const dg = disguised(room.players[id], t), key = id + (dg ? ':d' : '');
     if (mo.radarM[key]) mo.radarM[key].setLatLng([p.lat, p.lng]);
-    else mo.radarM[key] = L.circleMarker([p.lat, p.lng], { radius: 10, color: '#fff', weight: 2, fillColor: dg ? '#ff4d4f' : '#3ba3ff', fillOpacity: .9 })
-      .bindTooltip(dg ? '추격자' : esc(p.name), { permanent: true, direction: 'top', className: dg ? 'chaserTip' : 'runnerTip' }).addTo(mo.radarG);
+    else mo.radarM[key] = badge([p.lat, p.lng], { name: dg ? '추격자' : p.name, col: dg ? '#ff4d4f' : '#3ba3ff' }).addTo(mo.radarG);
   }
 }
 // 영역(모두에게 보임), 우리 팀 덫·분신, 덫에 걸린 상대 위치 — 매번 다시 그림 (개수가 적음)
@@ -3815,10 +3831,8 @@ function drawSpectator(mo, on) {
   const room = S.room, hits = (room && room.hits) || {}, items = [];
   if (on) for (const [id, p] of Object.entries(room.players)) {
     if (!p.role || p.lat == null || id === S.pid) continue;
-    const hp = Logic.hpOf(p, hits[id]), label = `${esc(p.name)} ${hp > 0 ? Math.ceil(hp) : '탈락'}`, op = hp > 0 ? .95 : .3;
-    items.push({ key: id, make: () => L.circleMarker([p.lat, p.lng], { radius: 9, color: '#fff', weight: 2, fillColor: p.role === 'chaser' ? '#ff4d4f' : '#3ba3ff', fillOpacity: op, interactive: false })
-      .bindTooltip(label, { permanent: true, direction: 'top', className: p.role === 'chaser' ? 'chaserTip' : 'runnerTip' }),
-      update: m => { m.setLatLng([p.lat, p.lng]).setStyle({ fillOpacity: op }); m.setTooltipContent(label); } });
+    const hp = Logic.hpOf(p, hits[id]), bo = { name: p.name, sub: hp > 0 ? Math.ceil(hp) : '탈락', col: ROLE_COL[p.role] || '#9ca3af', op: hp > 0 ? 1 : .35 };
+    items.push({ key: id, make: () => badge([p.lat, p.lng], bo), update: m => badgeSet(m, [p.lat, p.lng], bo) });
   }
   syncLayer(mo, 'specL', items);
 }
@@ -3857,15 +3871,13 @@ function drawSkills(mo) {
     if (p.role !== 'runner' || p.lat == null || !Logic.alive(p, (room.hits || {})[id])) continue;
     const w = (p.wantedUntil || 0) > t, m = (p.mugungUntil || 0) > t, tn = (p.tauntUntil || 0) > t, hd = (p.houndUntil || 0) > t;
     if (!w && !m && !tn && !hd) continue;
-    const dg = disguised(p, t), label = `${w ? '🎯' : m ? '🌸' : tn ? '🤪' : '🐕'} ${dg ? '추격자' : esc(p.name)}`; // 위장 중이면 추격자처럼
-    items.push({ key: 'x' + id + (dg ? 'd' : ''), make: () => L.circleMarker([p.lat, p.lng], { radius: 11, color: '#fff', weight: 3, fillColor: dg ? '#ff4d4f' : '#3ba3ff', fillOpacity: .95, interactive: false })
-      .bindTooltip(label, { permanent: true, direction: 'top', className: dg ? 'chaserTip' : 'runnerTip' }), update: mk => { mk.setLatLng([p.lat, p.lng]); mk.setTooltipContent(label); } });
+    const dg = disguised(p, t), bo = { pre: w ? '🎯' : m ? '🌸' : tn ? '🤪' : '🐕', name: dg ? '추격자' : p.name, col: dg ? '#ff4d4f' : '#3ba3ff' }; // 위장 중이면 추격자처럼
+    items.push({ key: 'x' + id + (dg ? 'd' : ''), make: () => badge([p.lat, p.lng], bo), update: mk => badgeSet(mk, [p.lat, p.lng], bo) });
   }
   // 도망자: 거울로 되돌려진 현상수배에 걸린 추격자 위치
   if (me.role === 'runner') for (const [id, p] of Object.entries(room.players)) {
     if (p.role !== 'chaser' || p.lat == null || (p.wantedUntil || 0) <= t) continue;
-    items.push({ key: 'xw' + id, make: () => L.circleMarker([p.lat, p.lng], { radius: 11, color: '#fff', weight: 3, fillColor: '#ff4d4f', fillOpacity: .95, interactive: false })
-      .bindTooltip(`🎯 ${esc(p.name)}`, { permanent: true, direction: 'top', className: 'chaserTip' }), update: mk => mk.setLatLng([p.lat, p.lng]) });
+    items.push({ key: 'xw' + id, make: () => badge([p.lat, p.lng], { pre: '🎯', name: p.name, col: '#ff4d4f' }), update: mk => mk.setLatLng([p.lat, p.lng]) });
   }
   // 위치 추적기: 붙은 상대의 위치를 20초마다 찍음
   for (const [id, p] of Object.entries(room.players)) {
@@ -3899,8 +3911,7 @@ function drawSkills(mo) {
   S.detects = (S.detects || []).filter(d => d.until > t);
   for (const d of S.detects) {
     const p = room.players[d.id]; if (!p || p.lat == null) continue;
-    items.push({ key: 'q' + d.id, make: () => L.circleMarker([p.lat, p.lng], { radius: 11, color: '#fff', weight: 3, fillColor: '#ff4d4f', fillOpacity: .95, interactive: false })
-      .bindTooltip(`🛰 ${esc(p.name)}`, { permanent: true, direction: 'top', className: 'chaserTip' }), update: mk => mk.setLatLng([p.lat, p.lng]) });
+    items.push({ key: 'q' + d.id, make: () => badge([p.lat, p.lng], { pre: '🛰', name: p.name, col: '#ff4d4f' }), update: mk => mk.setLatLng([p.lat, p.lng]) });
   }
   S.trapReveals = (S.trapReveals || []).filter(r => r.until > t);
   for (const r of S.trapReveals) {
@@ -3955,8 +3966,7 @@ function drawSkills(mo) {
       if (r.role !== 'runner' || r.lat == null || !Logic.alive(r, (room.hits || {})[rid]) || (r.stealthUntil || 0) > t || Logic.inSmoke(r, room.smokes, t)) continue;
       const rp = Logic.shownPos(r, t, room.players); if (Logic.dist(rp, q) > Logic.AUGS.drone.r) continue;
       const dg = disguised(r, t);
-      items.push({ key: 'drS' + rid + (dg ? 'd' : ''), make: () => L.circleMarker([rp.lat, rp.lng], { radius: 10, color: '#fff', weight: 2, fillColor: dg ? '#ff4d4f' : '#3ba3ff', fillOpacity: .9, interactive: false })
-        .bindTooltip(`🛸 ${dg ? '추격자' : esc(r.name)}`, { permanent: true, direction: 'top', className: dg ? 'chaserTip' : 'runnerTip' }), update: mk => mk.setLatLng([rp.lat, rp.lng]) });
+      items.push({ key: 'drS' + rid + (dg ? 'd' : ''), make: () => badge([rp.lat, rp.lng], { pre: '🛸', name: dg ? '추격자' : r.name, col: dg ? '#ff4d4f' : '#3ba3ff' }), update: mk => mk.setLatLng([rp.lat, rp.lng]) });
     }
   }
   // 그림자 밟기: 내 30m 안 도망자의 20초 전 자리 (나만 보임)
@@ -4379,6 +4389,16 @@ function bannerLoop() {
   deathBanLoop();
 }
 setInterval(bannerLoop, 500);
+setInterval(() => { // 미니맵 배지: 찍힌 지 몇 초 됐는지 + 오래될수록 흐려짐 (다음 갱신 즈음엔 반쯤)
+  const mo = maps.gmap; if (!mo || !mo.others) return;
+  const I = (modeOf(S.room) === 'mafia' ? Logic.MODE_RULES.MF_SNAP_SEC : intelSec()) * 1000;
+  for (const mk of mo.others) {
+    if (!mk._snapAt) continue; const el = mk.getElement(); if (!el) continue;
+    const age = Math.max(0, now() - mk._snapAt), sec = Math.round(age / 1000);
+    const em = el.querySelector('em'); if (em) em.textContent = sec < 2 ? '방금' : `${sec}초 전`;
+    const pb = el.querySelector('.pb'); if (pb) pb.style.opacity = Math.max(.4, 1 - .6 * age / I).toFixed(2);
+  }
+}, 1000);
 
 function checkWin() {
   const room = S.room;
@@ -4923,7 +4943,7 @@ function rpLoad(v) {
   for (const [id, p] of Object.entries(d.P)) {
     const faint = L.polyline(rpSegs(p.pts), { color: p.col, weight: 3, opacity: .22 }).addTo(RP.g);
     const live = L.polyline([], { color: p.col, weight: 5, opacity: .95 }).addTo(RP.g);
-    const dot = L.circleMarker([0, 0], { radius: 8, color: '#fff', weight: 2, fillColor: p.col, fillOpacity: 1 }).bindTooltip(esc(p.name), { permanent: true, direction: 'top', offset: [0, -8], className: 'rptip' });
+    const dot = badge([0, 0], { name: p.name, col: p.col });
     RP.L[id] = { faint, live, dot, on: false };
     p.pts.forEach(q => all.push([q.lat, q.lng]));
   }
@@ -4951,9 +4971,7 @@ function rpDraw() {
     const pos = rpPos(p.pts, T), dead = p.diedAt && d.meta.startAt && T >= (p.diedAt - d.meta.startAt) / 1000;
     const zomb = p.zombieAt && d.meta.startAt && T >= (p.zombieAt - d.meta.startAt) / 1000;
     if (pos) {
-      o.dot.setLatLng([pos.lat, pos.lng]);
-      o.dot.setStyle({ fillOpacity: dead || pos.stale ? .35 : 1, opacity: dead || pos.stale ? .5 : 1, fillColor: zomb ? '#84cc16' : p.col });
-      o.dot.setTooltipContent(`${dead ? (p.forfeit ? '🏳️ ' : '💀 ') : zomb ? '🧟 ' : ''}${esc(p.name)}`);
+      badgeSet(o.dot, [pos.lat, pos.lng], { name: p.name, col: zomb ? '#84cc16' : p.col, op: dead || pos.stale ? .4 : 1, pre: dead ? (p.forfeit ? '🏳️' : '💀') : zomb ? '🧟' : undefined });
       if (!o.on) { o.dot.addTo(RP.g); o.on = true; }
     } else if (o.on) { RP.g.removeLayer(o.dot); o.on = false; }
   }
