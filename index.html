@@ -274,8 +274,10 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
     <div class="row between"><span id="l-chLabel">추격자 수</span>
       <div class="row stepper"><button id="btnChMinus">−</button><b id="l-chasers">1</b><button id="btnChPlus">+</button></div></div>
     <p class="dim small"><span id="l-rnLabel">도망자</span> <span id="l-runners">0</span>명</p>
-    <div class="row between" style="margin-top:10px"><span>구역 반경</span><b id="l-rv"></b></div>
+    <div id="l-shape" class="modes"><button data-shape="circle">⭕ 원으로</button><button data-shape="poly">🔷 꼭짓점 찍기</button></div>
+    <div class="row between" style="margin-top:10px"><span id="l-rLabel">구역 반경</span><b id="l-rv"></b></div>
     <input id="l-r" type="range" min="100" max="1000" step="50">
+    <div id="l-polyBox" class="modes" style="display:none"><button id="btnPolyUndo">↶ 하나 지우기</button><button id="btnPolyClear">다 지우기</button><button id="btnPolyDone" class="primary">✔ 완료</button><button id="btnPolyCancel">취소</button></div>
     <div id="lmap" class="lmap"></div>
     <p id="l-areaHint" class="dim small" style="margin-top:6px"></p>
   </div>
@@ -552,8 +554,71 @@ const Logic = (() => {
   }
   // 높이 위장: 상대가 쓰고 있으면 높이 차이를 반대로
   const shownAlt = (p, myAlt, now) => (typeof p.alt === 'number' && typeof myAlt === 'number' && (p.altFakeUntil || 0) > now ? 2 * myAlt - p.alt : p.alt);
+  // ===== 꼭짓점 구역 (다각형): area = { lat, lng(무게중심), r(넓이가 같은 원의 반경), poly: [[lat, lng], …] } =====
+  const POLY_MIN = 3, POLY_MAX = 12, AREA_MIN_M = 100, AREA_MAX_M = 1000;
+  const toXY = (p, o) => [(p.lng - o.lng) * 111195 * Math.cos(rad(o.lat)), (p.lat - o.lat) * 111195];
+  const fromXY = (x, y, o) => ({ lat: o.lat + y / 111195, lng: o.lng + x / (111195 * Math.cos(rad(o.lat))) });
+  const polyXY = (area, k = 1) => area.poly.map(([lat, lng]) => toXY({ lat, lng }, area).map(c => c * k));
+  // 두 선분(평면 좌표)이 서로 가로지르는지 (끝점이 닿는 건 아님)
+  function xyCross(a, b, c, d) {
+    const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+    return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+  }
+  // 찍은 꼭짓점 검사 → { ok, why } 또는 { ok, lat, lng, r }
+  function polyCheck(pts) {
+    if (pts.length < POLY_MIN) return { ok: false, why: `꼭짓점을 ${POLY_MIN}개 이상 찍어 주세요` };
+    if (pts.length > POLY_MAX) return { ok: false, why: `꼭짓점은 ${POLY_MAX}개까지예요` };
+    const o = pts[0], v = pts.map(p => toXY(p, o)), n = v.length;
+    for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue; // 이웃한 선
+      if (xyCross(v[i], v[i + 1], v[j], v[(j + 1) % n])) return { ok: false, why: '선이 서로 꼬였어요. 둘레를 따라 순서대로 찍어 주세요' };
+    }
+    let A = 0, cx = 0, cy = 0;
+    for (let i = 0; i < n; i++) { const [x0, y0] = v[i], [x1, y1] = v[(i + 1) % n], c = x0 * y1 - x1 * y0; A += c; cx += (x0 + x1) * c; cy += (y0 + y1) * c; }
+    A /= 2;
+    const r = Math.round(Math.sqrt(Math.abs(A) / Math.PI));
+    if (r < AREA_MIN_M || r > AREA_MAX_M) return { ok: false, r, why: `구역이 너무 ${r < AREA_MIN_M ? '작아요' : '커요'} (넓이로 치면 반경 ${r}m, ${AREA_MIN_M}~${AREA_MAX_M}m만 돼요)` };
+    const c = fromXY(cx / (6 * A), cy / (6 * A), o);
+    return { ok: true, lat: c.lat, lng: c.lng, r };
+  }
+  // 구역 안인지 (k: 자기장처럼 중심 쪽으로 줄인 비율)
+  function inArea(p, area, k = 1) {
+    if (!area.poly) return dist(p, area) <= area.r * k;
+    const [px, py] = toXY(p, area), v = polyXY(area, k);
+    let inside = false;
+    for (let i = 0, j = v.length - 1; i < v.length; j = i++) {
+      const [xi, yi] = v[i], [xj, yj] = v[j];
+      if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  // 경계선까지 가장 가까운 거리 (꼭짓점 구역)
+  function polyGap(p, area) {
+    const [px, py] = toXY(p, area), v = polyXY(area);
+    let best = Infinity;
+    for (let i = 0; i < v.length; i++) {
+      const [ax, ay] = v[i], [bx, by] = v[(i + 1) % v.length], ex = bx - ax, ey = by - ay, L2 = ex * ex + ey * ey;
+      const q = L2 ? Math.max(0, Math.min(1, ((px - ax) * ex + (py - ay) * ey) / L2)) : 0;
+      best = Math.min(best, Math.hypot(px - ax - q * ex, py - ay - q * ey));
+    }
+    return best;
+  }
+  // 지도에 그릴 경계 (k배로 줄인 것)
+  const areaRing = (area, k = 1) => polyXY(area, k).map(([x, y]) => { const p = fromXY(x, y, area); return [p.lat, p.lng]; });
   // pos에서 brg 방향으로 구역(area) 경계까지 거리 (이미 밖이고 바깥쪽이면 0)
   function edgeDist(pos, brg, area) {
+    if (area.poly) {
+      if (!inArea(pos, area)) return 0;
+      const [px, py] = toXY(pos, area), v = polyXY(area), ux = Math.sin(rad(brg)), uy = Math.cos(rad(brg));
+      let best = Infinity;
+      for (let i = 0; i < v.length; i++) {
+        const [ax, ay] = v[i], [bx, by] = v[(i + 1) % v.length], ex = bx - ax, ey = by - ay, den = ux * ey - uy * ex;
+        if (Math.abs(den) < 1e-9) continue;
+        const tt = ((ax - px) * ey - (ay - py) * ex) / den, ss = ((ax - px) * uy - (ay - py) * ux) / den;
+        if (tt >= 0 && ss >= 0 && ss <= 1) best = Math.min(best, tt);
+      }
+      return best === Infinity ? 0 : best;
+    }
     const x = (pos.lng - area.lng) * 111195 * Math.cos(rad(area.lat)), y = (pos.lat - area.lat) * 111195;
     const ux = Math.sin(rad(brg)), uy = Math.cos(rad(brg)), pu = x * ux + y * uy, c = x * x + y * y - area.r * area.r;
     const disc = pu * pu - c;
@@ -875,6 +940,18 @@ const Logic = (() => {
   }
   // 구역 안(가장자리 15% 제외) 아무 곳
   function randomSpot(area, rnd = Math.random) {
+    if (area.poly) { // 꼭짓점 구역: 안쪽이면서 경계에서 조금 떨어진 곳
+      const v = polyXY(area), xs = v.map(a => a[0]), ys = v.map(a => a[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), gap = Math.min(15, area.r * 0.1);
+      let any = null;
+      for (let i = 0; i < 300; i++) {
+        const p = fromXY(x0 + (x1 - x0) * rnd(), y0 + (y1 - y0) * rnd(), area);
+        if (!inArea(p, area)) continue;
+        if (polyGap(p, area) >= gap) return p;
+        any = any || p;
+      }
+      return any || { lat: area.lat, lng: area.lng };
+    }
     const r = area.r * 0.85 * Math.sqrt(rnd()), th = rnd() * 2 * Math.PI;
     return { lat: area.lat + r * Math.cos(th) / 111195, lng: area.lng + r * Math.sin(th) / (111195 * Math.cos(rad(area.lat))) };
   }
@@ -968,7 +1045,7 @@ const Logic = (() => {
   return { beatGap, aimAt, rpsWinner, MF_AUGS, aimTarget, assignJobs, voteRound, voteResult, movingPos, segCross, clampLen, shownAlt, altLabel, edgeDist, dist, bearing, staminaCostPerSec, spendStamina, exhaust, phaseAt, arrowBase, arrowState, mapRevealIdx, hpRaw, hpOf, alive, nearestRunner, winner, parseQR, checkCatch, filterFix, assignRoles,
     GRADES, AUGS, augDesc, augPool, rollAug, rollOffer, addAug, augVal, augReady, augCdMs, fmtSec, randomSpot, augArrowSec, augIntelSec, spotStale, spotStaleMs, moveSpot,
     MODES, MODE_RULES, setClock, shownPos, survivalMs, mvp, stealTime, pullToward, stormR, snipeTarget, takeable, nearLimit, movePoint, inSmoke, rollGrade, upGrade,
-    interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM, augDomainM };
+    interp, recommend, applySettings, mergeSettings, arrowShowSec, augAlarmM, augDomainM, polyCheck, inArea, polyGap, areaRing, POLY_MAX };
 })();
 // LOGIC END
 </script>
@@ -1472,12 +1549,29 @@ function drawSelf(mo, color) {
   }
   if (!mo.centered) { mo.map.setView(ll, 17); mo.centered = true; }
 }
+// 꼭짓점 찍는 중: 찍은 순서대로 선 + 번호 점 (처음 점과 마지막 점도 점선으로 이어서 닫힌 모양 미리 보기)
+function drawPolyDraft(mo) {
+  const pts = S.polyEdit, key = pts ? pts.map(p => p.lat + ',' + p.lng).join(';') : '';
+  if (mo.draftKey === key) return;
+  mo.draftKey = key;
+  if (mo.draft) { mo.draft.remove(); mo.draft = null; }
+  if (!pts || !pts.length) return;
+  const g = L.layerGroup().addTo(mo.map), ll = pts.map(p => [p.lat, p.lng]);
+  if (ll.length >= 2) L.polyline(ll, { color: '#ffb020', weight: 3, interactive: false }).addTo(g);
+  if (ll.length >= 3) L.polyline([ll[ll.length - 1], ll[0]], { color: '#ffb020', weight: 2, dashArray: '4 6', interactive: false }).addTo(g);
+  ll.forEach((x, i) => L.marker(x, { interactive: false, icon: L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:#ffb020;color:#111;font:800 12px/22px sans-serif;text-align:center;border:2px solid #111">${i + 1}</div>` }) }).addTo(g));
+  mo.draft = g;
+}
 function drawArea(mo, area, fit) {
   if (!area) { if (mo.area) { mo.area.remove(); mo.area = null; } return; }
-  const ll = [area.lat, area.lng];
-  if (!mo.area) mo.area = L.circle(ll, { radius: area.r, color: '#ffb020', weight: 3, fill: false, dashArray: '8 8', interactive: false }).addTo(mo.map);
+  const ll = [area.lat, area.lng], shape = area.poly ? 'poly' : 'circle', st = { color: '#ffb020', weight: 3, fill: false, dashArray: '8 8', interactive: false };
+  if (mo.area && mo.areaShape !== shape) { mo.area.remove(); mo.area = null; }
+  mo.areaShape = shape;
+  if (!mo.area) mo.area = (area.poly ? L.polygon(Logic.areaRing(area), st) : L.circle(ll, { radius: area.r, ...st })).addTo(mo.map);
+  else if (area.poly) mo.area.setLatLngs(Logic.areaRing(area));
   else mo.area.setLatLng(ll).setRadius(area.r);
-  const key = `${area.lat},${area.lng},${area.r}`;
+  const key = `${area.lat},${area.lng},${area.r},${area.poly ? area.poly.length : 0}`;
   if (fit && mo.areaKey !== key) { mo.areaKey = key; mo.map.fitBounds(mo.area.getBounds(), { padding: [10, 10] }); mo.centered = true; }
   if (!mo.centered) { mo.map.setView(ll, 16); mo.centered = true; }
 }
@@ -1498,7 +1592,7 @@ const blackedOut = () => { const r = S.room, me = r && r.players[S.pid]; return 
 function drawMaps() {
   const room = S.room; if (!room) return;
   const area = room.settings && room.settings.area;
-  if (S.screen === 's-lobby' && maps.lmap) { drawSelf(maps.lmap, '#3ba3ff'); drawArea(maps.lmap, area, true); drawJail(maps.lmap); }
+  if (S.screen === 's-lobby' && maps.lmap) { drawSelf(maps.lmap, '#3ba3ff'); drawArea(maps.lmap, S.polyEdit ? null : area, true); drawPolyDraft(maps.lmap); drawJail(maps.lmap); }
   if (S.screen === 's-game' && maps.gmap) {
     const me = room.players && room.players[S.pid], mo = maps.gmap;
     drawSelf(mo, me && me.role === 'chaser' ? '#ff4d4f' : '#3ba3ff'); drawArea(mo, area);
@@ -1591,7 +1685,14 @@ function enterRoom(code, pid, name) {
   saveLocal({ code, pid, name });
   if (S.unsub) S.unsub();
   if (S.evUnsub) S.evUnsub();
-  S.unsub = onValue(roomRef(), snap => { S.room = snap.val(); onRoom(); });
+  S.unsub = onValue(roomRef(), snap => {
+    S.room = snap.val();
+    // 꼭짓점 구역: 저장소에 따라 배열이 {0: …, 1: …} 객체로 올 수 있어서 배열로 맞춤
+    const ar = S.room && S.room.settings && S.room.settings.area;
+    if (ar && ar.poly && !Array.isArray(ar.poly)) ar.poly = Object.keys(ar.poly).sort((x, y) => x - y).map(k => ar.poly[k]);
+    if (ar && ar.poly) ar.poly = ar.poly.map(v => (Array.isArray(v) ? v : [v[0], v[1]]));
+    onRoom();
+  });
   const since = now() - 5000;
   S.evUnsub = onChildAdded(query(roomRef('events'), limitToLast(20)), s => { const e = s.val(); if (e && (e.at || 0) >= since) onEvent(e); });
 }
@@ -1968,9 +2069,14 @@ function renderLobby() {
   $('#l-runners').textContent = Math.max(0, n - ch);
   const area = room.settings && room.settings.area, r = area ? area.r : RULES.AREA_DEFAULT_M;
   if (document.activeElement !== $('#l-r')) $('#l-r').value = r;
-  $('#l-rv').textContent = $('#l-r').value + 'm';
+  if (!isHost && S.polyEdit) S.polyEdit = null;
+  const poly = !!(area && area.poly);
+  document.querySelectorAll('#l-shape [data-shape]').forEach(b => { b.classList.toggle('on', S.polyEdit ? b.dataset.shape === 'poly' : (b.dataset.shape === 'poly') === poly); b.disabled = !isHost; });
+  $('#l-rLabel').textContent = poly && !S.polyEdit ? `꼭짓점 구역 (${area.poly.length}개)` : '구역 반경';
+  $('#l-rv').textContent = poly && !S.polyEdit ? `넓이로 치면 반경 ${area.r}m` : $('#l-r').value + 'm';
+  $('#l-r').style.display = poly || S.polyEdit ? 'none' : '';
   ['#btnChMinus', '#btnChPlus', '#l-r'].forEach(s => { $(s).disabled = !isHost; });
-  $('#l-areaHint').textContent = isHost ? '지도를 탭하면 구역 중심이 옮겨져요 (처음엔 내 위치)' : '추격자 수와 구역은 방장이 정해요';
+  renderPolyBox();
   // 게임 모드
   const mode = modeOf(room);
   document.querySelectorAll('#l-mode [data-mode]').forEach(b => { b.classList.toggle('on', b.dataset.mode === mode); b.disabled = !isHost; });
@@ -2002,11 +2108,16 @@ function renderLobby() {
       if (!S.room || S.room.hostId !== S.pid) return;
       const a = S.room.settings && S.room.settings.area;
       if (S.jailPick) { // 경찰과 도둑: 감옥 위치 (구역 안)
-        if (a && Logic.dist(a, e.latlng) > a.r) return toast('감옥은 구역 안에 있어야 해요');
+        if (a && !Logic.inArea(e.latlng, a)) return toast('감옥은 구역 안에 있어야 해요');
         S.jailPick = false;
         await update(roomRef('settings'), { jail: { lat: e.latlng.lat, lng: e.latlng.lng } });
         return toast('🔒 감옥 위치를 정했어요');
       }
+      if (S.polyEdit) { // 꼭짓점 찍기
+        if (S.polyEdit.length >= Logic.POLY_MAX) return toast(`꼭짓점은 ${Logic.POLY_MAX}개까지예요`);
+        S.polyEdit.push({ lat: e.latlng.lat, lng: e.latlng.lng }); renderPolyBox(); return drawMaps();
+      }
+      if (a && a.poly) return toast('꼭짓점 구역이에요. 바꾸려면 🔷 꼭짓점을 다시 누르세요');
       await update(roomRef('settings'), { area: { lat: e.latlng.lat, lng: e.latlng.lng, r: a ? a.r : RULES.AREA_DEFAULT_M } });
     }));
     setTimeout(() => mo.map.invalidateSize(), 50);
@@ -2065,15 +2176,54 @@ const setChasers = safe(async d => {
 $('#btnChMinus').onclick = () => setChasers(-1);
 $('#btnChPlus').onclick = () => setChasers(1);
 $('#l-r').oninput = () => { $('#l-rv').textContent = $('#l-r').value + 'm'; };
+// 구역 모양: 원 ↔ 꼭짓점 (꼭짓점은 지도를 탭한 순서대로, 3~12개, 선이 꼬이면 완료 못 함)
+function renderPolyBox() {
+  const isHost = S.room && S.room.hostId === S.pid, ed = S.polyEdit;
+  $('#l-polyBox').style.display = ed ? '' : 'none';
+  if (ed) {
+    const chk = Logic.polyCheck(ed);
+    $('#btnPolyDone').disabled = !chk.ok; $('#btnPolyUndo').disabled = $('#btnPolyClear').disabled = !ed.length;
+    $('#l-rv').textContent = `${ed.length}개` + (chk.r ? ` · 반경 약 ${chk.r}m` : '');
+    $('#l-areaHint').textContent = chk.ok ? '✔ 완료를 누르면 이 모양으로 정해져요' : `둘레를 따라 순서대로 지도를 탭하세요 (${ed.length}/${Logic.POLY_MAX}) · ${chk.why}`;
+  } else $('#l-areaHint').textContent = !isHost ? '추격자 수와 구역은 방장이 정해요'
+    : S.room && S.room.settings && S.room.settings.area && S.room.settings.area.poly ? '🔷 꼭짓점 찍기를 누르면 다시 찍을 수 있어요' : '지도를 탭하면 구역 중심이 옮겨져요 (처음엔 내 위치)';
+}
+$('#l-shape').onclick = safe(async e => {
+  const b = e.target.closest('[data-shape]'); if (!b || !S.room || S.room.hostId !== S.pid) return;
+  const a = S.room.settings && S.room.settings.area;
+  if (b.dataset.shape === 'poly') { S.polyEdit = a && a.poly ? a.poly.map(([lat, lng]) => ({ lat, lng })) : []; S.jailPick = false; }
+  else {
+    S.polyEdit = null;
+    if (a && a.poly) { // 꼭짓점 구역 → 넓이가 같은 원
+      const r = Math.min(1000, Math.max(100, Math.round(a.r / 50) * 50));
+      await set(roomRef('settings/area'), { lat: a.lat, lng: a.lng, r });
+      toast(`⭕ 반경 ${r}m 원으로 바꿨어요`);
+    }
+  }
+  renderLobby(S.room); drawMaps();
+});
+$('#btnPolyUndo').onclick = () => { if (S.polyEdit) { S.polyEdit.pop(); renderPolyBox(); drawMaps(); } };
+$('#btnPolyClear').onclick = () => { if (S.polyEdit) { S.polyEdit = []; renderPolyBox(); drawMaps(); } };
+$('#btnPolyCancel').onclick = () => { S.polyEdit = null; renderLobby(S.room); drawMaps(); };
+$('#btnPolyDone').onclick = safe(async () => {
+  const pts = S.polyEdit; if (!pts) return;
+  const chk = Logic.polyCheck(pts);
+  if (!chk.ok) return toast(chk.why, true);
+  await set(roomRef('settings/area'), { lat: chk.lat, lng: chk.lng, r: chk.r, poly: pts.map(p => [p.lat, p.lng]) });
+  S.polyEdit = null; toast(`🔷 꼭짓점 ${pts.length}개 구역으로 정했어요 (넓이로 치면 반경 ${chk.r}m)`);
+  renderLobby(S.room); drawMaps();
+});
 $('#l-r').onchange = safe(async () => {
   const a = S.room && S.room.settings && S.room.settings.area;
   if (!a) return toast('먼저 구역 중심을 정하세요');
+  if (a.poly) return;
   await update(roomRef('settings/area'), { r: +$('#l-r').value });
   $('#l-r').blur();
 });
 $('#btnStart').onclick = safe(async () => {
   const room = S.room, ids = Object.keys(room.players), n = ids.length;
   if (n < 2) return toast('2명 이상이어야 해요');
+  if (S.polyEdit) return toast('꼭짓점을 다 찍었으면 ✔ 완료, 아니면 취소를 먼저 눌러 주세요', true);
   const roles = Logic.assignRoles(ids, (room.settings && room.settings.chasers) || 1);
   const game = mergedSettings(room).out, mafia = modeOf(room) === 'mafia'; // 모든 폰이 같은 설정으로 시작
   const jobs = mafia ? Logic.assignJobs(roles, game.MF_POLICE || 0, game.MF_DOCTOR || 0) : {};
@@ -3660,9 +3810,10 @@ function drawSkills(mo) {
   // 자기장: 줄어드는 구역 (모두에게 보임)
   const area = room.settings && room.settings.area, sm = room.storm;
   if (area && sm && t >= sm.at && t < sm.until) {
-    const r = Logic.stormR(area.r, sm, t), label = `🌀 자기장 ${Math.ceil((sm.until - t) / 1000)}초`;
-    items.push({ key: 'storm' + sm.at, make: () => L.circle([area.lat, area.lng], { radius: r, color: '#ff4d4f', weight: 4, dashArray: '10 8', fillColor: '#ff4d4f', fillOpacity: .05, interactive: false })
-      .bindTooltip(label, { permanent: true, direction: 'top', className: 'chaserTip' }), update: mk => { mk.setRadius(r); mk.setTooltipContent(label); } });
+    const r = Logic.stormR(area.r, sm, t), label = `🌀 자기장 ${Math.ceil((sm.until - t) / 1000)}초`, st = { color: '#ff4d4f', weight: 4, dashArray: '10 8', fillColor: '#ff4d4f', fillOpacity: .05, interactive: false };
+    const ring = area.poly ? Logic.areaRing(area, r / area.r) : null; // 꼭짓점 구역은 같은 모양으로 중심 쪽으로 줄어듦
+    items.push({ key: 'storm' + sm.at, make: () => (ring ? L.polygon(ring, st) : L.circle([area.lat, area.lng], { radius: r, ...st }))
+      .bindTooltip(label, { permanent: true, direction: 'top', className: 'chaserTip' }), update: mk => { if (ring) mk.setLatLngs(ring); else mk.setRadius(r); mk.setTooltipContent(label); } });
   }
   // 우리 팀 CCTV·감시 카메라
   for (const [id, c] of Object.entries(room.cams || {})) {
@@ -3837,17 +3988,18 @@ function tick() {
   // 2) 구역 밖 / 탈것
   const area = room.settings && room.settings.area;
   // 자기장: 도망자에게는 줄어든 반경이 구역
-  const areaR = area ? (me.role === 'runner' ? Logic.stormR(area.r, room.storm, t) : area.r) : 0, areaD = area ? Logic.dist(S.fix, area) : 0;
+  const areaK = area && me.role === 'runner' ? Logic.stormR(area.r, room.storm, t) / area.r : 1;
+  const inFull = !area || !S.fix || Logic.inArea(S.fix, area), inNow = !area || !S.fix || Logic.inArea(S.fix, area, areaK);
   const exitOn = S.augs.exit && (S.augs.exit.until || 0) > t; // 비상구: 구역 밖이어도 괜찮음
-  const outside = gpsOk && !!area && areaD > areaR && !exitOn;
+  const outside = gpsOk && !!area && !inNow && !exitOn;
   const vehicle = S.speed * 3.6 > RULES.VEHICLE_KMH;
   if (outside || vehicle) {
     S.ruleSec += dt;
-    const what = outside ? (areaD > area.r ? '구역 밖' : '🌀 자기장 밖') : '탈것 감지', left = RULES.RULE_WARN_SEC - S.ruleSec;
+    const what = outside ? (!inFull ? '구역 밖' : '🌀 자기장 밖') : '탈것 감지', left = RULES.RULE_WARN_SEC - S.ruleSec;
     if (left > 0) alarm(`${what}! ${Math.ceil(left)}초 안에 돌아오세요`);
     else {
       dmg += RULES.RULE_DMG * dt; alarm(`${what}! 체력 감소 중`);
-      hurt = !outside ? { why: '탈것' } : areaD > area.r ? { why: '구역 밖' } : { why: '자기장 밖', by: room.storm && room.storm.by };
+      hurt = !outside ? { why: '탈것' } : !inFull ? { why: '구역 밖' } : { why: '자기장 밖', by: room.storm && room.storm.by };
     }
   } else if (gpsOk) S.ruleSec = 0;
   // 경찰과 도둑: 갇힌 도둑은 감옥(반경 15m) 안에 — 처음 2분은 가는 시간, 들어간 뒤 나가면 10초 경고 후 체력 감소
