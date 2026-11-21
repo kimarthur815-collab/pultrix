@@ -35,6 +35,29 @@
           }
         }
       }
+    },
+    "replays": {
+      "$rid": {
+        ".read": "$rid.matches(/^[A-Za-z0-9]{12}$/) && data.child('exp').val() > now",
+        ".write": "$rid.matches(/^[A-Za-z0-9]{12}$/) && (newData.exists() ? (!data.exists() || data.child('exp').val() > now) : data.child('exp').val() < now)",
+        "exp": {
+          ".validate": "newData.isNumber() && newData.val() < now + 864000000"
+        },
+        "meta": {
+          ".validate": "newData.hasChild('startAt')"
+        },
+        "trails": {
+          "$pid": {
+            ".validate": "$pid.matches(/^[A-Za-z0-9]{6,20}$/)",
+            "$cid": {
+              ".validate": "newData.isString() && newData.val().length <= 4000"
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     }
   }
 }

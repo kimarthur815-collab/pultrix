@@ -199,6 +199,29 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 .runnerTip{background:var(--runner);color:#fff;border:0;font-weight:700}
 /* 새 능력: 먹물 · 무궁화 · 흔들어 탈출 · 도청 */
 #ink{position:fixed;inset:0;z-index:1040;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 28% 34%,#020305 0 20%,transparent 21%),radial-gradient(circle at 72% 58%,#020305 0 26%,transparent 27%),radial-gradient(circle at 44% 78%,#020305 0 17%,transparent 18%),rgba(4,6,9,.97)}
+/* 리플레이 */
+#ov-replay{position:fixed;inset:0;z-index:2450;background:var(--bg);display:none;flex-direction:column}
+#ov-replay.on{display:flex}
+.rptop{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px}
+.rptop b{font-size:14px;line-height:1.3}
+#rpmap{flex:1;min-height:0}
+.rpbot{padding:8px 12px calc(env(safe-area-inset-bottom) + 10px);background:var(--panel);border-top:1px solid var(--line)}
+.rplegend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;max-height:66px;overflow:auto}
+.rplegend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.rprow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.rprow input{flex:1;min-width:0}
+.rprow button{width:auto;margin:0;padding:9px 12px;font-size:14px;flex:none}
+.rprow #btnRpImg,.rprow #btnRpShare{flex:1}
+.rpspd{display:flex;gap:4px}.rpspd button{padding:9px 9px}.rpspd button.on{background:var(--runner)}
+.rptip{background:#000c;color:#fff;border:0;font-weight:700;font-size:12px;padding:1px 6px;box-shadow:none}.rptip:before{display:none}
+.rpev span{display:block;font-size:20px;line-height:26px;text-align:center;filter:drop-shadow(0 0 2px #000)}
+/* 연결 끊김 · 소리 잠김 · 탈락 배너 (게임 화면 위쪽, 다른 알림에 안 덮임) */
+.ban{position:fixed;left:50%;transform:translateX(-50%);z-index:2600;display:none;max-width:92vw;padding:8px 14px;border-radius:12px;font-weight:700;font-size:15px;text-align:center;word-break:keep-all;pointer-events:none;background:rgba(17,20,24,.95);border:2px solid var(--line)}
+.ban.on{display:block}
+#netBan{top:calc(env(safe-area-inset-top) + 6px);border-color:var(--warn);color:var(--warn);z-index:3100}
+#sndBan{top:calc(var(--hh, 112px) + 100px);font-size:13px;color:var(--dim);pointer-events:auto}
+#deathBan{top:calc(var(--hh, 112px) + 54px);border-color:var(--chaser);font-size:17px}
+#deathBan.on{animation:cdpop .4s ease-out}
 #ink.on{display:flex;animation:inkin .4s ease-out}#ink b{color:#6b7380;font-size:20px;text-align:center}
 @keyframes inkin{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
 #mugung,#shStop{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:1990;width:min(92vw,420px);display:none;text-align:center;pointer-events:none;background:rgba(17,20,24,.95);border:3px solid #ff7ad9;border-radius:18px;padding:16px 14px;box-shadow:0 0 40px rgba(255,122,217,.55)}
@@ -335,6 +358,7 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
   <p id="r-sub" class="dim"></p>
   <div id="r-mvp"></div>
   <ul id="r-list" class="plist"></ul>
+  <button id="btnReplay" class="primary" style="display:none">🎬 리플레이 보기</button>
   <button id="btnAgain" class="danger">🔁 한 판 더</button>
   <p id="r-wait" class="dim small" style="text-align:center;margin:6px 0"></p>
   <button id="btnLeave2" class="primary">처음으로</button>
@@ -354,7 +378,8 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
     <p><b>무엇을</b> 게임하는 동안 내 위치(위도·경도·정확도·고도)와 이동 속도</p>
     <p><b>왜</b> 술래잡기 진행: 잡기 거리 확인, 화살표·미니맵, 구역·증강 지점 판정</p>
     <p><b>누구에게</b> 같은 방 플레이어에게 게임 규칙에 따라 보여요 (예: 추격자 화살표, 도망자 미니맵). 게임 서버(Google Firebase)를 거쳐 전달돼요.</p>
-    <p><b>언제까지</b> 방에서 <b>나가기</b>를 누르면 내 위치를 바로 지워요. 나가기 없이 창만 닫으면 그 방 기록에 남아 있을 수 있어요.</p>
+    <p><b>언제까지</b> 방에서 <b>나가기</b>를 누르면 방에 있는 내 위치를 바로 지워요. 나가기 없이 창만 닫으면 그 방 기록에 남아 있을 수 있어요.</p>
+    <p><b>리플레이</b> 게임하는 동안 모든 사람의 이동 경로(5초 간격)를 저장해서 끝난 뒤 지도로 다시 볼 수 있어요. <b>7일</b> 동안 보관하고, 리플레이 링크를 받은 사람은 누구나 볼 수 있어요 (닉네임·역할·동선).</p>
     <p><b>거부하면</b> 위치가 꼭 필요한 게임이라 방을 만들거나 참가할 수 없어요. 동의는 ⚙ 설정에서 언제든 철회할 수 있어요.</p>
     <label class="chk"><input type="checkbox" id="consentAge"> 만 14세 이상이에요 (14세 미만은 보호자의 동의가 필요해요)</label>
   </div>
@@ -371,6 +396,18 @@ button.augcard.sel{border-color:var(--warn);background:#2a2412}
 <div id="ov-role" class="ov"><p class="dim">당신의 역할은…</p><div class="slot"><div id="reel" class="reel"></div></div><p id="roleMsg" class="big"></p><p id="roleSub" class="dim"></p><button id="btnRoleOk" class="primary">확인</button></div>
 <div id="flash"></div>
 <div id="ink"><b id="inkTxt"></b></div>
+<div id="ov-replay">
+  <div class="rptop"><b id="rpTitle">🎬 리플레이</b><button id="btnRpClose" class="hudbtn">✕</button></div>
+  <div id="rpmap"></div>
+  <div class="rpbot">
+    <div id="rpLegend" class="rplegend"></div>
+    <div class="rprow"><button id="btnRpPlay">▶</button><input id="rpSlider" type="range" min="0" max="1" step="1" value="0"><span id="rpTime" class="small">0:00</span></div>
+    <div class="rprow"><span id="rpSpd" class="rpspd"><button data-spd="1">1×</button><button data-spd="10" class="on">10×</button><button data-spd="30">30×</button></span><button id="btnRpImg">🖼 그림 저장</button><button id="btnRpShare">🔗 공유</button></div>
+  </div>
+</div>
+<div id="netBan" class="ban">📡 연결 끊김 · 다시 연결 중…</div>
+<div id="sndBan" class="ban">🔇 화면을 한 번 눌러 소리 켜기</div>
+<div id="deathBan" class="ban"></div>
 <div id="mugung"></div><div id="shStop"></div><div id="hbFx"></div><div id="bombBar"></div>
 <div id="ov-rps" class="ov"><h2 id="rpsTitle">✊ 가위바위보</h2><p id="rpsLast" class="big"></p><p id="rpsSub" class="dim"></p><div id="rpsBtns" class="rpsbtns"><button data-rps="r">✊<small>바위</small></button><button data-rps="s">✌️<small>가위</small></button><button data-rps="p">✋<small>보</small></button></div></div>
 <div id="ov-shake" class="ov"><h2>📳 폰을 세게 흔드세요!</h2><p class="dim">3번 흔들면 50% 확률로 탈출</p><div id="shakeDots" class="shakedots"></div><p id="shakeLeft" class="big"></p></div>
@@ -1056,7 +1093,7 @@ const Logic = (() => {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, get, set, update, push, remove, onValue, onChildAdded, query, limitToLast, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, get, set, update, push, remove, onValue, onChildAdded, query, limitToLast, runTransaction, serverTimestamp, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const $ = s => document.querySelector(s);
 const ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -1162,9 +1199,11 @@ let actx = null, muted = false;
 try { muted = localStorage.getItem('gtag_mute') === '1'; } catch (e) {}
 function audio() {
   if (!actx) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; actx = new C(); }
-  if (actx.state === 'suspended') actx.resume().catch(() => {});
+  if (actx.state !== 'running' && actx.state !== 'closed') actx.resume().catch(() => {}); // 아이폰은 앱을 내렸다 올리면 'interrupted'
   return actx;
 }
+// 소리를 낼 수 있을 때만 (화면을 눌러 소리가 켜지기 전엔 null). 잠긴 채로 예약하면 처음 누르는 순간에 늦게 울려서
+const audioOn = () => { const a = audio(); return a && a.state === 'running' ? a : null; };
 document.addEventListener('pointerdown', () => audio(), { passive: true }); // 폰은 화면을 한 번 눌러야 소리가 켜짐
 // [주파수, 길이(초), 파형, 볼륨, 시작 지연(초)]
 const SFX = {
@@ -1204,7 +1243,7 @@ const SFX = {
 const MUG_VIB = [...Array(9).fill([100, 60]).flat(), 400]; // 아홉 글자는 짧게(0.1초 울리고 0.06초 쉼), '다'는 0.4초
 function sfx(name) {
   if (muted) return;
-  const a = audio(), seq = SFX[name]; if (!a || !seq) return;
+  const a = audioOn(), seq = SFX[name]; if (!a || !seq) return;
   const t0 = a.currentTime + .01;
   for (const [f, d, type, vol, delay = 0] of seq) {
     const o = a.createOscillator(), g = a.createGain(), st = t0 + delay;
@@ -1216,7 +1255,7 @@ function sfx(name) {
 // 호루라기: 심판 호루라기처럼 '삐— 삐이이—' 두 번, 떨리는 소리로 크게
 function whistleSound() {
   if (muted) return;
-  const a = audio(); if (!a) return;
+  const a = audioOn(); if (!a) return;
   const t0 = a.currentTime + .01;
   for (const [s0, d] of [[0, .3], [.4, 1]]) {
     const st = t0 + s0, g = a.createGain(), trem = a.createGain(), lfo = a.createOscillator(), lfoG = a.createGain();
@@ -1231,7 +1270,7 @@ function whistleSound() {
 }
 // 사이렌 증강: 상대가 울리는 소리라 음소거여도 울림 (아이폰 무음 스위치는 막을 수 없음)
 function sirenSound(sec) {
-  const a = audio(); if (!a) return;
+  const a = audioOn(); if (!a) return;
   const t0 = a.currentTime + .01, o = a.createOscillator(), o2 = a.createOscillator(), g = a.createGain();
   o.type = 'sawtooth'; o2.type = 'square';
   for (let k = 0; k < sec * 2; k++) { o.frequency.setValueAtTime(700, t0 + k / 2); o.frequency.linearRampToValueAtTime(1400, t0 + k / 2 + .45); }
@@ -1290,7 +1329,7 @@ function bgmLoop() {
 setInterval(bgmLoop, 100);
 // ---------- 설정 창 (홈·로비·게임 중 ⚙): 배경음악·효과음 켜고 끄기, 이 폰에 저장 ----------
 // 위치정보 동의 여부 (이 폰에 저장)
-const CONSENT_KEY = 'gtag_consent_v1';
+const CONSENT_KEY = 'gtag_consent_v2'; // v2: 리플레이(동선 7일 보관·공유) 추가 → 한 번 더 동의
 const hasConsent = () => { try { return !!localStorage.getItem(CONSENT_KEY); } catch (e) { return !!S.consentMem; } };
 function renderSet() {
   const sw = (sel, on) => { const b = $(sel); b.textContent = on ? '켜짐' : '꺼짐'; b.classList.toggle('on', on); };
@@ -1697,8 +1736,9 @@ function enterRoom(code, pid, name) {
     if (ar && ar.poly) ar.poly = ar.poly.map(v => (Array.isArray(v) ? v : [v[0], v[1]]));
     onRoom();
   });
-  const since = now() - 5000;
-  S.evUnsub = onChildAdded(query(roomRef('events'), limitToLast(20)), s => { const e = s.val(); if (e && (e.at || 0) >= since) onEvent(e); });
+  // 들어오기 5초 전부터의 알림만. 서버 시각(offset)을 받기 전에 폰 시계로 계산하면 시계가 늦은 폰에서 오래된 알림이 다시 떠서, 알림이 올 때마다 계산
+  const enterReal = Date.now();
+  S.evUnsub = onChildAdded(query(roomRef('events'), limitToLast(20)), s => { const e = s.val(); if (e && (e.at || 0) >= now() - (Date.now() - enterReal) - 5000) onEvent(e); });
 }
 function onRoom() {
   const room = S.room, me = room && room.players && room.players[S.pid];
@@ -1720,14 +1760,14 @@ function onRoom() {
   if (room.status === 'playing') notifyPings(room, me);
   if (room.status === 'playing') {
     if (!me.role) return leaveLocal('이미 시작한 게임이에요');
-    enterGame(); renderGame();
+    enterGame(); renderGame(); checkWin(); // 1초 루프를 기다리지 않고 바로 판정
   }
 }
 function onEvent(e) {
   const P0 = (S.room && S.room.players) || {}, who = id => (P0[id] || {}).name || '?';
   if (e.type === 'mega') return showMega(who(e.by), (P0[e.by] || {}).role, e.text || '');
   if (e.type === 'whistle') {
-    if (e.target === S.pid) { toast('삐익—!! 어디선가 호루라기 소리가 들려요', true); vibrate([400, 100, 400, 100, 600, 100, 400]); whistleSound(); flash('rgba(255,255,255,.6)'); }
+    if (e.target === S.pid && now() - (e.at || 0) <= 3000) { toast('삐익—!! 어디선가 호루라기 소리가 들려요', true); vibrate([400, 100, 400, 100, 600, 100, 400]); whistleSound(); flash('rgba(255,255,255,.6)'); }
     return;
   }
   if (e.type === 'blast') {
@@ -1841,6 +1881,7 @@ function onEvent(e) {
     return;
   }
   if (e.type === 'siren') {
+    if (now() - (e.at || 0) > 3000) return; // 다시 들어왔을 때 지난 사이렌이 늦게 울리지 않게
     if (me0.role === 'runner' && Logic.alive({ ...me0, selfDmg: S.selfDmg, augs: S.augs }, ((S.room && S.room.hits) || {})[S.pid])) {
       sirenSound(Logic.AUGS.siren.v); vibrate([500, 100, 500, 100, 800]); flash('rgba(255,77,79,.95)'); toast(`🚨 ${who(e.by)}의 사이렌! 폰에서 소리가 나요`, true);
     }
@@ -2253,6 +2294,15 @@ $('#btnStart').onclick = safe(async () => {
     for (const k of ['jamUntil', 'wantedUntil', 'mugungUntil', 'inkUntil', 'swap', 'prevFrozenUntil', 'tauntUntil', 'silenceUntil', 'revive', 'disguiseUntil', 'tracked', 'revTrail', 'jailed', 'zombieAt', 'drone', 'hound', 'houndUntil', 'altFakeUntil', 'lagUntil', 'lag', 'out', 'job', 'guard', 'shadowStop', 'mapHideUntil']) u[`players/${id}/${k}`] = null;
     if (jobs[id]) u[`players/${id}/job`] = jobs[id]; // 마피아 모드: 경찰·의사
   }
+  // 리플레이: 이번 판 동선은 방 데이터와 따로 저장. 보안 규칙이 아직 옛날 거라 거절되면 리플레이 없이 진행
+  u.replayId = null; u.replayExp = null;
+  try {
+    const rpId = rid(12, ALNUM), rpExp = u.startAt + (RULES.HIDE_SEC + RULES.GAME_SEC) * 1000 + RP_KEEP_MS;
+    const P = Object.fromEntries(ids.map(id => [id, { name: room.players[id].name || '?', role: roles[id], job: jobs[id] || null }]));
+    await Promise.race([set(rpRef(rpId), { exp: rpExp, meta: { startAt: u.startAt, hideSec: RULES.HIDE_SEC, gameSec: RULES.GAME_SEC, mode: modeOf(room), area: (room.settings && room.settings.area) || null, players: P } }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('replay timeout')), 4000))]);
+    u.replayId = rpId; u.replayExp = rpExp;
+  } catch (e) { console.error(e); }
   await update(roomRef(), u);
 });
 
@@ -2269,8 +2319,10 @@ function enterGame() {
       pingAt: 0, warnWas: false, specOn: false, resultKey: null,
       selfDmg: me.selfDmg || 0, anchor: me.anchor || null,
       waitOut: 0, ruleSec: 0, lastMapIdx: null, lastArrowKey: null, snap: [], dead: {}, warn: [],
-      lastTick: 0, lastWrite: 0, winSent: false, minuteWarned: false, arrowPopKey: null
+      lastTick: 0, lastWrite: 0, winSent: false, minuteWarned: false, arrowPopKey: null,
+      rpBuf: [], rpAt: 0, rpSent: Date.now()
     });
+    if (room.replayId) rpRemember(room.replayId, room.replayExp);
     S.st = me.st ?? stMaxOf(me.role);
     $('#ov-aug').classList.remove('on');
     const hits = room.hits || {};
@@ -3099,7 +3151,9 @@ function afterSettled(pid, cb) {
 const RPS_EMO = { r: '✊', s: '✌️', p: '✋' }, RPS_NAME = { r: '바위', s: '가위', p: '보' };
 function rpsLoop(room) {
   const all = (room && room.rps) || {}, t = now();
-  const entry = Object.entries(all).find(([tid, g]) => g && (tid === S.pid || g.chaser === S.pid) && t - g.catchAt < 60000);
+  const cands = Object.entries(all).filter(([tid, g]) => g && (tid === S.pid || g.chaser === S.pid) && t - g.catchAt < 60000);
+  // 추격자가 1분 안에 두 번 하면 끝난 첫 판이 진행 중인 판을 가려서, 진행 중인 판 → 가장 최근 판 순서
+  const entry = cands.find(([, g]) => !g.final) || cands.sort((a, b) => b[1].catchAt - a[1].catchAt)[0];
   const ov = $('#ov-rps');
   if (!entry) { if (ov.classList.contains('on')) ov.classList.remove('on'); return; }
   const [tid, g] = entry, R = Logic.AUGS.rps, iAmRunner = tid === S.pid, rd = g.round, picks = (g.picks || {})[rd] || {};
@@ -3309,7 +3363,7 @@ function markDead(me, t, inTick) {
     S.stats.deathBy = me.forfeit || !h ? null : h.by;
   }
   if (!me.forfeit) { toast(`체력 0 — 탈락했어요 (${deathLabel(S.stats, S.room.players)}). 관전 모드로 바뀌어요`, true); vibrate([300, 100, 300]); flash('rgba(255,77,79,1)'); sfx('lose'); }
-  if (!inTick) update(meRef(), { stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
+  if (!inTick) update(meRef(), { selfDmg: Math.round(S.selfDmg * 10) / 10, stats: { ...S.stats, dist: Math.round(S.stats.dist || 0), vmax: Math.round((S.stats.vmax || 0) * 10) / 10 } });
 }
 // 러너스 하이: 움직인 거리 500m마다 체력 +10
 function runnersHigh(me, hits, d) {
@@ -3712,8 +3766,14 @@ $('#btnForfeitNo').onclick = () => $('#ov-forfeit').classList.remove('on');
 $('#btnForfeitYes').onclick = safe(async () => {
   $('#ov-forfeit').classList.remove('on');
   S.stats.diedAt = now(); S.stats.deathWhy = '기권'; S.stats.deathBy = null;
-  await update(meRef(), { forfeit: true, stats: S.stats });
+  const w = update(meRef(), { forfeit: true, stats: S.stats });
   toast('기권했어요. 관전 모드로 바뀌어요', true); sfx('lose');
+  renderGame(); checkWin();
+  // 연결이 끊긴 채면 내 화면에서만 기권이 되고 다른 폰엔 안 감 → 알려 주고, 연결되면 자동으로 전달됨
+  let acked = false, slow = false;
+  const tm = setTimeout(() => { if (!acked) { slow = true; toast('📡 연결이 불안정해서 기권을 아직 못 보냈어요. 다시 연결되면 바로 전달돼요', true); reconnect(); } }, 3000);
+  await w; acked = true; clearTimeout(tm);
+  if (slow) toast('✅ 기권이 전달됐어요', true);
 });
 // 지도 표시물을 키별로 하나씩 유지하며 갱신 (지웠다 다시 그리면 라벨이 겹쳐 남는 경우가 있어서)
 function syncLayer(mo, name, items) {
@@ -3935,6 +3995,7 @@ function tick() {
   if (me.out && !S.hurtOut) { S.hurtOut = true; hurtBy({ mafia: '마피아에게 잡힘', vote: '투표로 추방', shot: '경찰 저격', misfire: '시민을 쏨' }[me.out.why] || '탈락', me.out.by); }
   if (!meAlive && S.aliveWas) markDead(me, t);
   S.aliveWas = meAlive;
+  rpTick(room, t, meAlive); // 리플레이용 내 동선
   recordHist(room, t, me.role); // 발자국 추적용 상대 위치 기록 (거울로 되돌려진 추적 포함)
   if (meAlive) { // 상황 팁 (처음 한 번)
     tipOnce('ping', '지도를 꾹 누르면 같은 팀에게 핑(👀 · 📍 모여 · ⚠️ 위험)을 보낼 수 있어요');
@@ -4257,6 +4318,43 @@ function overlayLoop() {
 }
 setInterval(overlayLoop, 200);
 
+// ---------- 연결 상태 · 소리 잠김 · 탈락 배너 ----------
+// 폰의 서버 연결이 조용히 끊기면 내 화면에서만 기권·위치가 바뀌고 다른 폰엔 안 감 → 끊기면 표시하고 다시 연결
+S.conn = false; S.connLostAt = Date.now(); S.reconnAt = 0;
+if (db) onValue(ref(db, '.info/connected'), s => {
+  if (s.val()) { S.conn = true; S.connLostAt = 0; }
+  else { S.conn = false; if (!S.connLostAt) S.connLostAt = Date.now(); }
+});
+function reconnect() {
+  if (!db || Date.now() - S.reconnAt < 3000) return;
+  S.reconnAt = Date.now();
+  try { goOffline(db); setTimeout(() => goOnline(db), 300); } catch (e) { console.error(e); }
+}
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (S.code && hiddenAt && Date.now() - hiddenAt > 5000) reconnect(); // 아이폰은 화면을 껐다 켜면 연결이 죽은 채로 남을 때가 있어서
+  hiddenAt = 0;
+});
+const deathBanQ = []; let deathBanUntil = 0;
+function deathBan(text) { deathBanQ.push(text); deathBanLoop(); }
+function deathBanLoop() {
+  const b = $('#deathBan');
+  if (S.screen !== 's-game') { deathBanQ.length = 0; deathBanUntil = 0; return b.classList.remove('on'); }
+  if (Date.now() < deathBanUntil) return;
+  if (!deathBanQ.length) return b.classList.remove('on');
+  b.textContent = deathBanQ.shift(); b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
+  deathBanUntil = Date.now() + 3000; vibrate(60);
+}
+function bannerLoop() {
+  const lost = !S.conn && S.code && S.connLostAt ? Date.now() - S.connLostAt : 0;
+  $('#netBan').classList.toggle('on', lost > 2000 && (S.screen === 's-game' || S.screen === 's-lobby'));
+  if (lost > 5000 && Date.now() - S.reconnAt > 10000) reconnect();
+  $('#sndBan').classList.toggle('on', S.screen === 's-game' && !muted && !(actx && actx.state === 'running'));
+  deathBanLoop();
+}
+setInterval(bannerLoop, 500);
+
 function checkWin() {
   const room = S.room;
   if (!room || room.result || room.status !== 'playing' || S.winSent) return;
@@ -4266,7 +4364,7 @@ function checkWin() {
   if (!w) return;
   S.winSent = true;
   runTransaction(roomRef('result'), cur => (cur ? undefined : { ...w, at: now() }))
-    .then(() => update(roomRef(), { status: 'ended' }))
+    .then(r => { if (r.committed && room.replayId) rpFinish(room, w); return update(roomRef(), { status: 'ended' }); })
     .catch(e => { S.winSent = false; console.error(e); });
 }
 
@@ -4359,7 +4457,8 @@ function renderGame() {
   S.deathQ = (S.deathQ || []).filter(q => {
     const p = room.players[q.id] || {}, lb = deathLabel(p.stats, room.players);
     if (!lb && Date.now() - q.at < 3000) return true;
-    if (modeOf(room) !== 'mafia') toast(`${p.name} 탈락!${lb ? ` (${lb})` : ''}`, true); return false;
+    // 다른 알림에 덮이지 않게 위쪽 배너로 (마피아 모드는 정체가 드러나지 않게 이름만)
+    deathBan(modeOf(room) === 'mafia' ? `💀 ${p.name} 탈락` : p.forfeit ? `🏳️ ${p.name} 기권` : `💀 ${p.name} 탈락${lb ? ' · ' + lb : ''}`); return false;
   });
   drawMaps();
 }
@@ -4510,6 +4609,8 @@ function renderResult() {
   $('#arrowBox').className = 'arrowbox';
   show('s-result');
   const room = S.room, r = room.result || {}, me = room.players[S.pid], hits = room.hits || {};
+  if (room.replayId) rpFlush(room.replayId); // 아직 안 올린 마지막 동선
+  $('#btnReplay').style.display = room.replayId ? '' : 'none';
   $('#r-title').textContent = r.winner ? `${roleName(r.winner, room)} 승리!` : '게임 종료';
   $('#r-sub').textContent = [r.reason, me.role ? (me.role === r.winner ? '이겼어요 🎉' : '졌어요') : ''].filter(Boolean).join(' · ');
   const endAt = r.at || now(), P = room.players, M = Logic.mvp(P, room.startAt, endAt);
@@ -4662,6 +4763,282 @@ $('#ov-tut').addEventListener('touchend', e => {
   if (dx < -50) $('#tutNext').click(); else if (dx > 50) $('#tutPrev').click();
 });
 
+// ---------- 리플레이: 판마다 모든 사람의 동선을 replays/{id}에 따로 저장 → 결과 화면에서 지도로 다시 보기 · 링크 공유 · 그림 저장 ----------
+// 방 데이터에 넣으면 폰마다 매번 받는 양이 계속 커져서 따로 둠. 7일 뒤엔 보안 규칙으로 못 열고, 그 판에 있던 폰이 다음에 앱을 열 때 지움
+const RP_EVERY_MS = 5000, RP_UPLOAD_MS = 30000, RP_KEEP_MS = 7 * 86400000, RP_GAP_SEC = 30;
+const RP_COL = { chaser: ['#ff4d4f', '#ff8a3d', '#f472b6', '#fb7185', '#e879f9'], runner: ['#3ba3ff', '#3ccf7a', '#22d3ee', '#a3e635', '#facc15', '#a78bfa', '#2dd4bf', '#60a5fa', '#fde047', '#c084fc'] };
+const rpRef = (id, p) => ref(db, `replays/${id}` + (p ? '/' + p : ''));
+// 게임 중: 5초마다 내 위치 한 점, 30초마다 모아서 올림 (탈락하면 기록 끝)
+function rpTick(room, t, alive) {
+  const id = room.replayId; if (!id || !db || t < room.startAt) return;
+  const real = Date.now();
+  if (alive && S.fix && real - (S.rpAt || 0) >= RP_EVERY_MS) {
+    S.rpAt = real;
+    S.rpBuf.push([Math.round((t - room.startAt) / 1000), S.fix.lat.toFixed(5), S.fix.lng.toFixed(5)].join(','));
+  }
+  if (S.rpBuf.length && (real - (S.rpSent || 0) >= RP_UPLOAD_MS || !alive)) rpFlush(id);
+}
+function rpFlush(id) {
+  if (!id || !db || !S.rpBuf || !S.rpBuf.length) return;
+  const str = S.rpBuf.join(';'); S.rpBuf = []; S.rpSent = Date.now();
+  push(rpRef(id, `trails/${S.pid}`), str).catch(e => console.error(e));
+}
+// 게임이 끝나면 결과를 기록한 폰이 한 번: 끝난 시각·승패·탈락 정보·잡기 같은 순간들
+function rpFinish(room, w) {
+  const P = {};
+  for (const [id, p] of Object.entries(room.players || {})) {
+    if (!p.role) continue;
+    const st = (id === S.pid ? S.stats : p.stats) || {};
+    P[id] = { name: p.name || '?', role: p.role, job: p.job || null, zombieAt: p.zombieAt || null, diedAt: st.diedAt || null, why: st.deathWhy || null, by: st.deathBy || null, forfeit: p.forfeit ? 1 : null };
+  }
+  const KEEP = ['catch', 'infect', 'jail', 'rescue', 'escape', 'rpsWin', 'revive', 'mfOut', 'bombBoom'];
+  const ev = Object.values(room.events || {}).filter(e => e && KEEP.includes(e.type) && e.at)
+    .map(e => ({ type: e.type, by: e.by || null, target: e.target || null, chaser: e.chaser || null, at: e.at })).slice(-300);
+  update(rpRef(room.replayId, 'meta'), { endAt: now(), winner: w.winner || null, reason: w.reason || null, players: P, events: ev }).catch(e => console.error(e));
+}
+function rpRemember(id, exp) {
+  try {
+    const L = JSON.parse(localStorage.getItem('gtag_rp') || '[]').filter(x => x.id !== id);
+    L.push({ id, exp: exp || Date.now() + RP_KEEP_MS }); localStorage.setItem('gtag_rp', JSON.stringify(L.slice(-50)));
+  } catch (e) {}
+}
+function rpCleanup() { // 보관 기간이 지난 리플레이 지우기 (1시간 여유: 폰 시계가 서버보다 빠를 수 있어서)
+  if (!db) return;
+  try {
+    const L = JSON.parse(localStorage.getItem('gtag_rp') || '[]'), keep = [];
+    for (const x of L) { if (x.exp + 3600000 < Date.now()) remove(rpRef(x.id)).catch(() => {}); else keep.push(x); }
+    localStorage.setItem('gtag_rp', JSON.stringify(keep));
+  } catch (e) {}
+}
+// ----- 보기 -----
+const RP = { id: null, d: null, mo: null, g: null, T: 0, playing: false, spd: 10, last: 0, unsub: null, fitted: false, L: {} };
+function rpParse(v) {
+  const meta = v.meta || {}, MP = meta.players || {}, FP = {}, tr = {};
+  for (const [pid, chunks] of Object.entries(v.trails || {})) {
+    const pts = [];
+    for (const k of Object.keys(chunks || {}).sort()) for (const s of String(chunks[k]).split(';')) {
+      const [t, lat, lng] = s.split(',').map(Number);
+      if (isFinite(t) && isFinite(lat) && isFinite(lng)) pts.push({ t, lat, lng });
+    }
+    pts.sort((a, b) => a.t - b.t); tr[pid] = pts;
+  }
+  const ids = [...new Set([...Object.keys(MP), ...Object.keys(tr)])];
+  const n = { chaser: 0, runner: 0 }, P = {};
+  for (const id of ids.sort((a, b) => ((MP[a] || {}).role === 'chaser' ? 0 : 1) - ((MP[b] || {}).role === 'chaser' ? 0 : 1) || String((MP[a] || {}).name).localeCompare(String((MP[b] || {}).name)))) {
+    const p = MP[id] || { name: '?', role: 'runner' }, role = p.role === 'chaser' ? 'chaser' : 'runner';
+    P[id] = { ...p, col: RP_COL[role][n[role]++ % RP_COL[role].length], pts: tr[id] || [] };
+  }
+  const area = meta.area || null;
+  if (area && area.poly && !Array.isArray(area.poly)) area.poly = Object.keys(area.poly).sort((x, y) => x - y).map(k => area.poly[k]);
+  if (area && area.poly) area.poly = area.poly.map(q => (Array.isArray(q) ? q : [q[0], q[1]]));
+  const lastT = Math.max(0, ...Object.values(P).map(p => (p.pts.length ? p.pts[p.pts.length - 1].t : 0)));
+  const dur = Math.max(lastT, meta.endAt && meta.startAt ? Math.round((meta.endAt - meta.startAt) / 1000) : 0, 1);
+  const sec = at => Math.round((at - (meta.startAt || 0)) / 1000);
+  const ev = Object.values(meta.events || {}).map(e => ({ ...e, t: sec(e.at) }));
+  for (const [id, p] of Object.entries(P)) {
+    if (p.diedAt) ev.push({ type: p.forfeit ? 'forfeit' : 'dead', target: id, by: p.by, t: sec(p.diedAt) });
+  }
+  ev.sort((a, b) => a.t - b.t);
+  return { meta, P, dur, area, ev, hide: meta.hideSec || 0 };
+}
+// T초의 위치 (점 사이는 보간, 30초 넘게 비면 마지막 위치에 멈춤). 처음 기록 전이면 null
+function rpPos(pts, T) {
+  if (!pts.length || T < pts[0].t) return null;
+  let lo = 0, hi = pts.length - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (pts[m].t <= T) lo = m; else hi = m - 1; }
+  const a = pts[lo], b = pts[lo + 1];
+  if (!b || b.t - a.t > RP_GAP_SEC) return { lat: a.lat, lng: a.lng, stale: T - a.t > RP_GAP_SEC };
+  const k = (T - a.t) / (b.t - a.t);
+  return { lat: a.lat + (b.lat - a.lat) * k, lng: a.lng + (b.lng - a.lng) * k };
+}
+// 30초 넘게 기록이 비면 선을 끊음 (폰이 꺼져 있던 동안)
+function rpSegs(pts, T = Infinity) {
+  const out = []; let cur = [];
+  for (let i = 0; i < pts.length && pts[i].t <= T; i++) {
+    if (i && pts[i].t - pts[i - 1].t > RP_GAP_SEC) { if (cur.length) out.push(cur); cur = []; }
+    cur.push([pts[i].lat, pts[i].lng]);
+  }
+  const p = rpPos(pts, T); if (p && !p.stale && cur.length && T < Infinity) cur.push([p.lat, p.lng]);
+  if (cur.length) out.push(cur);
+  return out;
+}
+const RP_EV = { catch: ['✖', '잡힘'], infect: ['🧟', '감염'], jail: ['🔒', '체포'], rescue: ['🔓', '탈옥'], escape: ['📳', '탈출'], rpsWin: ['✌️', '가위바위보 승리'], revive: ['🩸', '부활'], mfOut: ['💀', '탈락'], bombBoom: ['💥', '시한폭탄'], dead: ['💀', '탈락'], forfeit: ['🏳️', '기권'] };
+const rpWho = e => (e.type === 'escape' || e.type === 'rpsWin' ? e.by : e.target || e.by);
+function openReplay(id) {
+  if (!db || !id) return toast('리플레이를 열 수 없어요');
+  closeReplay(true);
+  Object.assign(RP, { id, d: null, T: 0, playing: false, spd: 10, fitted: false, L: {} });
+  $('#ov-replay').classList.add('on');
+  $('#rpTitle').textContent = '🎬 리플레이 불러오는 중…'; $('#rpLegend').innerHTML = ''; rpSpdBtns();
+  if (!RP.mo) { RP.mo = getMap('rpmap'); RP.g = L.layerGroup().addTo(RP.mo.map); }
+  setTimeout(() => RP.mo.map.invalidateSize(), 60);
+  let got = false;
+  const fail = () => { if (!got) $('#rpTitle').textContent = '🎬 보관 기간(7일)이 지났거나 없는 리플레이예요'; };
+  RP.unsub = onValue(rpRef(id), s => { const v = s.val(); if (!v || !v.meta) return fail(); got = true; rpLoad(v); }, fail);
+}
+function closeReplay(keep) {
+  if (RP.unsub) { RP.unsub(); RP.unsub = null; }
+  RP.playing = false; if (RP.g) RP.g.clearLayers();
+  if (!keep) {
+    $('#ov-replay').classList.remove('on');
+    if (new URLSearchParams(location.search).has('replay')) history.replaceState(null, '', location.pathname); // 공유 링크로 들어왔으면 주소 정리
+  }
+}
+function rpLoad(v) {
+  const d = RP.d = rpParse(v), m = d.meta, map = RP.mo.map;
+  const date = m.startAt ? new Date(m.startAt) : null, ds = date ? `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}` : '';
+  const win = m.winner ? `${roleName(m.winner, { settings: { mode: m.mode } })} 승리` : '끝나지 않은 판';
+  $('#rpTitle').textContent = `🎬 ${Logic.MODES[m.mode] || '기본'} · ${ds} · ${win}`;
+  RP.title = $('#rpTitle').textContent;
+  $('#rpSlider').max = d.dur;
+  RP.g.clearLayers(); RP.L = {};
+  if (d.area && d.area.poly) L.polygon(d.area.poly, { color: '#8b95a3', weight: 2, fill: false, dashArray: '6 6' }).addTo(RP.g);
+  else if (d.area && d.area.lat != null) L.circle([d.area.lat, d.area.lng], { radius: d.area.r || 300, color: '#8b95a3', weight: 2, fill: false, dashArray: '6 6' }).addTo(RP.g);
+  const all = [];
+  for (const [id, p] of Object.entries(d.P)) {
+    const faint = L.polyline(rpSegs(p.pts), { color: p.col, weight: 3, opacity: .22 }).addTo(RP.g);
+    const live = L.polyline([], { color: p.col, weight: 5, opacity: .95 }).addTo(RP.g);
+    const dot = L.circleMarker([0, 0], { radius: 8, color: '#fff', weight: 2, fillColor: p.col, fillOpacity: 1 }).bindTooltip(esc(p.name), { permanent: true, direction: 'top', offset: [0, -8], className: 'rptip' });
+    RP.L[id] = { faint, live, dot, on: false };
+    p.pts.forEach(q => all.push([q.lat, q.lng]));
+  }
+  RP.evL = d.ev.map(e => {
+    const p = d.P[rpWho(e)], pos = p && rpPos(p.pts, e.t), [ic, nm] = RP_EV[e.type] || ['•', e.type];
+    if (!pos) return null;
+    const mk = L.marker([pos.lat, pos.lng], { icon: L.divIcon({ className: 'rpev', html: `<span>${ic}</span>`, iconSize: [26, 26] }) }).bindTooltip(`${nm} · ${esc(p.name)}`);
+    return { t: e.t, mk, on: false };
+  }).filter(Boolean);
+  if (!RP.fitted) {
+    if (d.area && d.area.poly) all.push(...d.area.poly);
+    else if (d.area && d.area.lat != null) { const r = d.area.r || 300, dl = r / 111195, dg = r / (111195 * Math.cos(d.area.lat * Math.PI / 180)); all.push([d.area.lat - dl, d.area.lng - dg], [d.area.lat + dl, d.area.lng + dg]); }
+    if (all.length) { map.fitBounds(L.latLngBounds(all).pad(.12)); RP.fitted = true; }
+    else if (d.area && d.area.lat != null) map.setView([d.area.lat, d.area.lng], 16);
+  }
+  $('#rpLegend').innerHTML = Object.values(d.P).map(p => `<span><i style="background:${p.col}"></i>${esc(p.name)} <small class="${p.role}-t">${roleName(p.role, { settings: { mode: m.mode } }, p.job)}</small>${p.diedAt ? (p.forfeit ? ' 🏳️' : ' 💀') : ''}${p.pts.length ? '' : ' <small class="dim">기록 없음</small>'}</span>`).join('');
+  rpDraw();
+}
+function rpDraw() {
+  const d = RP.d; if (!d) return;
+  const T = RP.T;
+  for (const [id, p] of Object.entries(d.P)) {
+    const o = RP.L[id]; if (!o) continue;
+    o.live.setLatLngs(rpSegs(p.pts, T));
+    const pos = rpPos(p.pts, T), dead = p.diedAt && d.meta.startAt && T >= (p.diedAt - d.meta.startAt) / 1000;
+    const zomb = p.zombieAt && d.meta.startAt && T >= (p.zombieAt - d.meta.startAt) / 1000;
+    if (pos) {
+      o.dot.setLatLng([pos.lat, pos.lng]);
+      o.dot.setStyle({ fillOpacity: dead || pos.stale ? .35 : 1, opacity: dead || pos.stale ? .5 : 1, fillColor: zomb ? '#84cc16' : p.col });
+      o.dot.setTooltipContent(`${dead ? (p.forfeit ? '🏳️ ' : '💀 ') : zomb ? '🧟 ' : ''}${esc(p.name)}`);
+      if (!o.on) { o.dot.addTo(RP.g); o.on = true; }
+    } else if (o.on) { RP.g.removeLayer(o.dot); o.on = false; }
+  }
+  for (const e of RP.evL || []) {
+    const show = e.t <= T;
+    if (show && !e.on) { e.mk.addTo(RP.g); e.on = true; } else if (!show && e.on) { RP.g.removeLayer(e.mk); e.on = false; }
+  }
+  $('#rpSlider').value = T;
+  const f = s => fmt(s * 1000);
+  $('#rpTime').textContent = d.hide && T < d.hide ? `숨는 시간 ${f(T)}` : `${d.hide ? '추격 ' : ''}${f(T - d.hide)} / ${f(d.dur - d.hide)}`;
+  $('#btnRpPlay').textContent = RP.playing ? '⏸' : '▶';
+}
+function rpLoop(ts) {
+  if (!RP.playing) return;
+  const dt = RP.last ? Math.min((ts - RP.last) / 1000, .25) : 0; RP.last = ts;
+  RP.T = Math.min(RP.d.dur, RP.T + dt * RP.spd);
+  if (RP.T >= RP.d.dur) RP.playing = false;
+  rpDraw();
+  if (RP.playing) requestAnimationFrame(rpLoop);
+}
+function rpSpdBtns() { document.querySelectorAll('#rpSpd [data-spd]').forEach(b => b.classList.toggle('on', +b.dataset.spd === RP.spd)); }
+$('#btnRpPlay').onclick = () => {
+  if (!RP.d) return;
+  if (!RP.playing && RP.T >= RP.d.dur) RP.T = 0;
+  RP.playing = !RP.playing; RP.last = 0; rpDraw();
+  if (RP.playing) requestAnimationFrame(rpLoop);
+};
+$('#rpSlider').oninput = e => { RP.T = +e.target.value; rpDraw(); };
+$('#rpSpd').onclick = e => { const b = e.target.closest('[data-spd]'); if (!b) return; RP.spd = +b.dataset.spd; rpSpdBtns(); };
+$('#btnRpClose').onclick = () => closeReplay();
+$('#btnReplay').onclick = () => { const room = S.room; if (!room || !room.replayId) return; rpFlush(room.replayId); openReplay(room.replayId); };
+$('#btnRpShare').onclick = async () => {
+  if (!RP.id) return;
+  const url = location.origin + location.pathname + '?replay=' + RP.id;
+  try { if (navigator.share) { await navigator.share({ title: 'PULTRIX 리플레이', text: RP.title || '', url }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); toast('🔗 리플레이 링크를 복사했어요 (7일 동안 볼 수 있어요)', true); } catch (e) { toast(url, true); }
+};
+// 동선 그림: 지도 그림(OpenStreetMap) 위에 모든 선 · 이름표. 지도 그림을 못 쓰면 어두운 배경에 선만
+const merc = (lat, lng, z) => { const s = 256 * 2 ** z, r = lat * Math.PI / 180; return { x: (lng + 180) / 360 * s, y: (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * s }; };
+async function rpRender(tiles) {
+  const d = RP.d, W = 1080, MH = 1080, TOP = 130, rows = Math.ceil(Object.keys(d.P).length / 2), H = TOP + MH + 40 + rows * 46 + 40;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#111418'; c.fillRect(0, 0, W, H);
+  const pts = []; Object.values(d.P).forEach(p => p.pts.forEach(q => pts.push(q)));
+  if (d.area && d.area.lat != null) { pts.push({ lat: d.area.lat, lng: d.area.lng }); (d.area.poly || []).forEach(q => pts.push({ lat: q[0], lng: q[1] })); }
+  if (!pts.length) throw new Error('no points');
+  let z = 18, b;
+  const box = zz => { const ps = pts.map(q => merc(q.lat, q.lng, zz)); let x0 = Math.min(...ps.map(q => q.x)), x1 = Math.max(...ps.map(q => q.x)), y0 = Math.min(...ps.map(q => q.y)), y1 = Math.max(...ps.map(q => q.y));
+    if (d.area && d.area.lat != null && !d.area.poly) { const cc = merc(d.area.lat, d.area.lng, zz), rp = (d.area.r || 300) / (156543.03392 * Math.cos(d.area.lat * Math.PI / 180) / 2 ** zz); x0 = Math.min(x0, cc.x - rp); x1 = Math.max(x1, cc.x + rp); y0 = Math.min(y0, cc.y - rp); y1 = Math.max(y1, cc.y + rp); }
+    return { x0, x1, y0, y1 }; };
+  for (; z > 2; z--) { b = box(z); if ((b.x1 - b.x0) * 1.15 <= W && (b.y1 - b.y0) * 1.15 <= MH) break; }
+  const ox = (b.x0 + b.x1) / 2 - W / 2, oy = (b.y0 + b.y1) / 2 - MH / 2;
+  const P2 = (lat, lng) => { const q = merc(lat, lng, z); return [q.x - ox, q.y - oy + TOP]; };
+  c.save(); c.beginPath(); c.rect(0, TOP, W, MH); c.clip();
+  if (tiles) {
+    const jobs = [];
+    for (let tx = Math.floor(ox / 256); tx <= Math.floor((ox + W) / 256); tx++) for (let ty = Math.floor(oy / 256); ty <= Math.floor((oy + MH) / 256); ty++) {
+      jobs.push(new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res({ im, tx, ty }); im.onerror = rej; im.src = `https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`; }));
+    }
+    const ims = await Promise.race([Promise.all(jobs), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000))]);
+    for (const { im, tx, ty } of ims) c.drawImage(im, tx * 256 - ox, ty * 256 - oy + TOP);
+    c.fillStyle = 'rgba(10,12,16,.45)'; c.fillRect(0, TOP, W, MH);
+  } else {
+    c.strokeStyle = '#1b2027'; c.lineWidth = 1;
+    for (let x = 0; x < W; x += 60) { c.beginPath(); c.moveTo(x, TOP); c.lineTo(x, TOP + MH); c.stroke(); }
+    for (let y = TOP; y < TOP + MH; y += 60) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+  }
+  c.setLineDash([12, 10]); c.strokeStyle = '#8b95a3'; c.lineWidth = 3;
+  if (d.area && d.area.poly) { c.beginPath(); d.area.poly.forEach((q, i) => { const [x, y] = P2(q[0], q[1]); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.closePath(); c.stroke(); }
+  else if (d.area && d.area.lat != null) { const [x, y] = P2(d.area.lat, d.area.lng), rp = (d.area.r || 300) / (156543.03392 * Math.cos(d.area.lat * Math.PI / 180) / 2 ** z); c.beginPath(); c.arc(x, y, rp, 0, Math.PI * 2); c.stroke(); }
+  c.setLineDash([]); c.lineJoin = c.lineCap = 'round';
+  for (const p of Object.values(d.P)) {
+    c.strokeStyle = p.col; c.lineWidth = 6; c.globalAlpha = .9;
+    for (const sg of rpSegs(p.pts)) { c.beginPath(); sg.forEach((q, i) => { const [x, y] = P2(q[0], q[1]); i ? c.lineTo(x, y) : c.moveTo(x, y); }); c.stroke(); }
+    c.globalAlpha = 1;
+    if (!p.pts.length) continue;
+    const [sx, sy] = P2(p.pts[0].lat, p.pts[0].lng), e = p.pts[p.pts.length - 1], [ex, ey] = P2(e.lat, e.lng);
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(sx, sy, 7, 0, Math.PI * 2); c.fill();
+    c.fillStyle = p.col; c.strokeStyle = '#fff'; c.lineWidth = 3; c.beginPath(); c.arc(ex, ey, 11, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.font = 'bold 26px sans-serif'; c.textAlign = 'center'; c.lineWidth = 6; c.strokeStyle = '#000c';
+    const lb = (p.diedAt ? (p.forfeit ? '🏳️' : '💀') : '') + p.name; c.strokeText(lb, ex, ey - 20); c.fillStyle = '#fff'; c.fillText(lb, ex, ey - 20);
+  }
+  c.restore();
+  c.textAlign = 'left'; c.fillStyle = '#e9edf2'; c.font = 'bold 40px sans-serif'; c.fillText('PULTRIX', 40, 62);
+  c.font = '28px sans-serif'; c.fillStyle = '#8b95a3'; c.fillText((RP.title || '').replace('🎬 ', ''), 40, 106);
+  c.font = '18px sans-serif'; c.textAlign = 'right'; c.fillText(tiles ? '지도 © OpenStreetMap' : '', W - 20, TOP + MH - 14);
+  c.textAlign = 'left'; c.font = '26px sans-serif';
+  Object.values(d.P).forEach((p, i) => {
+    const x = 40 + (i % 2) * 520, y = TOP + MH + 60 + Math.floor(i / 2) * 46;
+    c.fillStyle = p.col; c.beginPath(); c.arc(x + 10, y - 9, 10, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#e9edf2'; c.fillText(`${p.name} · ${roleName(p.role, { settings: { mode: d.meta.mode } }, p.job)}${p.diedAt ? (p.forfeit ? ' · 기권' : ' · 탈락') : ''}`, x + 30, y);
+  });
+  return new Promise((res, rej) => { try { cv.toBlob(bl => (bl ? res(bl) : rej(new Error('blob'))), 'image/png'); } catch (e) { rej(e); } }); // 지도 그림을 못 쓰게 막혀 있으면 여기서 실패
+}
+$('#btnRpImg').onclick = safe(async () => {
+  if (!RP.d) return;
+  toast('🖼 동선 그림을 만드는 중…');
+  let blob = await rpRender(true).catch(() => null);
+  if (!blob) blob = await rpRender(false);
+  const name = `pultrix-replay-${RP.id}.png`;
+  try {
+    const file = new File([blob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'PULTRIX 동선' }); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  toast('🖼 동선 그림을 저장했어요');
+});
+
 /* ---------- 시작 ---------- */
 (function boot() {
   if (!cfgOk) return show('s-setup');
@@ -4673,6 +5050,9 @@ $('#ov-tut').addEventListener('touchend', e => {
   if (!seenTut) openTut();
   // 초대 링크(?room=코드)로 들어오면 방 코드를 미리 채움
   const invited = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+  rpCleanup();
+  const rpq = new URLSearchParams(location.search).get('replay') || ''; // 리플레이 공유 링크(?replay=…)
+  if (/^[A-Za-z0-9]{12}$/.test(rpq)) setTimeout(() => openReplay(rpq), 300);
   if (invited) { $('#in-code').value = invited; toast(`방 ${invited}에 초대받았어요. 닉네임을 넣고 참가를 누르세요`, true); }
   if (saved && saved.code && saved.pid && (!invited || invited === saved.code)) {
     get(ref(db, `rooms/${saved.code}/players/${saved.pid}`))
