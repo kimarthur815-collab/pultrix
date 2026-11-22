@@ -540,7 +540,7 @@ const RULES = {
   ALT_DIFF_M: 6,             // 높이 차이가 이보다 클 때만 (약 2층, GPS 고도 오차 때문)          // 이 거리 안이면 화살표 대신 '근처에 있어요!'
   ARROW_RECOVER: 15,         // 화살표가 뜰 때 추격자 스태미나 회복
   MAP_EVERY_SEC: 20,         // 도망자 미니맵의 추격자 위치 갱신 간격
-  MAP_HIDE_USES: 2,          // 추격자 기본 스킬 '미니맵 숨기기' 판마다 횟수 (0이면 없음)
+  TRACK_USES: 2,             // 추격자 기본 스킬 '즉시 추적' 판마다 횟수 (0이면 없음)
   ICE_SELF_USES: 3,          // 얼음땡: 도망자가 스스로 '얼음' 할 수 있는 횟수 (판마다, 0이면 없음)
   MAP_RECOVER: 10,           // 갱신될 때 도망자 스태미나 회복
   MAX_PLAYERS: 10,
@@ -1156,7 +1156,8 @@ const Logic = (() => {
     allIn:        { name: '도박수', grade: 'S', role: 'all', cd: 8, v: 30, d: v => `${v}초 동안 내 실제 위치가 상대에게 공개. 끝까지 살아 있으면 랜덤 증강 1개` },
     teamChat:     { name: '팀 대화방', grade: 'B', role: 'all', cd: 5, v: 180, len: 30, d: v => `${v / 60}분 동안 우리 팀 대화방이 열림 (팀원 모두 글 최대 ${AUGS.teamChat.len}자 + 빠른 문장). 상대가 도청을 가지고 있으면 엿볼 수 있음` },
     // ---- 추격자 기본 스킬 (게임 시작 때 모든 추격자에게, 방장이 정한 횟수) ----
-    mapHide:      { name: '미니맵 숨기기', grade: 'B', role: 'base', cd: 3, v: 30, d: v => `${v}초 동안 도망자 미니맵에 내 위치가 안 보임 (판마다 ${RULES.MAP_HIDE_USES}회)` },
+    trackNow:     { name: '즉시 추적', grade: 'B', role: 'base', cd: 3, v: 10, d: v => `누르는 순간 화살표 ${v}초 + 거리 표시 (판마다 ${RULES.TRACK_USES}회)` },
+    mapHide:      { name: '미니맵 숨기기', grade: 'B', role: 'chaser', cd: 3, v: 30, d: v => `${v}초 동안 도망자 미니맵에 내 위치가 안 보임` }, // 예전 기본 스킬 → 일반 증강
     // ---- 마피아 모드 직업 능력 (게임 시작·저격총 줍기로만 얻음) ----
     mfCheck:      { name: '조사', grade: 'A', role: 'job', cd: 3, v: 0, d: () => '1명을 골라 마피아인지 시민인지 확인 (나만 봄)' },
     mfRifle:      { name: '저격총', grade: 'S', role: 'job', cd: 5, v: 40, aim: 10, d: v => `폰을 겨눠(±10°, 가까우면 GPS 오차만큼 최대 ±35°) ${v}m 안 사람을 쏨. 마피아면 그 마피아만 탈락, 아니면 맞은 사람과 나 둘 다 탈락 (빗나가도 쿨타임). 내가 죽으면 그 자리에 떨어져 시민이 주우면 새 경찰` },
@@ -1341,7 +1342,7 @@ const Logic = (() => {
       AUG_EVERY_SEC: gameMin * 60 / 3,
       MF_POLICE: n >= 4 ? 1 : 0,
       MF_DOCTOR: n >= 5 ? 1 : 0,
-      MAP_HIDE_USES: RULE_DEFAULTS.MAP_HIDE_USES, ICE_SELF_USES: RULE_DEFAULTS.ICE_SELF_USES
+      TRACK_USES: RULE_DEFAULTS.TRACK_USES, ICE_SELF_USES: RULE_DEFAULTS.ICE_SELF_USES
     };
   }
   // 추천값에 방장이 직접 바꾼 칸을 덮어쓴 최종 설정.
@@ -1356,7 +1357,7 @@ const Logic = (() => {
     return out;
   }
   // 방에 저장된 설정을 RULES에 적용 (없는 값은 기본값)
-  const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON', 'ST_MUL', 'MF_POLICE', 'MF_DOCTOR', 'MAP_HIDE_USES', 'ICE_SELF_USES'];
+  const SETTING_KEYS = ['HIDE_SEC', 'GAME_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG', 'SPOT_COUNT', 'AUG_EVERY_SEC', 'AUG_ON', 'ST_MUL', 'MF_POLICE', 'MF_DOCTOR', 'TRACK_USES', 'ICE_SELF_USES'];
   function applySettings(g) {
     g = g || {};
     for (const k of SETTING_KEYS) RULES[k] = g[k] ?? RULE_DEFAULTS[k];
@@ -2596,7 +2597,7 @@ const SET_FIELDS = [
   { g: '추적', k: 'ARROW_UNLOCK_SEC', name: '화살표 열리는 시간', step: 30, min: 0, max: 600, f: fmtDur },
   { g: '추적', k: 'ARROW_EVERY_SEC', name: '화살표 주기', step: 5, min: 15, max: 180, f: fmtDur },
   { g: '추적', k: 'MAP_EVERY_SEC', name: '도망자 미니맵 갱신', step: 5, min: 5, max: 120, f: fmtDur },
-  { g: '추적', k: 'MAP_HIDE_USES', name: '추격자 미니맵 숨기기', step: 1, min: 0, max: 5, f: v => (v ? `판마다 ${v}회` : '없음') },
+  { g: '추적', k: 'TRACK_USES', name: '추격자 즉시 추적', step: 1, min: 0, max: 5, f: v => (v ? `판마다 ${v}회` : '없음') },
   { g: '체력·잡기', k: 'CATCH_DMG', name: '잡힐 때 데미지', step: 5, min: 10, max: 100, f: v => `-${v}` },
   { g: '체력·잡기', k: 'CATCH_COOLDOWN_SEC', name: '무적·정지 시간', step: 30, min: 30, max: 600, f: fmtDur },
   { g: '체력·잡기', k: 'WAIT_MOVE_DMG', name: '대기 중 이동 벌칙', step: 1, min: 0, max: 50, f: v => `초당 -${v}` },
@@ -2611,7 +2612,7 @@ const SET_FIELDS = [
   { g: '얼음땡', k: 'ICE_SELF_USES', name: '스스로 얼음 횟수', step: 1, min: 0, max: 5, f: v => (v ? `판마다 ${v}회` : '없음'), ice: true }
 ];
 // 마피아 모드에선 안 쓰는 설정 (숨는 시간·화살표·잡기 데미지 없음)
-const MF_SKIP = new Set(['HIDE_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'MAP_HIDE_USES', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG']);
+const MF_SKIP = new Set(['HIDE_SEC', 'ARROW_UNLOCK_SEC', 'ARROW_EVERY_SEC', 'MAP_EVERY_SEC', 'TRACK_USES', 'CATCH_DMG', 'CATCH_COOLDOWN_SEC', 'WAIT_MOVE_DMG']);
 const lobbyCounts = room => {
   const n = Object.keys(room.players || {}).length;
   return { n, ch: Math.min(Math.max(1, (room.settings && room.settings.chasers) || 1), Math.max(1, n - 1)) };
@@ -2891,7 +2892,7 @@ $('#btnStart').onclick = safe(async () => {
     u[`players/${id}/anchor`] = null;
     u[`players/${id}/qr`] = roles[id] === 'runner' || mafia ? rid(12, ALNUM) : null; // 마피아 모드: 모두 QR (마피아도 숨어야 하니까)
     u[`players/${id}/augs`] = jobs[id] === 'police' ? { mfCheck: { got: 1 }, mfRifle: { got: 1 } } : jobs[id] === 'doctor' ? { mfGuard: { got: 1 } }
-      : !mafia && roles[id] === 'chaser' && RULES.MAP_HIDE_USES > 0 ? { mapHide: { got: 1, left: RULES.MAP_HIDE_USES } } : null; // 추격자 기본 스킬
+      : !mafia && roles[id] === 'chaser' && RULES.TRACK_USES > 0 ? { trackNow: { got: 1, left: RULES.TRACK_USES } } : null; // 추격자 기본 스킬
     u[`players/${id}/augPicks`] = 0;
     u[`players/${id}/offer`] = null;
     u[`players/${id}/stealthUntil`] = 0;
@@ -3062,6 +3063,7 @@ const ICONS = {
   teamChat: '<path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
   quadrant: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4z"/><path d="M13 13h7v7h-7z" fill="currentColor"/>',
   mapHide: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/><path d="M4 4l16 16"/>',
+  trackNow: '<circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5"/>',
   timeBomb: '<circle cx="11" cy="14" r="7"/><path d="M11 10.5V14l2.5 1.8M15.5 8.5l2-2M18.5 2.5v2M22 6h-2M21 3.5l-1.4 1.4"/>',
   blockade: '<path d="M2 9h20v6H2z"/><path d="M6 9l-3 6M12 9l-3 6M18 9l-3 6M5 15v5M19 15v5"/>',
   net: '<path d="M3 3l18 18M21 3L3 21M3 12h18M12 3v18"/><circle cx="12" cy="12" r="9"/>',
@@ -3372,11 +3374,15 @@ function useAug(id) {
     push(roomRef('events'), { type: 'mugung', by: S.pid, at: serverTimestamp() });
     setCooldown(id, { until: from + v * 1000 }); toast('🌸 무궁화 꽃이 피었습니다!', true);
   } else if (id === 'mapHide') {
-    const x = S.augs.mapHide || {}, left = x.left ?? RULES.MAP_HIDE_USES;
-    if (left <= 0) return toast('이번 판에는 다 썼어요');
     update(meRef(), { mapHideUntil: t + v * 1000 });
+    setCooldown(id, { until: t + v * 1000 });
+    toast(`🫥 ${v}초 동안 미니맵에서 숨어요`, true);
+  } else if (id === 'trackNow') { // 추격자 기본 스킬: 화살표를 지금 바로 (끝나는 시각은 augs/trackNow.until에 남아서 새로고침해도 유지)
+    const x = S.augs.trackNow || {}, left = x.left ?? RULES.TRACK_USES;
+    if (left <= 0) return toast('이번 판에는 다 썼어요');
+    if (Logic.phaseAt(t, room.startAt, room.timeShift).phase !== 'chase') return toast('추격이 시작되면 쓸 수 있어요');
     setCooldown(id, { until: t + v * 1000, left: left - 1 });
-    toast(`🫥 ${v}초 동안 미니맵에서 숨어요 (남은 ${left - 1}회)`, true);
+    toast(`🎯 ${v}초 동안 화살표가 떠요 (남은 ${left - 1}회)`, true);
   } else if (id === 'teamChat') {
     const co = room.chatOpen && room.chatOpen[me.role], until = Math.max((co && co.until) || 0, t + v * 1000);
     update(roomRef('chatOpen/' + me.role), { by: S.pid, until });
@@ -3868,7 +3874,7 @@ async function modeCatch(mode, tid, t) {
     if (!r.committed) return toast('방금 다른 좀비가 감염시켰어요');
     const u = { [`players/${tid}/zombieAt`]: t, [`players/${tid}/frozenUntil`]: 0, [`players/${tid}/anchor`]: null };
     for (const k of Object.keys(tp.augs || {})) if (Logic.AUGS[k] && Logic.AUGS[k].role === 'runner') u[`players/${tid}/augs/${k}`] = null; // 도망자 전용 증강은 사라짐
-    if (RULES.MAP_HIDE_USES > 0 && !(tp.augs && tp.augs.mapHide)) u[`players/${tid}/augs/mapHide`] = { got: 1, left: RULES.MAP_HIDE_USES }; // 좀비도 추격자 기본 스킬
+    if (RULES.TRACK_USES > 0 && !(tp.augs && tp.augs.trackNow)) u[`players/${tid}/augs/trackNow`] = { got: 1, left: RULES.TRACK_USES }; // 좀비도 추격자 기본 스킬
     await update(roomRef(), u);
     push(roomRef('events'), { type: 'infect', by: S.pid, target: tid, at: serverTimestamp() });
     toast(`🧟 ${tp.name} 감염! 같이 쫓아요`, true); flash('rgba(132,204,22,.9)'); vibrate(200); sfx('catch');
@@ -6231,8 +6237,9 @@ function drawArrow() {
   if (ph.phase !== 'chase') return off();
   if ((me.frozenUntil || 0) > t) return off('정지가 풀리면 다시 쫓을 수 있어요');
   const base = Logic.arrowBase(me, room.startAt), a = Logic.arrowState(t, base, arrowEverySec(), av('foresight') || 0);
-  if (!a.unlocked) return off(`화살표 열리기까지 ${fmt(a.nextInMs)}`);
-  if (!a.visible) return off(`다음 화살표까지 ${fmt(a.nextInMs)}`);
+  const trkUntil = (S.augs.trackNow && S.augs.trackNow.until) || 0, trk = trkUntil > t; // 즉시 추적(기본 스킬) 중이면 주기와 상관없이 표시
+  if (!trk && !a.unlocked) return off(`화살표 열리기까지 ${fmt(a.nextInMs)}`);
+  if (!trk && !a.visible) return off(`다음 화살표까지 ${fmt(a.nextInMs)}`);
   if (fogged(t)) return off('🌫 안개 속이라 화살표가 안 떠요');
   if (fxOn('stop', t)) return off('⏸ 시간 정지! 화살표가 멈췄어요');
   box.classList.add('on');
@@ -6240,8 +6247,9 @@ function drawArrow() {
   // 나침반 교란: 살아 있는 도망자 중 누가 쓰고 있으면 모든 추격자 화살표가 엉뚱한 방향 (글자는 비움)
   const jammed = Object.entries(room.players).some(([id, p]) => p.role === 'runner' && (p.jamUntil || 0) > t && Logic.alive(p, hits[id]));
   tipOnce('arrow', () => `화살표는 가장 가까운 ${roleName('runner', room)} 쪽이에요. ${RULES.ARROW_NEAR_M}m 안이면 '근처에 있어요!'로 바뀌어요`);
-  if (S.arrowPopKey !== base + ':' + a.idx) { // 화살표가 새로 뜰 때 펄스 + 짧은 진동
-    S.arrowPopKey = base + ':' + a.idx;
+  const popKey = trk ? 'trk:' + trkUntil : base + ':' + a.idx;
+  if (S.arrowPopKey !== popKey) { // 화살표가 새로 뜰 때 펄스 + 짧은 진동
+    S.arrowPopKey = popKey;
     box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop'); sfx('arrow');
     vibrate(80);
     if (tg && !jammed) detectedBy(tg.id, 'arrow'); // 역탐지
@@ -6263,11 +6271,11 @@ function drawArrow() {
     arrow.style.display = 'block';
     const b = Logic.bearing(S.fix, tg.p);
     rotateArrow(S.compass && S.heading != null ? b - S.heading : b);
-    const unit = av('distance'); // 공간 지각 증강
+    const unit = av('distance') || (trk ? 10 : 0); // 공간 지각 증강 · 즉시 추적은 10m 단위
     const dTxt = unit ? (unit === 1 ? `${Math.round(tg.d)}m` : `약 ${Math.max(unit, Math.round(tg.d / unit) * unit)}m`) : '';
     txt.textContent = [altTxt, dTxt, S.compass ? '' : '나침반 없음 · 화면 위쪽이 북쪽'].filter(Boolean).join(' · ');
   }
-  return `화살표 표시 중 ${Math.ceil(a.showLeftMs / 1000)}초`;
+  return trk ? `🎯 즉시 추적 ${Math.ceil((trkUntil - t) / 1000)}초` : `화살표 표시 중 ${Math.ceil(a.showLeftMs / 1000)}초`;
 }
 
 /* ---------- QR ---------- */
