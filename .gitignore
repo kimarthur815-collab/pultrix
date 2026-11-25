@@ -1,9 +1,10 @@
-node_modules/
-test/sim/game.html
-test/sim/fb-misc.js
-*.png.tmp
-*.log
-*.wav
-dev/**/*.png
-dev/tools/mug.html
-test/sim/*.png
+# 배포(GitHub Pages)에 필요한 파일만 올림. 나머지 개발 파일은 이 컴퓨터에만.
+/*
+!/.gitignore
+!/index.html
+!/manifest.json
+!/mugung.mp3
+!/icon-180.png
+!/icon-192.png
+!/icon-512.png
+!/LICENSE
