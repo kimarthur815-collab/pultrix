@@ -3,3 +3,7 @@ test/sim/game.html
 test/sim/fb-misc.js
 *.png.tmp
 *.log
+*.wav
+dev/**/*.png
+dev/tools/mug.html
+test/sim/*.png
