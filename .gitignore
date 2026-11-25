@@ -1,0 +1,5 @@
+node_modules/
+test/sim/game.html
+test/sim/fb-misc.js
+*.png.tmp
+*.log
